@@ -1,0 +1,216 @@
+package cli
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/APICerberus/APICerebrus/internal/admin"
+	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/gateway"
+	"github.com/APICerberus/APICerebrus/internal/version"
+)
+
+const defaultPIDFile = "apicerberus.pid"
+
+// Run dispatches CLI commands.
+func Run(args []string) error {
+	if len(args) == 0 {
+		return runStart(nil)
+	}
+
+	switch args[0] {
+	case "start":
+		return runStart(args[1:])
+	case "stop":
+		return runStop(args[1:])
+	case "version":
+		return runVersion()
+	case "config":
+		return runConfig(args[1:])
+	case "-h", "--help", "help":
+		printUsage()
+		return nil
+	default:
+		return fmt.Errorf("unknown command %q", args[0])
+	}
+}
+
+func runStart(args []string) error {
+	fs := flag.NewFlagSet("start", flag.ContinueOnError)
+	cfgPath := fs.String("config", "apicerberus.yaml", "path to gateway config file")
+	pidFile := fs.String("pid-file", defaultPIDFile, "path to PID file")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	cfg, err := config.Load(*cfgPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	gw, err := gateway.New(cfg)
+	if err != nil {
+		return fmt.Errorf("initialize gateway: %w", err)
+	}
+
+	adminSrv, err := admin.NewServer(cfg, gw)
+	if err != nil {
+		return fmt.Errorf("initialize admin server: %w", err)
+	}
+
+	adminHTTP := &http.Server{
+		Addr:           cfg.Admin.Addr,
+		Handler:        adminSrv,
+		ReadTimeout:    cfg.Gateway.ReadTimeout,
+		WriteTimeout:   cfg.Gateway.WriteTimeout,
+		IdleTimeout:    cfg.Gateway.IdleTimeout,
+		MaxHeaderBytes: cfg.Gateway.MaxHeaderBytes,
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	if err := writePID(*pidFile); err != nil {
+		return fmt.Errorf("write pid file: %w", err)
+	}
+	defer os.Remove(*pidFile)
+
+	printBanner(cfg, *pidFile)
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
+		_ = adminHTTP.Shutdown(shutdownCtx)
+	}()
+
+	errCh := make(chan error, 2)
+	go func() { errCh <- gw.Start(ctx) }()
+	go func() {
+		err := adminHTTP.ListenAndServe()
+		if errors.Is(err, http.ErrServerClosed) {
+			err = nil
+		}
+		errCh <- err
+	}()
+
+	var firstErr error
+	for i := 0; i < 2; i++ {
+		err := <-errCh
+		if err != nil && firstErr == nil {
+			firstErr = err
+			cancel()
+		}
+	}
+
+	if firstErr != nil {
+		return fmt.Errorf("runtime failure: %w", firstErr)
+	}
+	return nil
+}
+
+func runStop(args []string) error {
+	fs := flag.NewFlagSet("stop", flag.ContinueOnError)
+	pidFile := fs.String("pid-file", defaultPIDFile, "path to PID file")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	data, err := os.ReadFile(*pidFile)
+	if err != nil {
+		return fmt.Errorf("read pid file: %w", err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return fmt.Errorf("invalid pid value: %w", err)
+	}
+
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return fmt.Errorf("find process: %w", err)
+	}
+
+	if err := process.Signal(syscall.SIGTERM); err != nil {
+		_ = process.Kill()
+	}
+	_ = os.Remove(*pidFile)
+
+	fmt.Printf("Sent termination signal to process %d\n", pid)
+	return nil
+}
+
+func runVersion() error {
+	payload := map[string]string{
+		"version":    version.Version,
+		"commit":     version.Commit,
+		"build_time": version.BuildTime,
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(payload)
+}
+
+func runConfig(args []string) error {
+	if len(args) == 0 {
+		return errors.New("missing config subcommand (expected: validate)")
+	}
+	switch args[0] {
+	case "validate":
+		return runConfigValidate(args[1:])
+	default:
+		return fmt.Errorf("unknown config subcommand %q", args[0])
+	}
+}
+
+func runConfigValidate(args []string) error {
+	fs := flag.NewFlagSet("config validate", flag.ContinueOnError)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() < 1 {
+		return errors.New("config validate requires a path")
+	}
+	path := fs.Arg(0)
+
+	if _, err := config.Load(path); err != nil {
+		return fmt.Errorf("config invalid: %w", err)
+	}
+	fmt.Printf("Config is valid: %s\n", path)
+	return nil
+}
+
+func printUsage() {
+	fmt.Println("API Cerberus CLI")
+	fmt.Println("Usage:")
+	fmt.Println("  apicerberus start [--config path] [--pid-file path]")
+	fmt.Println("  apicerberus stop [--pid-file path]")
+	fmt.Println("  apicerberus version")
+	fmt.Println("  apicerberus config validate <path>")
+}
+
+func printBanner(cfg *config.Config, pidFile string) {
+	fmt.Println("========================================")
+	fmt.Println("      API CERBERUS — CORE GATEWAY      ")
+	fmt.Println("========================================")
+	fmt.Printf("Version : %s\n", version.Version)
+	fmt.Printf("Commit  : %s\n", version.Commit)
+	fmt.Printf("Gateway : %s\n", cfg.Gateway.HTTPAddr)
+	fmt.Printf("Admin   : %s\n", cfg.Admin.Addr)
+	fmt.Printf("PID File: %s\n", filepath.Clean(pidFile))
+	fmt.Println("========================================")
+}
+
+func writePID(path string) error {
+	pid := os.Getpid()
+	return os.WriteFile(path, []byte(strconv.Itoa(pid)+"\n"), 0o600)
+}

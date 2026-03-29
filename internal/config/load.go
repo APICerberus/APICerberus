@@ -1,0 +1,476 @@
+package config
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/APICerberus/APICerebrus/internal/pkg/uuid"
+	customyaml "github.com/APICerberus/APICerebrus/internal/pkg/yaml"
+)
+
+// Load reads, parses, normalizes and validates configuration from disk.
+func Load(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read config: %w", err)
+	}
+
+	cfg := &Config{}
+	if err := customyaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
+	}
+
+	setDefaults(cfg)
+	if err := applyEnvOverrides(cfg); err != nil {
+		return nil, fmt.Errorf("apply env overrides: %w", err)
+	}
+	if err := generateIDs(cfg); err != nil {
+		return nil, fmt.Errorf("generate ids: %w", err)
+	}
+	if err := validate(cfg); err != nil {
+		return nil, fmt.Errorf("validate config: %w", err)
+	}
+
+	return cfg, nil
+}
+
+func setDefaults(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+
+	if cfg.Gateway.HTTPAddr == "" {
+		cfg.Gateway.HTTPAddr = ":8080"
+	}
+	if cfg.Gateway.ReadTimeout == 0 {
+		cfg.Gateway.ReadTimeout = 30 * time.Second
+	}
+	if cfg.Gateway.WriteTimeout == 0 {
+		cfg.Gateway.WriteTimeout = 30 * time.Second
+	}
+	if cfg.Gateway.IdleTimeout == 0 {
+		cfg.Gateway.IdleTimeout = 120 * time.Second
+	}
+	if cfg.Gateway.MaxHeaderBytes == 0 {
+		cfg.Gateway.MaxHeaderBytes = 1 << 20 // 1MB
+	}
+	if cfg.Gateway.MaxBodyBytes == 0 {
+		cfg.Gateway.MaxBodyBytes = 10 << 20 // 10MB
+	}
+
+	if cfg.Admin.Addr == "" {
+		cfg.Admin.Addr = ":9876"
+	}
+	if cfg.Admin.UIPath == "" {
+		cfg.Admin.UIPath = "/dashboard"
+	}
+	if !cfg.Admin.UIEnabled {
+		// Keep explicit false if user sets it; assume true only when no other admin settings are present.
+		if cfg.Admin.APIKey == "" && cfg.Admin.Addr == ":9876" && cfg.Admin.UIPath == "/dashboard" {
+			cfg.Admin.UIEnabled = true
+		}
+	}
+
+	if cfg.Logging.Level == "" {
+		cfg.Logging.Level = "info"
+	}
+	if cfg.Logging.Format == "" {
+		cfg.Logging.Format = "json"
+	}
+	if cfg.Logging.Output == "" {
+		cfg.Logging.Output = "stdout"
+	}
+	if cfg.Logging.Rotation.MaxSizeMB == 0 {
+		cfg.Logging.Rotation.MaxSizeMB = 100
+	}
+	if cfg.Logging.Rotation.MaxBackups == 0 {
+		cfg.Logging.Rotation.MaxBackups = 7
+	}
+
+	if strings.TrimSpace(cfg.Store.Path) == "" {
+		cfg.Store.Path = "apicerberus.db"
+	}
+	if cfg.Store.BusyTimeout == 0 {
+		cfg.Store.BusyTimeout = 5 * time.Second
+	}
+	if strings.TrimSpace(cfg.Store.JournalMode) == "" {
+		cfg.Store.JournalMode = "WAL"
+	}
+	if !cfg.Store.ForeignKeys {
+		// Preserve explicit false as much as possible; default to true when store section is omitted.
+		if cfg.Store.Path == "apicerberus.db" && cfg.Store.BusyTimeout == 5*time.Second && strings.EqualFold(cfg.Store.JournalMode, "WAL") {
+			cfg.Store.ForeignKeys = true
+		}
+	}
+
+	if cfg.Billing.DefaultCost == 0 {
+		cfg.Billing.DefaultCost = 1
+	}
+	if cfg.Billing.RouteCosts == nil {
+		cfg.Billing.RouteCosts = map[string]int64{}
+	}
+	if cfg.Billing.MethodMultipliers == nil {
+		cfg.Billing.MethodMultipliers = map[string]float64{}
+	}
+	cfg.Billing.ZeroBalanceAction = strings.ToLower(strings.TrimSpace(cfg.Billing.ZeroBalanceAction))
+	if cfg.Billing.ZeroBalanceAction == "" {
+		cfg.Billing.ZeroBalanceAction = "reject"
+	}
+	if !cfg.Billing.TestModeEnabled {
+		if cfg.Billing.DefaultCost == 1 && len(cfg.Billing.RouteCosts) == 0 && len(cfg.Billing.MethodMultipliers) == 0 && cfg.Billing.ZeroBalanceAction == "reject" {
+			cfg.Billing.TestModeEnabled = true
+		}
+	}
+
+	for i := range cfg.Services {
+		if cfg.Services[i].Protocol == "" {
+			cfg.Services[i].Protocol = "http"
+		}
+		if cfg.Services[i].ConnectTimeout == 0 {
+			cfg.Services[i].ConnectTimeout = 5 * time.Second
+		}
+		if cfg.Services[i].ReadTimeout == 0 {
+			cfg.Services[i].ReadTimeout = 30 * time.Second
+		}
+		if cfg.Services[i].WriteTimeout == 0 {
+			cfg.Services[i].WriteTimeout = 30 * time.Second
+		}
+	}
+
+	for i := range cfg.Routes {
+		if len(cfg.Routes[i].Methods) == 0 {
+			cfg.Routes[i].Methods = []string{"GET"}
+		}
+		cfg.Routes[i].Plugins = normalizePluginConfigs(cfg.Routes[i].Plugins)
+	}
+
+	cfg.GlobalPlugins = normalizePluginConfigs(cfg.GlobalPlugins)
+
+	for i := range cfg.Upstreams {
+		if cfg.Upstreams[i].Algorithm == "" {
+			cfg.Upstreams[i].Algorithm = "round_robin"
+		}
+		if cfg.Upstreams[i].HealthCheck.Active.Path == "" {
+			cfg.Upstreams[i].HealthCheck.Active.Path = "/health"
+		}
+		if cfg.Upstreams[i].HealthCheck.Active.Interval == 0 {
+			cfg.Upstreams[i].HealthCheck.Active.Interval = 10 * time.Second
+		}
+		if cfg.Upstreams[i].HealthCheck.Active.Timeout == 0 {
+			cfg.Upstreams[i].HealthCheck.Active.Timeout = 2 * time.Second
+		}
+		if cfg.Upstreams[i].HealthCheck.Active.HealthyThreshold == 0 {
+			cfg.Upstreams[i].HealthCheck.Active.HealthyThreshold = 2
+		}
+		if cfg.Upstreams[i].HealthCheck.Active.UnhealthyThreshold == 0 {
+			cfg.Upstreams[i].HealthCheck.Active.UnhealthyThreshold = 3
+		}
+
+		for j := range cfg.Upstreams[i].Targets {
+			if cfg.Upstreams[i].Targets[j].Weight == 0 {
+				cfg.Upstreams[i].Targets[j].Weight = 100
+			}
+		}
+	}
+
+	for i := range cfg.Consumers {
+		if cfg.Consumers[i].RateLimit.RequestsPerSecond < 0 {
+			cfg.Consumers[i].RateLimit.RequestsPerSecond = 0
+		}
+		if cfg.Consumers[i].RateLimit.Burst < 0 {
+			cfg.Consumers[i].RateLimit.Burst = 0
+		}
+	}
+
+	cfg.Auth.APIKey.KeyNames = normalizeNames(cfg.Auth.APIKey.KeyNames)
+	cfg.Auth.APIKey.QueryNames = normalizeNames(cfg.Auth.APIKey.QueryNames)
+	cfg.Auth.APIKey.CookieNames = normalizeNames(cfg.Auth.APIKey.CookieNames)
+}
+
+func validate(cfg *Config) error {
+	if cfg == nil {
+		return fmt.Errorf("config is nil")
+	}
+
+	errs := make([]string, 0)
+	addErr := func(msg string) {
+		errs = append(errs, msg)
+	}
+
+	if cfg.Gateway.HTTPAddr == "" && cfg.Gateway.HTTPSAddr == "" {
+		addErr("gateway.http_addr or gateway.https_addr must be set")
+	}
+	if cfg.Gateway.ReadTimeout < 0 || cfg.Gateway.WriteTimeout < 0 || cfg.Gateway.IdleTimeout < 0 {
+		addErr("gateway timeouts cannot be negative")
+	}
+	if cfg.Gateway.MaxHeaderBytes <= 0 {
+		addErr("gateway.max_header_bytes must be greater than zero")
+	}
+	if cfg.Gateway.MaxBodyBytes <= 0 {
+		addErr("gateway.max_body_bytes must be greater than zero")
+	}
+
+	if !strings.HasPrefix(cfg.Admin.UIPath, "/") {
+		addErr("admin.ui_path must start with '/'")
+	}
+
+	level := strings.ToLower(cfg.Logging.Level)
+	if level != "debug" && level != "info" && level != "warn" && level != "error" {
+		addErr("logging.level must be one of: debug, info, warn, error")
+	}
+	format := strings.ToLower(cfg.Logging.Format)
+	if format != "json" && format != "text" {
+		addErr("logging.format must be one of: json, text")
+	}
+
+	if strings.TrimSpace(cfg.Store.Path) == "" {
+		addErr("store.path is required")
+	}
+	if cfg.Store.BusyTimeout < 0 {
+		addErr("store.busy_timeout cannot be negative")
+	}
+	journalMode := strings.ToUpper(strings.TrimSpace(cfg.Store.JournalMode))
+	switch journalMode {
+	case "WAL", "DELETE", "TRUNCATE", "PERSIST", "MEMORY", "OFF":
+	default:
+		addErr("store.journal_mode must be one of: WAL, DELETE, TRUNCATE, PERSIST, MEMORY, OFF")
+	}
+	if cfg.Billing.DefaultCost < 0 {
+		addErr("billing.default_cost cannot be negative")
+	}
+	for routeID, cost := range cfg.Billing.RouteCosts {
+		if strings.TrimSpace(routeID) == "" {
+			addErr("billing.route_costs keys cannot be empty")
+			continue
+		}
+		if cost < 0 {
+			addErr(fmt.Sprintf("billing.route_costs[%q] cannot be negative", routeID))
+		}
+	}
+	for method, multiplier := range cfg.Billing.MethodMultipliers {
+		if strings.TrimSpace(method) == "" {
+			addErr("billing.method_multipliers keys cannot be empty")
+			continue
+		}
+		if multiplier <= 0 {
+			addErr(fmt.Sprintf("billing.method_multipliers[%q] must be greater than zero", method))
+		}
+	}
+	switch cfg.Billing.ZeroBalanceAction {
+	case "reject", "allow_with_flag":
+	default:
+		addErr("billing.zero_balance_action must be one of: reject, allow_with_flag")
+	}
+
+	upstreamByName := make(map[string]struct{}, len(cfg.Upstreams))
+	for i, up := range cfg.Upstreams {
+		if up.Name == "" {
+			addErr(fmt.Sprintf("upstreams[%d].name is required", i))
+			continue
+		}
+		if _, exists := upstreamByName[up.Name]; exists {
+			addErr(fmt.Sprintf("duplicate upstream name: %s", up.Name))
+		}
+		upstreamByName[up.Name] = struct{}{}
+
+		if len(up.Targets) == 0 {
+			addErr(fmt.Sprintf("upstream %q must include at least one target", up.Name))
+		}
+		for j, t := range up.Targets {
+			if strings.TrimSpace(t.Address) == "" {
+				addErr(fmt.Sprintf("upstream %q targets[%d].address is required", up.Name, j))
+			}
+			if t.Weight <= 0 {
+				addErr(fmt.Sprintf("upstream %q targets[%d].weight must be greater than zero", up.Name, j))
+			}
+		}
+		if up.HealthCheck.Active.Interval < 0 || up.HealthCheck.Active.Timeout < 0 {
+			addErr(fmt.Sprintf("upstream %q health check interval/timeout cannot be negative", up.Name))
+		}
+		if up.HealthCheck.Active.HealthyThreshold <= 0 || up.HealthCheck.Active.UnhealthyThreshold <= 0 {
+			addErr(fmt.Sprintf("upstream %q health check thresholds must be greater than zero", up.Name))
+		}
+	}
+
+	serviceByName := make(map[string]struct{}, len(cfg.Services))
+	for i, svc := range cfg.Services {
+		if svc.Name == "" {
+			addErr(fmt.Sprintf("services[%d].name is required", i))
+			continue
+		}
+		if _, exists := serviceByName[svc.Name]; exists {
+			addErr(fmt.Sprintf("duplicate service name: %s", svc.Name))
+		}
+		serviceByName[svc.Name] = struct{}{}
+
+		protocol := strings.ToLower(strings.TrimSpace(svc.Protocol))
+		switch protocol {
+		case "http", "grpc", "graphql":
+		default:
+			addErr(fmt.Sprintf("service %q protocol must be one of: http, grpc, graphql", svc.Name))
+		}
+		if strings.TrimSpace(svc.Upstream) == "" {
+			addErr(fmt.Sprintf("service %q upstream is required", svc.Name))
+		} else if _, ok := upstreamByName[svc.Upstream]; !ok {
+			addErr(fmt.Sprintf("service %q references unknown upstream %q", svc.Name, svc.Upstream))
+		}
+	}
+
+	allowedMethods := map[string]struct{}{
+		"*": {}, "GET": {}, "POST": {}, "PUT": {}, "PATCH": {}, "DELETE": {}, "HEAD": {}, "OPTIONS": {},
+	}
+	for i, rt := range cfg.Routes {
+		if rt.Name == "" {
+			addErr(fmt.Sprintf("routes[%d].name is required", i))
+			continue
+		}
+		if strings.TrimSpace(rt.Service) == "" {
+			addErr(fmt.Sprintf("route %q service is required", rt.Name))
+		} else if _, ok := serviceByName[rt.Service]; !ok {
+			addErr(fmt.Sprintf("route %q references unknown service %q", rt.Name, rt.Service))
+		}
+		if len(rt.Paths) == 0 {
+			addErr(fmt.Sprintf("route %q must include at least one path", rt.Name))
+		}
+		for _, m := range rt.Methods {
+			method := strings.ToUpper(strings.TrimSpace(m))
+			if _, ok := allowedMethods[method]; !ok {
+				addErr(fmt.Sprintf("route %q has invalid method %q", rt.Name, m))
+			}
+		}
+		for j, p := range rt.Plugins {
+			if strings.TrimSpace(p.Name) == "" {
+				addErr(fmt.Sprintf("route %q plugins[%d].name is required", rt.Name, j))
+			}
+		}
+	}
+
+	for i, p := range cfg.GlobalPlugins {
+		if strings.TrimSpace(p.Name) == "" {
+			addErr(fmt.Sprintf("global_plugins[%d].name is required", i))
+		}
+	}
+
+	consumerByName := make(map[string]struct{}, len(cfg.Consumers))
+	apiKeyOwners := make(map[string]string)
+	for i, consumer := range cfg.Consumers {
+		if strings.TrimSpace(consumer.Name) == "" {
+			addErr(fmt.Sprintf("consumers[%d].name is required", i))
+			continue
+		}
+		if _, exists := consumerByName[consumer.Name]; exists {
+			addErr(fmt.Sprintf("duplicate consumer name: %s", consumer.Name))
+		}
+		consumerByName[consumer.Name] = struct{}{}
+
+		for j, key := range consumer.APIKeys {
+			if strings.TrimSpace(key.Key) == "" {
+				addErr(fmt.Sprintf("consumer %q api_keys[%d].key is required", consumer.Name, j))
+				continue
+			}
+			if owner, exists := apiKeyOwners[key.Key]; exists && owner != consumer.Name {
+				addErr(fmt.Sprintf("api key is duplicated across consumers: %s", key.Key))
+			}
+			apiKeyOwners[key.Key] = consumer.Name
+		}
+	}
+
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "; "))
+	}
+	return nil
+}
+
+func generateIDs(cfg *Config) error {
+	for i := range cfg.Services {
+		if strings.TrimSpace(cfg.Services[i].ID) == "" {
+			id, err := uuid.NewString()
+			if err != nil {
+				return err
+			}
+			cfg.Services[i].ID = id
+		}
+	}
+	for i := range cfg.Routes {
+		if strings.TrimSpace(cfg.Routes[i].ID) == "" {
+			id, err := uuid.NewString()
+			if err != nil {
+				return err
+			}
+			cfg.Routes[i].ID = id
+		}
+	}
+	for i := range cfg.Upstreams {
+		if strings.TrimSpace(cfg.Upstreams[i].ID) == "" {
+			id, err := uuid.NewString()
+			if err != nil {
+				return err
+			}
+			cfg.Upstreams[i].ID = id
+		}
+		for j := range cfg.Upstreams[i].Targets {
+			if strings.TrimSpace(cfg.Upstreams[i].Targets[j].ID) == "" {
+				id, err := uuid.NewString()
+				if err != nil {
+					return err
+				}
+				cfg.Upstreams[i].Targets[j].ID = id
+			}
+		}
+	}
+	for i := range cfg.Consumers {
+		if strings.TrimSpace(cfg.Consumers[i].ID) == "" {
+			id, err := uuid.NewString()
+			if err != nil {
+				return err
+			}
+			cfg.Consumers[i].ID = id
+		}
+		for j := range cfg.Consumers[i].APIKeys {
+			if strings.TrimSpace(cfg.Consumers[i].APIKeys[j].ID) == "" {
+				id, err := uuid.NewString()
+				if err != nil {
+					return err
+				}
+				cfg.Consumers[i].APIKeys[j].ID = id
+			}
+		}
+	}
+	return nil
+}
+
+func normalizeNames(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func normalizePluginConfigs(in []PluginConfig) []PluginConfig {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]PluginConfig, 0, len(in))
+	for _, plugin := range in {
+		plugin.Name = strings.TrimSpace(plugin.Name)
+		if plugin.Config == nil {
+			plugin.Config = map[string]any{}
+		}
+		out = append(out, plugin)
+	}
+	return out
+}

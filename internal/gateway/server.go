@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/APICerberus/APICerebrus/internal/audit"
 	"github.com/APICerberus/APICerebrus/internal/billing"
 	"github.com/APICerberus/APICerebrus/internal/config"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
@@ -27,6 +28,7 @@ type Gateway struct {
 	health         *Checker
 	store          *store.Store
 	billing        *billing.Engine
+	auditLogger    *audit.Logger
 	upstreams      map[string]*UpstreamPool
 	consumers      []config.Consumer
 	authAPIKey     *plugin.AuthAPIKey
@@ -38,6 +40,7 @@ type Gateway struct {
 
 	runCtx       context.Context
 	healthCancel context.CancelFunc
+	auditCancel  context.CancelFunc
 }
 
 // New initializes all gateway subsystems from config.
@@ -61,6 +64,7 @@ func New(cfg *config.Config) (*Gateway, error) {
 	apiKeyLookup := buildStoreAPIKeyLookup(st)
 	permissionLookup := buildEndpointPermissionLookup(st)
 	billingEngine := billing.NewEngine(st, cfg.Billing)
+	auditLogger := newAuditLogger(st, cfg)
 	authAPIKey := newAuthAPIKey(cfg, consumers, nil)
 	routePipelines, routeHasAuth, err := plugin.BuildRoutePipelinesWithContext(cfg, plugin.BuilderContext{
 		Consumers:        consumers,
@@ -81,6 +85,7 @@ func New(cfg *config.Config) (*Gateway, error) {
 		health:         checker,
 		store:          st,
 		billing:        billingEngine,
+		auditLogger:    auditLogger,
 		upstreams:      upstreamPools,
 		consumers:      consumers,
 		authAPIKey:     authAPIKey,
@@ -113,19 +118,58 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upstreamPools := g.upstreams
 	checker := g.health
 	billingEngine := g.billing
+	auditLogger := g.auditLogger
 	authAPIKey := g.authAPIKey
 	authRequired := g.authRequired
 	routePipelines := g.routePipelines
 	routeHasAuth := g.routeHasAuth
 	g.mu.RUnlock()
 
-	route, service, err := router.Match(r)
+	requestStartedAt := time.Now()
+	var (
+		route               *config.Route
+		service             *config.Service
+		consumer            *config.Consumer
+		requestBodySnapshot []byte
+		proxyErrForAudit    error
+		blocked             bool
+		blockReason         string
+		auditWriter         *audit.ResponseCaptureWriter
+	)
+	if auditLogger != nil {
+		if body, captureErr := audit.CaptureRequestBody(r, auditLogger.MaxRequestBodyBytes()); captureErr == nil {
+			requestBodySnapshot = body
+		}
+		auditWriter = audit.NewResponseCaptureWriter(w, auditLogger.MaxResponseBodyBytes())
+		w = auditWriter
+	}
+	defer func() {
+		if auditLogger == nil || auditWriter == nil {
+			return
+		}
+		auditLogger.Log(audit.LogInput{
+			Request:        r,
+			ResponseWriter: auditWriter,
+			Route:          route,
+			Service:        service,
+			Consumer:       consumer,
+			RequestBody:    requestBodySnapshot,
+			StartedAt:      requestStartedAt,
+			Blocked:        blocked,
+			BlockReason:    blockReason,
+			ProxyErr:       proxyErrForAudit,
+		})
+	}()
+
+	var err error
+	route, service, err = router.Match(r)
 	if err != nil {
+		blocked = true
+		blockReason = "route_not_found"
 		g.writeError(w, http.StatusNotFound, "route_not_found", "No matching route")
 		return
 	}
 
-	var consumer *config.Consumer
 	routeKey := routePipelineKey(route)
 	chain := routePipelines[routeKey]
 	pipeline := plugin.NewPipeline(chain)
@@ -140,6 +184,8 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer runPipelineCleanup(pipelineCtx)
 	handled, err := pipeline.Execute(pipelineCtx)
 	if err != nil {
+		blocked = true
+		blockReason = "plugin_error"
 		g.writePluginError(w, err)
 		return
 	}
@@ -148,6 +194,13 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r = pipelineCtx.Request
 	}
 	if handled || pipelineCtx.Aborted {
+		if pipelineCtx.Aborted {
+			reason := strings.TrimSpace(pipelineCtx.AbortReason)
+			if reason != "" && !strings.Contains(reason, ": handled response") {
+				blocked = true
+				blockReason = reason
+			}
+		}
 		if consumer != nil {
 			setRequestConsumer(r, consumer)
 		}
@@ -156,11 +209,15 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if authRequired && !routeHasAuth[routeKey] {
 		if authAPIKey == nil {
+			blocked = true
+			blockReason = "auth_unavailable"
 			g.writeError(w, http.StatusInternalServerError, "auth_unavailable", "Authentication module is unavailable")
 			return
 		}
 		resolved, err := authAPIKey.Authenticate(r)
 		if err != nil {
+			blocked = true
+			blockReason = "auth_failed"
 			g.writeAuthError(w, err)
 			return
 		}
@@ -171,6 +228,8 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	billingState, err := applyBillingPreProxy(billingEngine, r, route, consumer, pipelineCtx)
 	if err != nil {
+		blocked = true
+		blockReason = "billing_precheck_failed"
 		g.writeBillingError(w, err)
 		return
 	}
@@ -178,6 +237,8 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	pool := findUpstreamPool(upstreamPools, service.Upstream)
 	if pool == nil {
+		blocked = true
+		blockReason = "upstream_not_found"
 		g.writeError(w, http.StatusBadGateway, "upstream_not_found", "Service upstream is not configured")
 		return
 	}
@@ -213,9 +274,13 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			if errors.Is(err, ErrNoHealthyTargets) {
+				blocked = true
+				blockReason = "no_healthy_target"
 				g.writeError(w, http.StatusBadGateway, "no_healthy_target", "No healthy upstream target available")
 				return
 			}
+			blocked = true
+			blockReason = "target_selection_failed"
 			g.writeError(w, http.StatusBadGateway, "target_selection_failed", "Failed to select upstream target")
 			return
 		}
@@ -234,6 +299,9 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			pool.Done(targetID)
 			if proxyErr != nil {
+				blocked = true
+				blockReason = "proxy_error"
+				proxyErrForAudit = proxyErr
 				if checker != nil {
 					checker.ReportError(pool.Name(), targetID)
 				}
@@ -274,6 +342,9 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				time.Sleep(retryPolicy.Backoff(attempt))
 				continue
 			}
+			blocked = true
+			blockReason = "proxy_error"
+			proxyErrForAudit = proxyErr
 			writeProxyError(downstreamWriter, proxyErrorStatus(proxyErr))
 			runAfterProxy(proxyErr)
 			pool.Done(targetID)
@@ -309,11 +380,16 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		applyBillingPostProxy(billingEngine, billingState, pipelineCtx, writeErr)
 		pool.Done(targetID)
 		if writeErr != nil {
+			blocked = true
+			blockReason = "response_write_error"
+			proxyErrForAudit = writeErr
 			return
 		}
 		return
 	}
 
+	blocked = true
+	blockReason = "retries_exhausted"
 	writeProxyError(w, http.StatusBadGateway)
 }
 
@@ -325,13 +401,19 @@ func (g *Gateway) Start(ctx context.Context) error {
 
 	g.mu.Lock()
 	g.runCtx = ctx
-	healthCtx, cancel := context.WithCancel(ctx)
-	g.healthCancel = cancel
+	healthCtx, healthCancel := context.WithCancel(ctx)
+	g.healthCancel = healthCancel
+	auditCtx, auditCancel := context.WithCancel(ctx)
+	g.auditCancel = auditCancel
 	server := g.httpServer
 	checker := g.health
+	auditLogger := g.auditLogger
 	g.mu.Unlock()
 
 	checker.Start(healthCtx)
+	if auditLogger != nil {
+		go auditLogger.Start(auditCtx)
+	}
 
 	go func() {
 		<-ctx.Done()
@@ -367,6 +449,7 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 	newAPIKeyLookup := buildStoreAPIKeyLookup(newStore)
 	newPermissionLookup := buildEndpointPermissionLookup(newStore)
 	newBillingEngine := billing.NewEngine(newStore, newCfg.Billing)
+	newAuditLogger := newAuditLogger(newStore, newCfg)
 	newAuthAPIKey := newAuthAPIKey(newCfg, newConsumers, nil)
 	newRoutePipelines, newRouteHasAuth, err := plugin.BuildRoutePipelinesWithContext(newCfg, plugin.BuilderContext{
 		Consumers:        newConsumers,
@@ -389,6 +472,7 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 	g.health = newChecker
 	g.store = newStore
 	g.billing = newBillingEngine
+	g.auditLogger = newAuditLogger
 	g.consumers = newConsumers
 	g.authAPIKey = newAuthAPIKey
 	g.authRequired = len(newConsumers) > 0
@@ -410,6 +494,18 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 		g.healthCancel = cancel
 		g.health.Start(healthCtx)
 	}
+	if g.auditCancel != nil {
+		g.auditCancel()
+		base := g.runCtx
+		if base == nil {
+			base = context.Background()
+		}
+		auditCtx, cancel := context.WithCancel(base)
+		g.auditCancel = cancel
+		if g.auditLogger != nil {
+			go g.auditLogger.Start(auditCtx)
+		}
+	}
 	g.mu.Unlock()
 
 	if oldStore != nil {
@@ -421,13 +517,17 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 // Shutdown gracefully drains active connections and stops background health loops.
 func (g *Gateway) Shutdown(ctx context.Context) error {
 	g.mu.RLock()
-	cancel := g.healthCancel
+	healthCancel := g.healthCancel
+	auditCancel := g.auditCancel
 	server := g.httpServer
 	st := g.store
 	g.mu.RUnlock()
 
-	if cancel != nil {
-		cancel()
+	if healthCancel != nil {
+		healthCancel()
+	}
+	if auditCancel != nil {
+		auditCancel()
 	}
 	shutdownErr := server.Shutdown(ctx)
 	if st != nil {
@@ -659,6 +759,13 @@ func newAuthAPIKey(cfg *config.Config, consumers []config.Consumer, lookup plugi
 		CookieNames: append([]string(nil), cfg.Auth.APIKey.CookieNames...),
 		Lookup:      lookup,
 	})
+}
+
+func newAuditLogger(st *store.Store, cfg *config.Config) *audit.Logger {
+	if st == nil || cfg == nil {
+		return nil
+	}
+	return audit.NewLogger(st.Audits(), cfg.Audit)
 }
 
 func openGatewayStore(cfg *config.Config) (*store.Store, error) {

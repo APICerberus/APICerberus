@@ -1700,6 +1700,78 @@ func TestGatewayPluginPipelineRedirect(t *testing.T) {
 	}
 }
 
+func TestGatewayAuditLoggingCapturesAndMasks(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"password":"upstream-secret","ok":true}`))
+	}))
+	defer upstream.Close()
+
+	cfg := gatewayTestConfig(t, "127.0.0.1:0", mustHost(t, upstream.URL))
+	cfg.Routes[0].Methods = []string{http.MethodPost}
+	cfg.Store = config.StoreConfig{
+		Path:        t.TempDir() + "/gateway-audit.db",
+		BusyTimeout: time.Second,
+		JournalMode: "WAL",
+		ForeignKeys: true,
+	}
+	cfg.Audit = config.AuditConfig{
+		Enabled:              true,
+		BufferSize:           64,
+		BatchSize:            10,
+		FlushInterval:        time.Second,
+		MaxRequestBodyBytes:  4096,
+		MaxResponseBodyBytes: 4096,
+		MaskHeaders:          []string{"Authorization"},
+		MaskBodyFields:       []string{"password"},
+		MaskReplacement:      "***",
+	}
+
+	gw, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New gateway error: %v", err)
+	}
+	t.Cleanup(func() {
+		if gw.store != nil {
+			_ = gw.store.Close()
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "http://gateway.local/api/users", bytes.NewBufferString(`{"password":"client-secret"}`))
+	req.Header.Set("Authorization", "Bearer abc")
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	gw.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 got %d body=%q", rr.Code, rr.Body.String())
+	}
+
+	logs, err := gw.store.Audits().List(store.AuditListOptions{Limit: 10})
+	if err != nil {
+		t.Fatalf("list audit logs: %v", err)
+	}
+	if logs.Total != 1 || len(logs.Entries) != 1 {
+		t.Fatalf("expected one audit row, got total=%d len=%d", logs.Total, len(logs.Entries))
+	}
+	entry := logs.Entries[0]
+	if entry.Method != http.MethodPost {
+		t.Fatalf("unexpected method in audit row: %s", entry.Method)
+	}
+	if entry.RequestBody != `{"password":"***"}` {
+		t.Fatalf("request body should be masked, got %s", entry.RequestBody)
+	}
+	if entry.ResponseBody != `{"ok":true,"password":"***"}` && entry.ResponseBody != `{"password":"***","ok":true}` {
+		t.Fatalf("response body should be masked, got %s", entry.ResponseBody)
+	}
+	if entry.RequestHeaders["Authorization"] != "***" {
+		t.Fatalf("authorization header should be masked: %#v", entry.RequestHeaders["Authorization"])
+	}
+}
+
 func gatewayTestConfig(t *testing.T, addr, upstreamHost string) *config.Config {
 	t.Helper()
 

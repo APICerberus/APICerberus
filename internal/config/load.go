@@ -125,6 +125,27 @@ func setDefaults(cfg *Config) {
 		}
 	}
 
+	if cfg.Audit.BufferSize <= 0 {
+		cfg.Audit.BufferSize = 10_000
+	}
+	if cfg.Audit.BatchSize <= 0 {
+		cfg.Audit.BatchSize = 100
+	}
+	if cfg.Audit.FlushInterval <= 0 {
+		cfg.Audit.FlushInterval = time.Second
+	}
+	if cfg.Audit.MaxRequestBodyBytes <= 0 {
+		cfg.Audit.MaxRequestBodyBytes = 64 << 10 // 64KB
+	}
+	if cfg.Audit.MaxResponseBodyBytes <= 0 {
+		cfg.Audit.MaxResponseBodyBytes = 64 << 10 // 64KB
+	}
+	if strings.TrimSpace(cfg.Audit.MaskReplacement) == "" {
+		cfg.Audit.MaskReplacement = "***REDACTED***"
+	}
+	cfg.Audit.MaskHeaders = normalizeNames(cfg.Audit.MaskHeaders)
+	cfg.Audit.MaskBodyFields = normalizeNames(cfg.Audit.MaskBodyFields)
+
 	for i := range cfg.Services {
 		if cfg.Services[i].Protocol == "" {
 			cfg.Services[i].Protocol = "http"
@@ -263,6 +284,21 @@ func validate(cfg *Config) error {
 	case "reject", "allow_with_flag":
 	default:
 		addErr("billing.zero_balance_action must be one of: reject, allow_with_flag")
+	}
+	if cfg.Audit.BufferSize <= 0 {
+		addErr("audit.buffer_size must be greater than zero")
+	}
+	if cfg.Audit.BatchSize <= 0 {
+		addErr("audit.batch_size must be greater than zero")
+	}
+	if cfg.Audit.FlushInterval <= 0 {
+		addErr("audit.flush_interval must be greater than zero")
+	}
+	if cfg.Audit.MaxRequestBodyBytes < 0 {
+		addErr("audit.max_request_body_bytes cannot be negative")
+	}
+	if cfg.Audit.MaxResponseBodyBytes < 0 {
+		addErr("audit.max_response_body_bytes cannot be negative")
 	}
 
 	upstreamByName := make(map[string]struct{}, len(cfg.Upstreams))

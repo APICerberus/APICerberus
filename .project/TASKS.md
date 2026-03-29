@@ -506,30 +506,30 @@
 ## v0.0.6 â€” Audit Logging & Analytics
 
 ### 6.1 Audit Logger
-- [ ] Implement `audit.Logger` struct with buffered channel (10K capacity)
-- [ ] Implement `AuditEntry` struct (all fields from SPECIFICATION Â§19.1)
-- [ ] Implement `Logger.Log(ctx)` â€” build entry from RequestContext, send to buffer (non-blocking)
-- [ ] Implement flush loop: batch collect from channel â†’ `AuditRepo.BatchInsert(batch)` every 1s or 100 items
-- [ ] Implement `ResponseWriter` wrapper that captures response body for audit
-- [ ] Implement request body capture (read + buffer + re-wrap as new ReadCloser)
-- [ ] Integrate into pipeline.ExecutePostProxy â€” always log after response
+- [x] Implement `audit.Logger` struct with buffered channel (10K capacity)
+- [x] Implement `AuditEntry` struct (all fields from SPECIFICATION Â§19.1)
+- [x] Implement `Logger.Log(ctx)` â€” build entry from RequestContext, send to buffer (non-blocking)
+- [x] Implement flush loop: batch collect from channel â†’ `AuditRepo.BatchInsert(batch)` every 1s or 100 items
+- [x] Implement `ResponseWriter` wrapper that captures response body for audit
+- [x] Implement request body capture (read + buffer + re-wrap as new ReadCloser)
+- [x] Integrate into pipeline.ExecutePostProxy â€” always log after response
 
 ### 6.2 Sensitive Data Masking
-- [ ] Implement `audit.Masker` struct with header list + body field list + replacement string
-- [ ] Implement header masking: replace values of configured headers with `***REDACTED***`
-- [ ] Implement JSON body field masking: traverse JSON, replace values of matching keys
-- [ ] Implement nested field support (e.g., `user.password`, `payment.credit_card`)
-- [ ] Write unit tests: mask headers, mask top-level fields, mask nested fields
+- [x] Implement `audit.Masker` struct with header list + body field list + replacement string
+- [x] Implement header masking: replace values of configured headers with `***REDACTED***`
+- [x] Implement JSON body field masking: traverse JSON, replace values of matching keys
+- [x] Implement nested field support (e.g., `user.password`, `payment.credit_card`)
+- [x] Write unit tests: mask headers, mask top-level fields, mask nested fields
 
 ### 6.3 Audit Log Repository
-- [ ] Implement `AuditRepo.BatchInsert(entries)` â€” single transaction, prepared statement, batch insert
+- [x] Implement `AuditRepo.BatchInsert(entries)` â€” single transaction, prepared statement, batch insert
 - [ ] Implement `AuditRepo.Search(filters) ([]AuditEntry, total, error)` â€” dynamic WHERE clause builder
 - [ ] Support filters: user_id, api_key_prefix, route, method, status_code range, client_ip, blocked, block_reason, date range, min_latency, full-text search (path/body LIKE)
-- [ ] Implement `AuditRepo.FindByID(id)` â€” full detail with req/res bodies
+- [x] Implement `AuditRepo.FindByID(id)` â€” full detail with req/res bodies
 - [ ] Implement `AuditRepo.Stats(filters)` â€” aggregate: total requests, error rate, avg latency, top routes, top users
 - [ ] Implement `AuditRepo.DeleteOlderThan(cutoff, batchSize)` â€” batch deletion
 - [ ] Implement `AuditRepo.Export(filters, format)` â€” stream results as CSV/JSON/JSONL
-- [ ] Write unit tests
+- [x] Write unit tests
 
 ### 6.4 Log Retention & Cleanup
 - [ ] Implement retention scheduler: ticker â†’ check retention config â†’ delete expired logs

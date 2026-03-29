@@ -9,6 +9,7 @@ type Config struct {
 	Logging       LoggingConfig  `yaml:"logging" json:"logging"`
 	Store         StoreConfig    `yaml:"store" json:"store"`
 	Billing       BillingConfig  `yaml:"billing" json:"billing"`
+	Audit         AuditConfig    `yaml:"audit" json:"audit"`
 	Services      []Service      `yaml:"services" json:"services"`
 	Routes        []Route        `yaml:"routes" json:"routes"`
 	Upstreams     []Upstream     `yaml:"upstreams" json:"upstreams"`
@@ -24,6 +25,18 @@ type BillingConfig struct {
 	MethodMultipliers map[string]float64 `yaml:"method_multipliers" json:"method_multipliers"`
 	TestModeEnabled   bool               `yaml:"test_mode_enabled" json:"test_mode_enabled"`
 	ZeroBalanceAction string             `yaml:"zero_balance_action" json:"zero_balance_action"`
+}
+
+type AuditConfig struct {
+	Enabled              bool          `yaml:"enabled" json:"enabled"`
+	BufferSize           int           `yaml:"buffer_size" json:"buffer_size"`
+	BatchSize            int           `yaml:"batch_size" json:"batch_size"`
+	FlushInterval        time.Duration `yaml:"flush_interval" json:"flush_interval"`
+	MaxRequestBodyBytes  int64         `yaml:"max_request_body_bytes" json:"max_request_body_bytes"`
+	MaxResponseBodyBytes int64         `yaml:"max_response_body_bytes" json:"max_response_body_bytes"`
+	MaskHeaders          []string      `yaml:"mask_headers" json:"mask_headers"`
+	MaskBodyFields       []string      `yaml:"mask_body_fields" json:"mask_body_fields"`
+	MaskReplacement      string        `yaml:"mask_replacement" json:"mask_replacement"`
 }
 
 type AuthConfig struct {

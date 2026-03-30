@@ -1,9 +1,12 @@
 package admin
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -29,6 +32,64 @@ func TestAdminAuthMiddleware(t *testing.T) {
 
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401 got %d", resp.StatusCode)
+	}
+}
+
+func TestAdminDashboardSPAFallback(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+	status, body, _ := mustRawRequest(t, http.MethodGet, baseURL+"/", "")
+	if status != http.StatusOK {
+		t.Fatalf("expected GET / to return 200, got %d body=%q", status, body)
+	}
+	if !strings.Contains(body, "<div id=\"app\"></div>") {
+		t.Fatalf("expected dashboard index shell, got body=%q", body)
+	}
+
+	status, body, _ = mustRawRequest(t, http.MethodGet, baseURL+"/services", "")
+	if status != http.StatusOK {
+		t.Fatalf("expected SPA fallback to return 200, got %d body=%q", status, body)
+	}
+	if !strings.Contains(body, "<div id=\"app\"></div>") {
+		t.Fatalf("expected SPA fallback body, got %q", body)
+	}
+}
+
+func TestAdminRealtimeWebSocketEndpoint(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	statusLine, conn, reader := performWebSocketHandshake(t, baseURL, "secret-admin")
+	defer conn.Close()
+
+	if !strings.Contains(statusLine, "101") {
+		t.Fatalf("expected websocket upgrade status 101, got %q", strings.TrimSpace(statusLine))
+	}
+
+	frame, err := readWebSocketFramePayload(reader)
+	if err != nil {
+		t.Fatalf("read websocket frame: %v", err)
+	}
+	var event map[string]any
+	if err := json.Unmarshal(frame, &event); err != nil {
+		t.Fatalf("unmarshal websocket frame: %v payload=%q", err, string(frame))
+	}
+	if got := strings.TrimSpace(asString(event["type"])); got != "connected" {
+		t.Fatalf("expected first websocket event type=connected got=%q payload=%s", got, string(frame))
+	}
+}
+
+func TestAdminRealtimeWebSocketRejectsUnauthorized(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+	statusLine, conn, _ := performWebSocketHandshake(t, baseURL, "")
+	defer conn.Close()
+
+	if !strings.Contains(statusLine, "401") {
+		t.Fatalf("expected websocket unauthorized status 401, got %q", strings.TrimSpace(statusLine))
 	}
 }
 
@@ -457,7 +518,8 @@ func newAdminTestServer(t *testing.T) (adminBaseURL string, upstreamURL string, 
 			MaxBodyBytes:   1 << 20,
 		},
 		Admin: config.AdminConfig{
-			APIKey: "secret-admin",
+			APIKey:    "secret-admin",
+			UIEnabled: true,
 		},
 		Store: config.StoreConfig{
 			Path:        storePath,
@@ -522,6 +584,117 @@ func newAdminTestServer(t *testing.T) (adminBaseURL string, upstreamURL string, 
 	})
 
 	return httpSrv.URL, upstream.URL, storePath
+}
+
+func performWebSocketHandshake(t *testing.T, baseURL, apiKey string) (string, net.Conn, *bufio.Reader) {
+	t.Helper()
+
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		t.Fatalf("parse base URL: %v", err)
+	}
+	path := "/admin/api/v1/ws"
+	if strings.TrimSpace(apiKey) != "" {
+		query := url.Values{}
+		query.Set("api_key", apiKey)
+		path += "?" + query.Encode()
+	}
+
+	conn, err := net.Dial("tcp", parsed.Host)
+	if err != nil {
+		t.Fatalf("dial websocket endpoint: %v", err)
+	}
+	reader := bufio.NewReader(conn)
+
+	requestLines := []string{
+		"GET " + path + " HTTP/1.1",
+		"Host: " + parsed.Host,
+		"Upgrade: websocket",
+		"Connection: Upgrade",
+		"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+		"Sec-WebSocket-Version: 13",
+		"",
+		"",
+	}
+	if _, err := conn.Write([]byte(strings.Join(requestLines, "\r\n"))); err != nil {
+		_ = conn.Close()
+		t.Fatalf("write websocket handshake request: %v", err)
+	}
+
+	statusLine, err := reader.ReadString('\n')
+	if err != nil {
+		_ = conn.Close()
+		t.Fatalf("read websocket status line: %v", err)
+	}
+	for {
+		line, readErr := reader.ReadString('\n')
+		if readErr != nil {
+			_ = conn.Close()
+			t.Fatalf("read websocket headers: %v", readErr)
+		}
+		if line == "\r\n" {
+			break
+		}
+	}
+
+	return statusLine, conn, reader
+}
+
+func readWebSocketFramePayload(reader *bufio.Reader) ([]byte, error) {
+	firstByte, err := reader.ReadByte()
+	if err != nil {
+		return nil, err
+	}
+	opcode := firstByte & 0x0F
+	if opcode != 0x1 {
+		return nil, io.ErrUnexpectedEOF
+	}
+
+	secondByte, err := reader.ReadByte()
+	if err != nil {
+		return nil, err
+	}
+	masked := secondByte&0x80 != 0
+	length := uint64(secondByte & 0x7F)
+	switch length {
+	case 126:
+		extended := make([]byte, 2)
+		if _, err := io.ReadFull(reader, extended); err != nil {
+			return nil, err
+		}
+		length = uint64(extended[0])<<8 | uint64(extended[1])
+	case 127:
+		extended := make([]byte, 8)
+		if _, err := io.ReadFull(reader, extended); err != nil {
+			return nil, err
+		}
+		length = uint64(extended[0])<<56 |
+			uint64(extended[1])<<48 |
+			uint64(extended[2])<<40 |
+			uint64(extended[3])<<32 |
+			uint64(extended[4])<<24 |
+			uint64(extended[5])<<16 |
+			uint64(extended[6])<<8 |
+			uint64(extended[7])
+	}
+
+	var maskKey [4]byte
+	if masked {
+		if _, err := io.ReadFull(reader, maskKey[:]); err != nil {
+			return nil, err
+		}
+	}
+
+	payload := make([]byte, length)
+	if _, err := io.ReadFull(reader, payload); err != nil {
+		return nil, err
+	}
+	if masked {
+		for i := range payload {
+			payload[i] ^= maskKey[i%4]
+		}
+	}
+	return payload, nil
 }
 
 func mustJSONRequest(t *testing.T, method, rawURL, adminKey string, payload any) map[string]any {

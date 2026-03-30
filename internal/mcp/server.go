@@ -773,6 +773,23 @@ func loadConfigFromArgs(args map[string]any) (*config.Config, error) {
 }
 
 func loadConfigFromYAML(raw string) (*config.Config, error) {
+	cfg, err := loadConfigFromYAMLRaw(raw)
+	if err == nil {
+		return cfg, nil
+	}
+
+	normalized := normalizeYAMLForConfigParser(raw)
+	if normalized == raw {
+		return nil, err
+	}
+	cfg, normalizedErr := loadConfigFromYAMLRaw(normalized)
+	if normalizedErr != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+func loadConfigFromYAMLRaw(raw string) (*config.Config, error) {
 	temp, err := os.CreateTemp("", "apicerberus-mcp-import-*.yaml")
 	if err != nil {
 		return nil, fmt.Errorf("create temp config file: %w", err)
@@ -785,6 +802,14 @@ func loadConfigFromYAML(raw string) (*config.Config, error) {
 		return nil, fmt.Errorf("write temp config file: %w", err)
 	}
 	return config.Load(path)
+}
+
+func normalizeYAMLForConfigParser(raw string) string {
+	out := raw
+	// Our custom YAML parser is stricter than flow-style YAML in some cases.
+	out = strings.ReplaceAll(out, ": {}", ":")
+	out = strings.ReplaceAll(out, ": []", ":")
+	return out
 }
 
 func (s *Server) swapRuntime(newCfg *config.Config) error {

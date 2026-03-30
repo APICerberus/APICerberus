@@ -678,11 +678,11 @@
 - [x] Implement `admin/Settings.tsx` â€” portal config, billing settings, retention policies
 
 ### 7.10 Go: Embed & Serve Dashboard
-- [ ] Implement `embed.go` â€” `//go:embed web/dist/*`
-- [ ] Implement SPA serving in admin server: file server + fallback to index.html
-- [ ] Implement WebSocket endpoint for real-time dashboard updates
-- [ ] Implement WebSocket: broadcast new request metrics, health changes
-- [ ] Build pipeline: `npm run build` â†’ embed in Go binary
+- [x] Implement `embed.go` â€” `//go:embed web/dist/*`
+- [x] Implement SPA serving in admin server: file server + fallback to index.html
+- [x] Implement WebSocket endpoint for real-time dashboard updates
+- [x] Implement WebSocket: broadcast new request metrics, health changes
+- [x] Build pipeline: `npm run build` â†’ embed in Go binary
 
 ### 7.11 Final (v0.0.7)
 - [ ] Verify dashboard loads in browser (dark + light mode)

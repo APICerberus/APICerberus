@@ -1,4 +1,4 @@
-import { WS_CONFIG } from "./constants";
+import { API_CONFIG, WS_CONFIG } from "./constants";
 
 export type WebSocketStatus = "idle" | "connecting" | "open" | "reconnecting" | "closed";
 
@@ -17,18 +17,33 @@ type StatusListener = (status: WebSocketStatus) => void;
 type ErrorListener = (error: Event) => void;
 
 function resolveWebSocketUrl(overrideUrl?: string) {
+  let resolvedUrl = "";
   if (overrideUrl) {
-    return overrideUrl;
+    resolvedUrl = overrideUrl;
+  } else if (WS_CONFIG.url) {
+    resolvedUrl = WS_CONFIG.url;
+  } else if (typeof window !== "undefined") {
+    const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const host = window.location.host;
+    resolvedUrl = `${scheme}//${host}${WS_CONFIG.path}`;
   }
-  if (WS_CONFIG.url) {
-    return WS_CONFIG.url;
+
+  if (!resolvedUrl || typeof window === "undefined") {
+    return resolvedUrl;
   }
-  if (typeof window === "undefined") {
-    return "";
+
+  const adminKey = window.localStorage.getItem(API_CONFIG.adminApiKeyStorageKey)?.trim();
+  if (!adminKey) {
+    return resolvedUrl;
   }
-  const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const host = window.location.host;
-  return `${scheme}//${host}${WS_CONFIG.path}`;
+
+  try {
+    const url = new URL(resolvedUrl, window.location.origin);
+    url.searchParams.set("api_key", adminKey);
+    return url.toString();
+  } catch {
+    return resolvedUrl;
+  }
 }
 
 export class ReconnectingWebSocketClient<TMessage = unknown> {
@@ -192,4 +207,3 @@ export class ReconnectingWebSocketClient<TMessage = unknown> {
     }
   }
 }
-

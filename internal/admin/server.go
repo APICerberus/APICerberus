@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"sort"
@@ -25,10 +26,11 @@ import (
 
 // Server hosts Admin REST API endpoints.
 type Server struct {
-	mu      sync.RWMutex
-	cfg     *config.Config
-	gateway *gateway.Gateway
-	mux     *http.ServeMux
+	mu          sync.RWMutex
+	cfg         *config.Config
+	gateway     *gateway.Gateway
+	mux         *http.ServeMux
+	dashboardFS fs.FS
 
 	startedAt time.Time
 }
@@ -47,6 +49,13 @@ func NewServer(cfg *config.Config, gw *gateway.Gateway) (*Server, error) {
 		gateway:   gw,
 		mux:       http.NewServeMux(),
 		startedAt: time.Now(),
+	}
+	if cfg.Admin.UIEnabled {
+		dashboardFS, err := embeddedDashboardFS()
+		if err != nil {
+			return nil, fmt.Errorf("load embedded dashboard assets: %w", err)
+		}
+		s.dashboardFS = dashboardFS
 	}
 	s.registerRoutes()
 	return s, nil
@@ -129,6 +138,12 @@ func (s *Server) registerRoutes() {
 	s.handle("PUT /admin/api/v1/billing/config", s.updateBillingConfig)
 	s.handle("GET /admin/api/v1/billing/route-costs", s.getBillingRouteCosts)
 	s.handle("PUT /admin/api/v1/billing/route-costs", s.updateBillingRouteCosts)
+
+	s.mux.HandleFunc("GET /admin/api/v1/ws", s.handleRealtimeWebSocket)
+
+	if s.dashboardFS != nil {
+		s.mux.Handle("/", s.newDashboardHandler())
+	}
 }
 
 func (s *Server) handle(pattern string, handler http.HandlerFunc) {

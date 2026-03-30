@@ -17,6 +17,7 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/audit"
 	"github.com/APICerberus/APICerebrus/internal/billing"
 	"github.com/APICerberus/APICerebrus/internal/config"
+	grpcpkg "github.com/APICerberus/APICerebrus/internal/grpc"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/plugin"
 	"github.com/APICerberus/APICerebrus/internal/store"
@@ -43,6 +44,7 @@ type Gateway struct {
 	httpServer     *http.Server
 	httpsServer    *http.Server
 	tlsManager     *TLSManager
+	grpcServer     *grpcpkg.H2CServer // gRPC h2c server
 	startedAt      time.Time
 
 	runCtx       context.Context
@@ -553,6 +555,23 @@ func (g *Gateway) Start(ctx context.Context) error {
 	}
 
 	errCh := make(chan error, serverCount)
+
+	// Start gRPC server if enabled
+	if g.config.Gateway.GRPC.Enabled && g.config.Gateway.GRPC.Addr != "" {
+		grpcConfig := &grpcpkg.H2CConfig{
+			Addr:                   g.config.Gateway.GRPC.Addr,
+			ReadTimeout:            g.config.Gateway.ReadTimeout,
+			WriteTimeout:           g.config.Gateway.WriteTimeout,
+			IdleTimeout:            g.config.Gateway.IdleTimeout,
+			MaxHeaderBytes:         g.config.Gateway.MaxHeaderBytes,
+			MaxConcurrentStreams:   250,
+		}
+		g.grpcServer = grpcpkg.NewH2CServer(grpcConfig, g)
+		if err := g.grpcServer.Start(); err != nil {
+			return fmt.Errorf("start gRPC server: %w", err)
+		}
+	}
+
 	if server != nil {
 		go func() {
 			err := server.ListenAndServe()
@@ -697,6 +716,7 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 	auditCancel := g.auditCancel
 	server := g.httpServer
 	httpsServer := g.httpsServer
+	grpcServer := g.grpcServer
 	st := g.store
 	g.mu.RUnlock()
 
@@ -714,6 +734,11 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 	}
 	if httpsServer != nil {
 		if err := httpsServer.Shutdown(ctx); err != nil {
+			shutdownErr = errors.Join(shutdownErr, err)
+		}
+	}
+	if grpcServer != nil {
+		if err := grpcServer.Stop(ctx); err != nil {
 			shutdownErr = errors.Join(shutdownErr, err)
 		}
 	}

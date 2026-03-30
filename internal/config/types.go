@@ -61,11 +61,19 @@ type GatewayConfig struct {
 	HTTPAddr       string        `yaml:"http_addr" json:"http_addr"`
 	HTTPSAddr      string        `yaml:"https_addr" json:"https_addr"`
 	TLS            TLSConfig     `yaml:"tls" json:"tls"`
+	GRPC           GRPCConfig    `yaml:"grpc" json:"grpc"`
 	ReadTimeout    time.Duration `yaml:"read_timeout" json:"read_timeout"`
 	WriteTimeout   time.Duration `yaml:"write_timeout" json:"write_timeout"`
 	IdleTimeout    time.Duration `yaml:"idle_timeout" json:"idle_timeout"`
 	MaxHeaderBytes int           `yaml:"max_header_bytes" json:"max_header_bytes"`
 	MaxBodyBytes   int64         `yaml:"max_body_bytes" json:"max_body_bytes"`
+}
+
+type GRPCConfig struct {
+	Enabled           bool   `yaml:"enabled" json:"enabled"`
+	Addr              string `yaml:"addr" json:"addr"`
+	EnableWeb         bool   `yaml:"enable_web" json:"enable_web"`
+	EnableTranscoding bool   `yaml:"enable_transcoding" json:"enable_transcoding"`
 }
 
 type TLSConfig struct {

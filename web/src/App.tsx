@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ROUTES } from "@/lib/constants";
 import { DashboardPage } from "@/pages/admin/Dashboard";
+import { RouteDetailPage } from "@/pages/admin/RouteDetail";
+import { RoutesPage } from "@/pages/admin/Routes";
 import { ServiceDetailPage } from "@/pages/admin/ServiceDetail";
 import { ServicesPage } from "@/pages/admin/Services";
 
@@ -39,8 +41,10 @@ export function App() {
           <Route path={ROUTES.dashboard} element={<DashboardPage />} />
           <Route path={ROUTES.services} element={<ServicesPage />} />
           <Route path="/services/:id" element={<ServiceDetailPage />} />
+          <Route path={ROUTES.routes} element={<RoutesPage />} />
+          <Route path="/routes/:id" element={<RouteDetailPage />} />
           {NAV_ITEMS
-            .filter((item) => item.path !== ROUTES.dashboard && item.path !== ROUTES.services)
+            .filter((item) => item.path !== ROUTES.dashboard && item.path !== ROUTES.services && item.path !== ROUTES.routes)
             .map((item) => (
             <Route
               key={item.path}

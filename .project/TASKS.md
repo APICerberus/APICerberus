@@ -662,8 +662,8 @@
 - [x] Implement `admin/Dashboard.tsx` â€” KPI cards (requests, users, credits, errors), traffic chart, top routes table, live request tail
 - [x] Implement `admin/Services.tsx` â€” service list (DataTable), create dialog, inline status badges
 - [x] Implement `admin/ServiceDetail.tsx` â€” service config, associated routes, edit form
-- [ ] Implement `admin/Routes.tsx` â€” route list, create dialog, plugin badges
-- [ ] Implement `admin/RouteDetail.tsx` â€” route config, plugin configuration, edit form
+- [x] Implement `admin/Routes.tsx` â€” route list, create dialog, plugin badges
+- [x] Implement `admin/RouteDetail.tsx` â€” route config, plugin configuration, edit form
 - [ ] Implement `admin/Upstreams.tsx` â€” upstream list, health indicators, target management
 - [ ] Implement `admin/UpstreamDetail.tsx` â€” targets list, health check config, algorithm selector
 - [ ] Implement `admin/Consumers.tsx` â€” consumer list, API key management

@@ -1,7 +1,7 @@
 # API Cerberus
 
 [![Go](https://img.shields.io/badge/go-1.26%2B-00ADD8.svg)](https://go.dev/)
-[![Release](https://img.shields.io/badge/release-v0.0.5-blue.svg)](#release-status)
+[![Release](https://img.shields.io/badge/release-v0.1.0-blue.svg)](#release-status)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
 API Cerberus is an API gateway and API management platform written in Go.
@@ -10,26 +10,46 @@ user management, credits/billing, and an admin REST API.
 
 ## Release Status
 
-- Current tagged release: `v0.0.5`
-- Implemented milestones: `v0.0.1` to `v0.0.5`
-- Next milestone: `v0.0.6` (Audit Logging and Analytics)
+- Current tagged release: `v0.1.0`
+- Implemented milestones: `v0.0.1` to `v0.1.0`
+- Next milestone: `v0.2.0` (gRPC Support)
 
 Progress is tracked in [`.project/TASKS.md`](./.project/TASKS.md).
 
-## What Is Implemented (v0.0.1 - v0.0.5)
+## What Is Implemented (v0.0.1 - v0.1.0)
 
+### Core Features
 - Core gateway: routing, reverse proxy, websocket proxy
-- Load balancing: round robin, weighted, least_conn, ip_hash, consistent_hash, adaptive, and more
+- Load balancing: 10 algorithms (round robin, weighted, least_conn, ip_hash, consistent_hash, adaptive, least_latency, health_weighted, random)
 - Health checks: active and passive
-- Plugin pipeline with route/global plugin configuration
-- Authentication: API key and JWT (HS256 and RS256)
-- Rate limiting: token bucket, fixed window, sliding window, leaky bucket
-- Traffic controls: circuit breaker, retry, timeout, IP restrict, CORS
-- Transform plugins: request/response transform, validation, request size limits, correlation IDs
-- Embedded SQLite-backed data model for users, API keys, credits, and endpoint permissions
-- User-level IP whitelist enforcement
-- Extended admin API for users, keys, permissions, IP whitelist, credits, and billing config
-- End-to-end test coverage for v0.0.5 scenarios
+- Plugin pipeline with 20+ plugins
+- Authentication: API key (SQLite-backed) and JWT (HS256, RS256, JWKS)
+- Rate limiting: 4 algorithms (token bucket, fixed window, sliding window, leaky bucket)
+- Traffic controls: circuit breaker, retry, timeout, IP restrict, CORS, bot detection
+- Transform plugins: request/response transform, URL rewrite, validation, size limits, correlation IDs, compression
+
+### Data & Management
+- Embedded SQLite-backed data model
+- User management with roles and IP whitelist
+- API key management with `ck_live_`/`ck_test_` prefixes
+- Credit system with atomic transactions and test key bypass
+- Endpoint permissions with time/day restrictions
+- Audit logging with masking and retention policies
+- Analytics engine with real-time metrics
+
+### Interfaces
+- Admin REST API (40+ endpoints)
+- Web Dashboard (React + shadcn/ui, 35+ components)
+- User Portal with API Playground
+- WebSocket real-time updates
+- MCP Server (stdio + SSE transports, 25+ tools)
+- CLI with 40+ commands
+
+### Operations
+- TLS with ACME auto-provisioning
+- Config export/import with diff
+- Hot reload (SIGHUP)
+- Graceful shutdown
 
 ## Documentation
 
@@ -107,27 +127,89 @@ curl \
 ## CLI Commands
 
 ```text
+# Core
 apicerberus start [--config path] [--pid-file path]
 apicerberus stop [--pid-file path]
 apicerberus version
 apicerberus config validate <path>
+
+# Config Management
+apicerberus config export [--config path] [--out path]
+apicerberus config import [--target path] <source>
+apicerberus config diff <path1> <path2>
+
+# User Management
+apicerberus user list [--config path] [--output json]
+apicerberus user create --email --name [--credits] [--role]
+apicerberus user get <id> [--config path] [--output json]
+apicerberus user update <id> [--name] [--rate-limit-rps]
+apicerberus user suspend|activate <id>
+apicerberus user apikey list --user <id>
+apicerberus user apikey create --user <id> --name <name> [--mode test|live]
+apicerberus user apikey revoke --user <id> --key <key-id>
+apicerberus user permission list --user <id>
+apicerberus user permission grant --user <id> --route <route> --methods <methods>
+apicerberus user permission revoke --user <id> --permission <id>
+apicerberus user ip list --user <id>
+apicerberus user ip add --user <id> --ip <cidr>
+apicerberus user ip remove --user <id> --ip <cidr>
+
+# Credit Management
+apicerberus credit overview [--config path] [--output json]
+apicerberus credit balance --user <id>
+apicerberus credit topup --user <id> --amount <n> --reason <text>
+apicerberus credit deduct --user <id> --amount <n> --reason <text>
+apicerberus credit transactions --user <id>
+
+# Audit & Analytics
+apicerberus audit search [--config path] [--output json] [--user] [--route] [--since]
+apicerberus audit tail [--config path] [--follow]
+apicerberus audit detail <id>
+apicerberus audit export [--format csv|json|jsonl]
+apicerberus audit stats
+apicerberus audit cleanup --older-than-days <n>
+apicerberus audit retention show|set --days <n>
+apicerberus analytics overview [--config path] [--output json]
+apicerberus analytics requests [--config path]
+apicerberus analytics latency [--config path]
+
+# Gateway Entities
+apicerberus service list|add|get|update|delete
+apicerberus route list|add|get|update|delete
+apicerberus upstream list|add|get|update|delete
+
+# MCP Server
+apicerberus mcp start [--transport stdio|sse] [--port 3000] [--config path]
 ```
 
 ## Admin API Overview
 
-The admin server is protected by `X-Admin-Key`.
+The admin server is protected by `X-Admin-Key` header.
 
-Main groups currently available:
+### Core Endpoints
+- System: `/admin/api/v1/status`, `/info`, `/config/reload`, `/config/export`, `/config/import`
+- Real-time: `/admin/api/v1/ws` (WebSocket)
 
-- System: `/admin/api/v1/status`, `/info`, `/config/reload`
+### Gateway Management
 - Services CRUD: `/admin/api/v1/services`
 - Routes CRUD: `/admin/api/v1/routes`
 - Upstreams CRUD + targets + health: `/admin/api/v1/upstreams`
-- Users CRUD + suspend/activate/reset-password: `/admin/api/v1/users`
-- User API keys: `/admin/api/v1/users/{id}/api-keys`
-- User permissions: `/admin/api/v1/users/{id}/permissions`
-- User IP whitelist: `/admin/api/v1/users/{id}/ip-whitelist`
-- Credits and billing: `/admin/api/v1/credits/overview`, `/admin/api/v1/users/{id}/credits/*`, `/admin/api/v1/billing/*`
+
+### User Management
+- Users CRUD: `/admin/api/v1/users`
+- User operations: `/admin/api/v1/users/{id}/suspend`, `/activate`, `/reset-password`
+- API keys: `/admin/api/v1/users/{id}/api-keys`
+- Permissions: `/admin/api/v1/users/{id}/permissions`
+- IP whitelist: `/admin/api/v1/users/{id}/ip-whitelist`
+- Credit: `/admin/api/v1/users/{id}/credits/*`
+
+### Audit & Analytics
+- Audit logs: `/admin/api/v1/audit-logs` (search, export, cleanup)
+- Analytics: `/admin/api/v1/analytics/*` (overview, timeseries, top routes, latency, etc.)
+
+### Alerts
+- Alert rules: `/admin/api/v1/alerts`
+- Alert history: `/admin/api/v1/alerts/history`
 
 ## Tests
 
@@ -164,9 +246,12 @@ docker run --rm -p 8080:8080 -p 9876:9876 apicerberus:local
 
 Upcoming high-level milestones:
 
-- `v0.0.6`: audit logging and analytics
-- `v0.0.7`: web dashboard
-- `v0.0.8`: user portal and API playground
-- `v0.1.0`: MCP server and expanded CLI
+- `v0.2.0`: gRPC support (HTTP/2, gRPC-Web, transcoding)
+- `v0.3.0`: GraphQL support (query depth, complexity, subscriptions)
+- `v0.4.0`: GraphQL Federation (schema composition, query planning)
+- `v0.5.0`: Raft Clustering (HA, distributed rate limiting)
+- `v0.6.0`: Advanced features (caching, Prometheus, OpenTelemetry)
+- `v0.7.0`: Enterprise (RBAC, SSO, white-label)
+- `v1.0.0`: Production release
 
 See the full plan in [`.project/TASKS.md`](./.project/TASKS.md).

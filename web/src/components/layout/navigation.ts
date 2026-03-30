@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Boxes,
   FileCode2,
+  GitBranch,
   LayoutDashboard,
   LineChart,
   Network,
@@ -84,6 +85,12 @@ export const NAV_ITEMS: NavItem[] = [
     description: "Latency, throughput, and error analytics.",
   },
   {
+    title: "Cluster",
+    path: ROUTES.cluster,
+    icon: GitBranch,
+    description: "Cluster topology and role view.",
+  },
+  {
     title: "Config",
     path: ROUTES.config,
     icon: FileCode2,
@@ -96,4 +103,3 @@ export const NAV_ITEMS: NavItem[] = [
     description: "System and platform preferences.",
   },
 ];
-

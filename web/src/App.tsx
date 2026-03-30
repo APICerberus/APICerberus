@@ -11,6 +11,7 @@ import { PORTAL_ROUTES } from "@/lib/portal-routes";
 import { AnalyticsPage } from "@/pages/admin/Analytics";
 import { AuditLogDetailPage } from "@/pages/admin/AuditLogDetail";
 import { AuditLogsPage } from "@/pages/admin/AuditLogs";
+import { ClusterPage } from "@/pages/admin/Cluster";
 import { ConfigPage } from "@/pages/admin/Config";
 import { ConsumersPage } from "@/pages/admin/Consumers";
 import { CreditsPage } from "@/pages/admin/Credits";
@@ -119,6 +120,7 @@ function AdminRoutesView() {
         <Route path={ROUTES.auditLogs} element={<AuditLogsPage />} />
         <Route path="/audit-logs/:id" element={<AuditLogDetailPage />} />
         <Route path={ROUTES.analytics} element={<AnalyticsPage />} />
+        <Route path={ROUTES.cluster} element={<ClusterPage />} />
         <Route path={ROUTES.config} element={<ConfigPage />} />
         <Route path={ROUTES.settings} element={<SettingsPage />} />
         {NAV_ITEMS
@@ -134,6 +136,7 @@ function AdminRoutesView() {
               item.path !== ROUTES.credits &&
               item.path !== ROUTES.auditLogs &&
               item.path !== ROUTES.analytics &&
+              item.path !== ROUTES.cluster &&
               item.path !== ROUTES.config &&
               item.path !== ROUTES.settings,
           )

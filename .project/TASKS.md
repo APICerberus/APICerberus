@@ -773,9 +773,9 @@
 - [x] Integrate into `admin/Services.tsx` as toggle view (table/graph)
 
 ### 9.5 Cluster Topology (Placeholder)
-- [ ] Implement `ClusterTopology.tsx` â€” React Flow: single node (standalone mode)
-- [ ] Prepare for v0.5.0: node types for Leader/Follower/Unhealthy
-- [ ] Integrate into `admin/Cluster.tsx`
+- [x] Implement `ClusterTopology.tsx` â€” React Flow: single node (standalone mode)
+- [x] Prepare for v0.5.0: node types for Leader/Follower/Unhealthy
+- [x] Integrate into `admin/Cluster.tsx`
 
 ### 9.6 WebSocket Real-Time Feed
 - [ ] Implement Go WebSocket endpoint: `/admin/api/v1/ws`

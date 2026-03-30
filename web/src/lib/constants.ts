@@ -15,6 +15,7 @@ export const ROUTES = {
   credits: "/credits",
   auditLogs: "/audit-logs",
   analytics: "/analytics",
+  cluster: "/cluster",
   config: "/config",
   settings: "/settings",
 } as const;

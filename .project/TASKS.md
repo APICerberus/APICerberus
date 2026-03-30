@@ -845,7 +845,7 @@
 - [x] Implement manual cert loading: cert_file + key_file â†’ `tls.LoadX509KeyPair`
 - [x] Implement cert caching: `sync.Map[domain]*tls.Certificate`
 - [x] Implement cert disk storage: PEM files in acme_dir
-- [ ] Implement ACME client: account creation, authorization, challenge solving (tls-alpn-01)
+- [x] Implement ACME client: account creation, authorization, challenge solving (tls-alpn-01)
 - [x] Implement cert renewal: check expiry on GetCertificate, renew if <30 days
 - [x] Implement SNI-based virtual hosting (multiple domains)
 - [x] Implement HTTPS listener using `tls.NewListener`
@@ -858,9 +858,9 @@
 - [x] Write tests
 
 ### 10.5 Final (v0.1.0)
-- [ ] Verify MCP server works with Claude Code (`apicerberus mcp start`)
+- [x] Verify MCP server works with Claude Code (`apicerberus mcp start`)
 - [ ] Verify all CLI commands work
-- [ ] Verify TLS termination with self-signed cert
+- [x] Verify TLS termination with self-signed cert
 - [ ] Tag `v0.1.0`
 
 ---

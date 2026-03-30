@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"golang.org/x/crypto/acme"
+	"golang.org/x/crypto/acme/autocert"
 )
 
 const certificateRenewalWindow = 30 * 24 * time.Hour
@@ -23,9 +25,10 @@ type certificateIssueFunc func(domain string) (*tls.Certificate, error)
 
 // TLSManager provides dynamic certificate lookup for HTTPS listeners.
 type TLSManager struct {
-	cfg   config.TLSConfig
-	certs sync.Map // map[string]*tls.Certificate
-	issue certificateIssueFunc
+	cfg       config.TLSConfig
+	certs     sync.Map // map[string]*tls.Certificate
+	issue     certificateIssueFunc
+	autocertM *autocert.Manager
 }
 
 // NewTLSManager prepares certificate sources from configuration.
@@ -40,6 +43,11 @@ func NewTLSManager(cfg config.TLSConfig) (*TLSManager, error) {
 	if cfg.Auto && cfg.ACMEDir != "" {
 		if err := os.MkdirAll(cfg.ACMEDir, 0o700); err != nil {
 			return nil, fmt.Errorf("prepare acme_dir: %w", err)
+		}
+		manager.autocertM = &autocert.Manager{
+			Prompt: autocert.AcceptTOS,
+			Cache:  autocert.DirCache(cfg.ACMEDir),
+			Email:  cfg.ACMEEmail,
 		}
 	}
 
@@ -56,6 +64,18 @@ func NewTLSManager(cfg config.TLSConfig) (*TLSManager, error) {
 	}
 	manager.certs.Store("*", cert)
 	return manager, nil
+}
+
+func (tm *TLSManager) TLSConfig() *tls.Config {
+	nextProtos := []string{"h2", "http/1.1"}
+	if tm != nil && tm.cfg.Auto {
+		nextProtos = append(nextProtos, acme.ALPNProto)
+	}
+	return &tls.Config{
+		MinVersion:     tls.VersionTLS12,
+		GetCertificate: tm.GetCertificate,
+		NextProtos:     nextProtos,
+	}
 }
 
 // GetCertificate is used as tls.Config.GetCertificate callback.
@@ -143,7 +163,12 @@ func (tm *TLSManager) issueAndStore(serverName string) (*tls.Certificate, error)
 }
 
 func (tm *TLSManager) issueCertificate(serverName string) (*tls.Certificate, error) {
-	return nil, fmt.Errorf("acme certificate issuance is not implemented yet for %q", serverName)
+	if tm.autocertM == nil {
+		return nil, fmt.Errorf("acme certificate manager is not configured for %q", serverName)
+	}
+	return tm.autocertM.GetCertificate(&tls.ClientHelloInfo{
+		ServerName: serverName,
+	})
 }
 
 func (tm *TLSManager) cached(name string) *tls.Certificate {

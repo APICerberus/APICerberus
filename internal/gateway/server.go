@@ -501,10 +501,7 @@ func (g *Gateway) serveHTTPS(server *http.Server, tlsManager *TLSManager) error 
 	if err != nil {
 		return err
 	}
-	tlsConfig := &tls.Config{
-		MinVersion:     tls.VersionTLS12,
-		GetCertificate: tlsManager.GetCertificate,
-	}
+	tlsConfig := tlsManager.TLSConfig()
 	tlsListener := tls.NewListener(listener, tlsConfig)
 	return server.Serve(tlsListener)
 }

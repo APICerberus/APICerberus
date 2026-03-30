@@ -1772,6 +1772,73 @@ func TestGatewayAuditLoggingCapturesAndMasks(t *testing.T) {
 	}
 }
 
+func TestGatewayAnalyticsRecordsRequestMetrics(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte("created"))
+	}))
+	defer upstream.Close()
+
+	cfg := gatewayTestConfig(t, "127.0.0.1:0", mustHost(t, upstream.URL))
+	gw, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New gateway error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "http://gateway.local/api/users", nil)
+	rr := httptest.NewRecorder()
+	gw.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201 got %d body=%q", rr.Code, rr.Body.String())
+	}
+
+	engine := gw.Analytics()
+	if engine == nil {
+		t.Fatalf("expected analytics engine")
+	}
+
+	overview := engine.Overview()
+	if overview.TotalRequests != 1 {
+		t.Fatalf("expected total_requests=1 got %d", overview.TotalRequests)
+	}
+	if overview.TotalErrors != 0 {
+		t.Fatalf("expected total_errors=0 got %d", overview.TotalErrors)
+	}
+	if overview.ActiveConns != 0 {
+		t.Fatalf("expected active_conns=0 got %d", overview.ActiveConns)
+	}
+
+	latest := engine.Latest(1)
+	if len(latest) != 1 {
+		t.Fatalf("expected 1 latest metric got %d", len(latest))
+	}
+	metric := latest[0]
+	if metric.RouteID != "route-1" || metric.RouteName != "users-route" {
+		t.Fatalf("unexpected route metric: %#v", metric)
+	}
+	if metric.Method != http.MethodGet || metric.Path != "/api/users" {
+		t.Fatalf("unexpected request metric fields: %#v", metric)
+	}
+	if metric.StatusCode != http.StatusCreated {
+		t.Fatalf("unexpected status code metric: %d", metric.StatusCode)
+	}
+	if metric.BytesOut <= 0 {
+		t.Fatalf("expected bytes_out > 0 got %d", metric.BytesOut)
+	}
+
+	now := time.Now().UTC()
+	buckets := engine.TimeSeries(now.Add(-time.Minute), now.Add(time.Minute))
+	if len(buckets) == 0 {
+		t.Fatalf("expected at least one analytics bucket")
+	}
+	if buckets[len(buckets)-1].Requests <= 0 {
+		t.Fatalf("expected bucket requests > 0, buckets=%#v", buckets)
+	}
+}
+
 func gatewayTestConfig(t *testing.T, addr, upstreamHost string) *config.Config {
 	t.Helper()
 

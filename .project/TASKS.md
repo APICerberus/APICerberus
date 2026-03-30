@@ -544,13 +544,13 @@
 - [x] Write unit test
 
 ### 6.6 Analytics Engine
-- [ ] Implement `analytics.Engine` struct (ring buffer + time-series store + counters)
-- [ ] Implement `RingBuffer[RequestMetric]` â€” fixed size (default 100K), lock-free push
-- [ ] Implement `TimeSeriesStore` â€” per-minute buckets, auto-cleanup of old buckets
-- [ ] Implement `Bucket` aggregation: requests, errors, latency percentiles (p50/p95/p99), status codes, bytes
-- [ ] Implement real-time atomic counters: totalRequests, activeConns, totalErrors
-- [ ] Implement `Engine.Record(metric)` â€” push to ring buffer + update time-series + increment counters
-- [ ] Integrate into pipeline: after each request, record analytics metric
+- [x] Implement `analytics.Engine` struct (ring buffer + time-series store + counters)
+- [x] Implement `RingBuffer[RequestMetric]` â€” fixed size (default 100K), lock-free push
+- [x] Implement `TimeSeriesStore` â€” per-minute buckets, auto-cleanup of old buckets
+- [x] Implement `Bucket` aggregation: requests, errors, latency percentiles (p50/p95/p99), status codes, bytes
+- [x] Implement real-time atomic counters: totalRequests, activeConns, totalErrors
+- [x] Implement `Engine.Record(metric)` â€” push to ring buffer + update time-series + increment counters
+- [x] Integrate into pipeline: after each request, record analytics metric
 
 ### 6.7 Analytics API Endpoints
 - [ ] Implement `GET /admin/api/v1/analytics/overview` â€” KPIs: total req, active conn, error rate, avg latency, credits consumed

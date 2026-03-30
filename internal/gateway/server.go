@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/APICerberus/APICerebrus/internal/analytics"
 	"github.com/APICerberus/APICerebrus/internal/audit"
 	"github.com/APICerberus/APICerebrus/internal/billing"
 	"github.com/APICerberus/APICerebrus/internal/config"
@@ -30,6 +31,7 @@ type Gateway struct {
 	billing        *billing.Engine
 	auditLogger    *audit.Logger
 	auditRetention *audit.RetentionScheduler
+	analytics      *analytics.Engine
 	upstreams      map[string]*UpstreamPool
 	consumers      []config.Consumer
 	authAPIKey     *plugin.AuthAPIKey
@@ -89,6 +91,7 @@ func New(cfg *config.Config) (*Gateway, error) {
 		billing:        billingEngine,
 		auditLogger:    auditLogger,
 		auditRetention: auditRetention,
+		analytics:      analytics.NewEngine(analytics.EngineConfig{}),
 		upstreams:      upstreamPools,
 		consumers:      consumers,
 		authAPIKey:     authAPIKey,
@@ -122,11 +125,17 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	checker := g.health
 	billingEngine := g.billing
 	auditLogger := g.auditLogger
+	analyticsEngine := g.analytics
 	authAPIKey := g.authAPIKey
 	authRequired := g.authRequired
 	routePipelines := g.routePipelines
 	routeHasAuth := g.routeHasAuth
 	g.mu.RUnlock()
+
+	if analyticsEngine != nil {
+		analyticsEngine.IncActiveConns()
+		defer analyticsEngine.DecActiveConns()
+	}
 
 	requestStartedAt := time.Now()
 	var (
@@ -138,29 +147,93 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		blocked             bool
 		blockReason         string
 		auditWriter         *audit.ResponseCaptureWriter
+		responseWriter      *audit.ResponseCaptureWriter
 	)
+	if auditLogger != nil || analyticsEngine != nil {
+		maxResponseBodyBytes := int64(0)
+		if auditLogger != nil {
+			maxResponseBodyBytes = auditLogger.MaxResponseBodyBytes()
+		}
+		responseWriter = audit.NewResponseCaptureWriter(w, maxResponseBodyBytes)
+		w = responseWriter
+	}
 	if auditLogger != nil {
 		if body, captureErr := audit.CaptureRequestBody(r, auditLogger.MaxRequestBodyBytes()); captureErr == nil {
 			requestBodySnapshot = body
 		}
-		auditWriter = audit.NewResponseCaptureWriter(w, auditLogger.MaxResponseBodyBytes())
-		w = auditWriter
+		auditWriter = responseWriter
 	}
 	defer func() {
-		if auditLogger == nil || auditWriter == nil {
+		if auditLogger != nil && auditWriter != nil {
+			auditLogger.Log(audit.LogInput{
+				Request:        r,
+				ResponseWriter: auditWriter,
+				Route:          route,
+				Service:        service,
+				Consumer:       consumer,
+				RequestBody:    requestBodySnapshot,
+				StartedAt:      requestStartedAt,
+				Blocked:        blocked,
+				BlockReason:    blockReason,
+				ProxyErr:       proxyErrForAudit,
+			})
+		}
+
+		if analyticsEngine == nil {
 			return
 		}
-		auditLogger.Log(audit.LogInput{
-			Request:        r,
-			ResponseWriter: auditWriter,
-			Route:          route,
-			Service:        service,
-			Consumer:       consumer,
-			RequestBody:    requestBodySnapshot,
-			StartedAt:      requestStartedAt,
-			Blocked:        blocked,
-			BlockReason:    blockReason,
-			ProxyErr:       proxyErrForAudit,
+
+		statusCode := 0
+		bytesOut := int64(0)
+		if responseWriter != nil {
+			statusCode = responseWriter.StatusCode()
+			bytesOut = responseWriter.BytesWritten()
+		}
+		bytesIn := r.ContentLength
+		if bytesIn < 0 {
+			bytesIn = 0
+		}
+		if bytesIn == 0 && len(requestBodySnapshot) > 0 {
+			bytesIn = int64(len(requestBodySnapshot))
+		}
+
+		routeID := ""
+		routeName := ""
+		serviceName := ""
+		userID := ""
+		method := ""
+		path := ""
+		if route != nil {
+			routeID = strings.TrimSpace(route.ID)
+			routeName = strings.TrimSpace(route.Name)
+		}
+		if service != nil {
+			serviceName = strings.TrimSpace(service.Name)
+		}
+		if consumer != nil {
+			userID = strings.TrimSpace(consumer.ID)
+		}
+		if r != nil {
+			method = strings.TrimSpace(strings.ToUpper(r.Method))
+			if r.URL != nil {
+				path = strings.TrimSpace(r.URL.Path)
+			}
+		}
+
+		analyticsEngine.Record(analytics.RequestMetric{
+			Timestamp:   requestStartedAt.UTC(),
+			RouteID:     routeID,
+			RouteName:   routeName,
+			ServiceName: serviceName,
+			UserID:      userID,
+			Method:      method,
+			Path:        path,
+			StatusCode:  statusCode,
+			LatencyMS:   time.Since(requestStartedAt).Milliseconds(),
+			BytesIn:     bytesIn,
+			BytesOut:    bytesOut,
+			Blocked:     blocked,
+			Error:       blocked || proxyErrForAudit != nil || statusCode >= http.StatusInternalServerError,
 		})
 	}()
 
@@ -971,6 +1044,14 @@ func (g *Gateway) Uptime() time.Duration {
 	started := g.startedAt
 	g.mu.RUnlock()
 	return time.Since(started)
+}
+
+// Analytics returns the runtime analytics engine.
+func (g *Gateway) Analytics() *analytics.Engine {
+	g.mu.RLock()
+	engine := g.analytics
+	g.mu.RUnlock()
+	return engine
 }
 
 // UpstreamHealth returns current target health by target ID for the given upstream name.

@@ -738,7 +738,7 @@
 - [x] Verify portal works on configured port/path
 
 ### 8.5 Final (v0.0.8)
-- [ ] E2E test: user login â†’ generate key â†’ test in playground â†’ view logs â†’ check credits
+- [x] E2E test: user login â†’ generate key â†’ test in playground â†’ view logs â†’ check credits
 - [ ] Verify portal responsive on mobile
 - [ ] Tag `v0.0.8`
 

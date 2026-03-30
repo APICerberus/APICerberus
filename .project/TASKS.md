@@ -859,7 +859,7 @@
 
 ### 10.5 Final (v0.1.0)
 - [x] Verify MCP server works with Claude Code (`apicerberus mcp start`)
-- [ ] Verify all CLI commands work
+- [x] Verify all CLI commands work
 - [x] Verify TLS termination with self-signed cert
 - [ ] Tag `v0.1.0`
 

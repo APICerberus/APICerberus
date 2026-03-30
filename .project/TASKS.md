@@ -739,8 +739,8 @@
 
 ### 8.5 Final (v0.0.8)
 - [x] E2E test: user login â†’ generate key â†’ test in playground â†’ view logs â†’ check credits
-- [ ] Verify portal responsive on mobile
-- [ ] Tag `v0.0.8`
+- [x] Verify portal responsive on mobile
+- [x] Tag `v0.0.8`
 
 ---
 

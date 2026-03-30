@@ -25,14 +25,14 @@ export function PortalLayout() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20">
       <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 p-3 md:flex-row md:gap-6 md:p-6">
-        <aside className="w-full rounded-2xl border bg-card/70 p-3 backdrop-blur-sm md:sticky md:top-6 md:h-[calc(100vh-3rem)] md:w-72 md:p-4">
+        <aside className="w-full rounded-2xl border bg-card/70 p-3 backdrop-blur-sm md:sticky md:top-6 md:h-[calc(100vh-3rem)] md:w-72 md:overflow-y-auto md:p-4">
           <div className="mb-4 border-b pb-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">API Cerberus</p>
             <h1 className="text-lg font-semibold">User Portal</h1>
             <p className="mt-1 text-xs text-muted-foreground">{meQuery.data?.user?.email ?? "Session loading..."}</p>
           </div>
 
-          <nav className="grid gap-1">
+          <nav className="grid grid-cols-2 gap-1 sm:grid-cols-3 md:grid-cols-1">
             {PORTAL_NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               return (

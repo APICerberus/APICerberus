@@ -5,6 +5,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { useBreakpoint } from "@/hooks/use-media-query";
 import type { PlaygroundTemplate, PortalAPIItem, PortalPlaygroundResponse } from "@/lib/portal-types";
 import { BodyEditor } from "./BodyEditor";
 import { HeaderEditor } from "./HeaderEditor";
@@ -38,8 +39,13 @@ export function PlaygroundView({
   onSaveTemplate,
   onDeleteTemplate,
 }: PlaygroundViewProps) {
+  const isDesktop = useBreakpoint("md");
+
   return (
-    <ResizablePanelGroup orientation="horizontal" className="min-h-[720px] rounded-xl border">
+    <ResizablePanelGroup
+      orientation={isDesktop ? "horizontal" : "vertical"}
+      className="min-h-[560px] rounded-xl border md:min-h-[720px]"
+    >
       <ResizablePanel defaultSize={58} minSize={44}>
         <div className="space-y-3 p-3">
           <RequestBuilder draft={draft} apis={apis} onChange={onDraftChange} />

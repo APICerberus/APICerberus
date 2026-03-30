@@ -77,7 +77,7 @@ export function RequestBuilder({ draft, apis, onChange }: RequestBuilderProps) {
                 Route Finder
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[420px] p-0" align="end">
+            <PopoverContent className="w-[min(92vw,420px)] p-0" align="end">
               <Command>
                 <CommandInput placeholder="Search route or path..." />
                 <CommandList>

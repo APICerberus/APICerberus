@@ -70,8 +70,8 @@ export function DataTable<TData, TValue>({
         fileName={fileName}
       />
 
-      <div className="overflow-hidden rounded-lg border">
-        <Table>
+      <div className="overflow-x-auto rounded-lg border">
+        <Table className="min-w-[640px]">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -128,4 +128,3 @@ export function DataTable<TData, TValue>({
     </div>
   );
 }
-

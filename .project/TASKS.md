@@ -650,13 +650,13 @@
 - [x] Implement `DiffViewer.tsx` â€” side-by-side config diff
 
 ### 7.8 TanStack Query Hooks
-- [ ] Implement `use-services.ts` â€” CRUD queries + mutations for services
-- [ ] Implement `use-routes.ts` â€” CRUD queries + mutations for routes
-- [ ] Implement `use-upstreams.ts` â€” CRUD queries + mutations for upstreams
-- [ ] Implement `use-users.ts` â€” CRUD queries + mutations for users
-- [ ] Implement `use-credits.ts` â€” balance, topup, transactions queries
-- [ ] Implement `use-audit-logs.ts` â€” search, detail, export queries
-- [ ] Implement `use-analytics.ts` â€” overview, timeseries, top routes queries
+- [x] Implement `use-services.ts` â€” CRUD queries + mutations for services
+- [x] Implement `use-routes.ts` â€” CRUD queries + mutations for routes
+- [x] Implement `use-upstreams.ts` â€” CRUD queries + mutations for upstreams
+- [x] Implement `use-users.ts` â€” CRUD queries + mutations for users
+- [x] Implement `use-credits.ts` â€” balance, topup, transactions queries
+- [x] Implement `use-audit-logs.ts` â€” search, detail, export queries
+- [x] Implement `use-analytics.ts` â€” overview, timeseries, top routes queries
 
 ### 7.9 Admin Pages
 - [ ] Implement `admin/Dashboard.tsx` â€” KPI cards (requests, users, credits, errors), traffic chart, top routes table, live request tail

@@ -645,9 +645,9 @@
 - [x] All charts: dark/light theme aware, responsive, configurable time window
 
 ### 7.7 Editor Components
-- [ ] Implement `YAMLEditor.tsx` â€” CodeMirror 6 with YAML syntax, dark/light theme
-- [ ] Implement `JSONViewer.tsx` â€” CodeMirror 6 read-only with JSON syntax
-- [ ] Implement `DiffViewer.tsx` â€” side-by-side config diff
+- [x] Implement `YAMLEditor.tsx` â€” CodeMirror 6 with YAML syntax, dark/light theme
+- [x] Implement `JSONViewer.tsx` â€” CodeMirror 6 read-only with JSON syntax
+- [x] Implement `DiffViewer.tsx` â€” side-by-side config diff
 
 ### 7.8 TanStack Query Hooks
 - [ ] Implement `use-services.ts` â€” CRUD queries + mutations for services

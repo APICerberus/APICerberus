@@ -637,12 +637,12 @@
 - [x] Implement `ConfirmDialog.tsx` â€” reusable AlertDialog for destructive actions
 
 ### 7.6 Chart Components
-- [ ] Implement `AreaChart.tsx` â€” Recharts: real-time traffic (responsive, themed)
-- [ ] Implement `BarChart.tsx` â€” Recharts: credit usage, error breakdown
-- [ ] Implement `LineChart.tsx` â€” Recharts: latency trends
-- [ ] Implement `PieChart.tsx` â€” Recharts: status code distribution
-- [ ] Implement `HeatmapChart.tsx` â€” Recharts: latency heatmap (ScatterChart based)
-- [ ] All charts: dark/light theme aware, responsive, configurable time window
+- [x] Implement `AreaChart.tsx` â€” Recharts: real-time traffic (responsive, themed)
+- [x] Implement `BarChart.tsx` â€” Recharts: credit usage, error breakdown
+- [x] Implement `LineChart.tsx` â€” Recharts: latency trends
+- [x] Implement `PieChart.tsx` â€” Recharts: status code distribution
+- [x] Implement `HeatmapChart.tsx` â€” Recharts: latency heatmap (ScatterChart based)
+- [x] All charts: dark/light theme aware, responsive, configurable time window
 
 ### 7.7 Editor Components
 - [ ] Implement `YAMLEditor.tsx` â€” CodeMirror 6 with YAML syntax, dark/light theme

@@ -767,10 +767,10 @@
 - [x] Integrate into `admin/UpstreamDetail.tsx`
 
 ### 9.4 Service Dependency Graph
-- [ ] Implement `ServiceGraph.tsx` â€” React Flow: Services â†’ Routes â†’ Upstreams
-- [ ] Auto-layout using dagre/elk algorithm
-- [ ] Click any node â†’ navigate to detail page
-- [ ] Integrate into `admin/Services.tsx` as toggle view (table/graph)
+- [x] Implement `ServiceGraph.tsx` â€” React Flow: Services â†’ Routes â†’ Upstreams
+- [x] Auto-layout using dagre/elk algorithm
+- [x] Click any node â†’ navigate to detail page
+- [x] Integrate into `admin/Services.tsx` as toggle view (table/graph)
 
 ### 9.5 Cluster Topology (Placeholder)
 - [ ] Implement `ClusterTopology.tsx` â€” React Flow: single node (standalone mode)

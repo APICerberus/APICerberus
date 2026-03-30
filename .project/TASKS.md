@@ -934,19 +934,67 @@
 
 ## v0.3.0 â€” GraphQL Support
 
-- [ ] Implement GraphQL request detection (POST with `application/json` body containing `query` field)
-- [ ] Implement GraphQL query proxy: parse query, forward to upstream GraphQL service
-- [ ] Implement query depth analyzer: recursive AST traversal, enforce max_depth
-- [ ] Implement query complexity analyzer: assign cost per field, enforce max_complexity
-- [ ] Implement introspection control: block `__schema` and `__type` queries per config
-- [ ] Implement field-level authorization: check user permissions against requested fields
-- [ ] Implement automatic persisted queries (APQ): hash-based query caching
-- [ ] Implement subscription proxying: WebSocket â†’ upstream WebSocket
-- [ ] Implement `GraphQLGuard` plugin (depth + complexity + introspection in one plugin)
-- [ ] Implement React Flow: GraphQL schema view (placeholder for federation)
+
+### 12.1 GraphQL Request Detection
+- [ ] Detect GraphQL requests (POST with application/json body containing query field)
+- [ ] Detect GET requests with query parameter
+- [ ] Support application/graphql content type
+- [ ] Route to GraphQL handler
+
+### 12.2 GraphQL Query Proxy
+- [ ] Parse GraphQL query from request body
+- [ ] Forward to upstream GraphQL service
+- [ ] Handle GraphQL responses
+- [ ] Support query batching
+
+### 12.3 Query Depth Analyzer
+- [ ] Parse GraphQL AST
+- [ ] Recursive depth calculation
+- [ ] Configurable max_depth enforcement
+- [ ] Return error for queries exceeding depth limit
+
+### 12.4 Query Complexity Analyzer
+- [ ] Assign cost per field
+- [ ] Calculate total query complexity
+- [ ] Configurable max_complexity enforcement
+- [ ] Field-level cost configuration
+
+### 12.5 GraphQL Introspection Control
+- [ ] Block __schema queries
+- [ ] Block __type queries
+- [ ] Configurable per-route
+- [ ] Return appropriate error messages
+
+### 12.6 Field-Level Authorization
+- [ ] Parse requested fields from AST
+- [ ] Check user permissions against requested fields
+- [ ] Support field-level access control
+- [ ] Return 403 for unauthorized fields
+
+### 12.7 Automatic Persisted Queries (APQ)
+- [ ] Hash-based query caching
+- [ ] Store and retrieve queries by hash
+- [ ] Support APQ protocol
+
+### 12.8 GraphQL Subscription Proxying
+- [ ] WebSocket upgrade for subscriptions
+- [ ] Proxy subscription to upstream
+- [ ] Handle subscription lifecycle
+- [ ] Support for multiple concurrent subscriptions
+
+### 12.9 GraphQLGuard Plugin
+- [ ] Combine depth + complexity + introspection checks
+- [ ] Single plugin configuration
+- [ ] Configurable limits per route
+- [ ] Proper error responses
+
+### 12.10 GraphQL Schema View (Placeholder)
+- [ ] React Flow placeholder for federation
+- [ ] Schema visualization preparation
+
+### 12.11 Final (v0.3.0)
 - [ ] Write integration tests with test GraphQL service
 - [ ] Tag `v0.3.0`
-
 ---
 
 ## v0.4.0 â€” GraphQL Federation

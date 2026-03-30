@@ -823,22 +823,22 @@
 - [x] Write unit tests for each tool
 
 ### 10.2 CLI Completion
-- [ ] Implement `apicerberus user list` â€” list users (table format)
-- [ ] Implement `apicerberus user create --email --name --credits`
-- [ ] Implement `apicerberus user get <id>`
-- [ ] Implement `apicerberus user update <id> --rate-limit-rps`
-- [ ] Implement `apicerberus user suspend/activate <id>`
-- [ ] Implement `apicerberus user apikey list/create/revoke`
-- [ ] Implement `apicerberus user permission list/grant/revoke`
-- [ ] Implement `apicerberus user ip list/add/remove`
-- [ ] Implement `apicerberus credit overview/balance/topup/deduct/transactions`
+- [x] Implement `apicerberus user list` â€” list users (table format)
+- [x] Implement `apicerberus user create --email --name --credits`
+- [x] Implement `apicerberus user get <id>`
+- [x] Implement `apicerberus user update <id> --rate-limit-rps`
+- [x] Implement `apicerberus user suspend/activate <id>`
+- [x] Implement `apicerberus user apikey list/create/revoke`
+- [x] Implement `apicerberus user permission list/grant/revoke`
+- [x] Implement `apicerberus user ip list/add/remove`
+- [x] Implement `apicerberus credit overview/balance/topup/deduct/transactions`
 - [ ] Implement `apicerberus audit search/tail/detail/export/stats/cleanup/retention`
 - [ ] Implement `apicerberus analytics overview/requests/latency`
 - [ ] Implement `apicerberus service/route/upstream list/add/get/update/delete` (if not done in v0.0.1)
 - [ ] Implement `apicerberus config export/import/diff`
 - [x] Implement `apicerberus mcp start [--transport stdio|sse] [--port 3000]`
-- [ ] Implement CLI table formatter (aligned columns, truncation)
-- [ ] Implement CLI JSON output mode (`--output json`)
+- [x] Implement CLI table formatter (aligned columns, truncation)
+- [x] Implement CLI JSON output mode (`--output json`)
 
 ### 10.3 TLS & ACME
 - [ ] Implement `TLSManager` struct with `tls.Config.GetCertificate` callback

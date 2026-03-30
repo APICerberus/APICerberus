@@ -6,6 +6,7 @@ import "time"
 type Config struct {
 	Gateway       GatewayConfig  `yaml:"gateway" json:"gateway"`
 	Admin         AdminConfig    `yaml:"admin" json:"admin"`
+	Portal        PortalConfig   `yaml:"portal" json:"portal"`
 	Logging       LoggingConfig  `yaml:"logging" json:"logging"`
 	Store         StoreConfig    `yaml:"store" json:"store"`
 	Billing       BillingConfig  `yaml:"billing" json:"billing"`
@@ -71,6 +72,20 @@ type AdminConfig struct {
 	APIKey    string `yaml:"api_key" json:"api_key"`
 	UIEnabled bool   `yaml:"ui_enabled" json:"ui_enabled"`
 	UIPath    string `yaml:"ui_path" json:"ui_path"`
+}
+
+type PortalConfig struct {
+	Enabled    bool                `yaml:"enabled" json:"enabled"`
+	Addr       string              `yaml:"addr" json:"addr"`
+	PathPrefix string              `yaml:"path_prefix" json:"path_prefix"`
+	Session    PortalSessionConfig `yaml:"session" json:"session"`
+}
+
+type PortalSessionConfig struct {
+	Secret     string        `yaml:"secret" json:"secret"`
+	CookieName string        `yaml:"cookie_name" json:"cookie_name"`
+	MaxAge     time.Duration `yaml:"max_age" json:"max_age"`
+	Secure     bool          `yaml:"secure" json:"secure"`
 }
 
 type LoggingConfig struct {

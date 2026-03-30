@@ -18,6 +18,8 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/admin"
 	"github.com/APICerberus/APICerebrus/internal/config"
 	"github.com/APICerberus/APICerebrus/internal/gateway"
+	"github.com/APICerberus/APICerebrus/internal/portal"
+	"github.com/APICerberus/APICerebrus/internal/store"
 	"github.com/APICerberus/APICerebrus/internal/version"
 )
 
@@ -77,6 +79,30 @@ func runStart(args []string) error {
 		MaxHeaderBytes: cfg.Gateway.MaxHeaderBytes,
 	}
 
+	var (
+		portalHTTP  *http.Server
+		portalStore *store.Store
+	)
+	if cfg.Portal.Enabled {
+		portalStore, err = store.Open(cfg)
+		if err != nil {
+			return fmt.Errorf("open portal store: %w", err)
+		}
+		portalSrv, err := portal.NewServer(cfg, portalStore)
+		if err != nil {
+			_ = portalStore.Close()
+			return fmt.Errorf("initialize portal server: %w", err)
+		}
+		portalHTTP = &http.Server{
+			Addr:           cfg.Portal.Addr,
+			Handler:        portalSrv,
+			ReadTimeout:    cfg.Gateway.ReadTimeout,
+			WriteTimeout:   cfg.Gateway.WriteTimeout,
+			IdleTimeout:    cfg.Gateway.IdleTimeout,
+			MaxHeaderBytes: cfg.Gateway.MaxHeaderBytes,
+		}
+	}
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
@@ -84,6 +110,11 @@ func runStart(args []string) error {
 		return fmt.Errorf("write pid file: %w", err)
 	}
 	defer os.Remove(*pidFile)
+	defer func() {
+		if portalStore != nil {
+			_ = portalStore.Close()
+		}
+	}()
 
 	printBanner(cfg, *pidFile)
 
@@ -92,9 +123,16 @@ func runStart(args []string) error {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
 		_ = adminHTTP.Shutdown(shutdownCtx)
+		if portalHTTP != nil {
+			_ = portalHTTP.Shutdown(shutdownCtx)
+		}
 	}()
 
-	errCh := make(chan error, 2)
+	serverCount := 2
+	if portalHTTP != nil {
+		serverCount++
+	}
+	errCh := make(chan error, serverCount)
 	go func() { errCh <- gw.Start(ctx) }()
 	go func() {
 		err := adminHTTP.ListenAndServe()
@@ -103,9 +141,18 @@ func runStart(args []string) error {
 		}
 		errCh <- err
 	}()
+	if portalHTTP != nil {
+		go func() {
+			err := portalHTTP.ListenAndServe()
+			if errors.Is(err, http.ErrServerClosed) {
+				err = nil
+			}
+			errCh <- err
+		}()
+	}
 
 	var firstErr error
-	for i := 0; i < 2; i++ {
+	for i := 0; i < serverCount; i++ {
 		err := <-errCh
 		if err != nil && firstErr == nil {
 			firstErr = err
@@ -206,6 +253,9 @@ func printBanner(cfg *config.Config, pidFile string) {
 	fmt.Printf("Commit  : %s\n", version.Commit)
 	fmt.Printf("Gateway : %s\n", cfg.Gateway.HTTPAddr)
 	fmt.Printf("Admin   : %s\n", cfg.Admin.Addr)
+	if cfg.Portal.Enabled {
+		fmt.Printf("Portal  : %s\n", cfg.Portal.Addr)
+	}
 	fmt.Printf("PID File: %s\n", filepath.Clean(pidFile))
 	fmt.Println("========================================")
 }

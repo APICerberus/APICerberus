@@ -74,6 +74,25 @@ func setDefaults(cfg *Config) {
 		}
 	}
 
+	if cfg.Portal.Addr == "" {
+		cfg.Portal.Addr = ":9877"
+	}
+	if cfg.Portal.PathPrefix == "" {
+		cfg.Portal.PathPrefix = "/portal"
+	}
+	if cfg.Portal.Session.CookieName == "" {
+		cfg.Portal.Session.CookieName = "apicerberus_session"
+	}
+	if cfg.Portal.Session.MaxAge <= 0 {
+		cfg.Portal.Session.MaxAge = 24 * time.Hour
+	}
+	if !cfg.Portal.Enabled {
+		// Keep explicit false when user sets it; otherwise default enabled for self-service portal.
+		if cfg.Portal.Addr == ":9877" && cfg.Portal.PathPrefix == "/portal" && cfg.Portal.Session.CookieName == "apicerberus_session" && cfg.Portal.Session.MaxAge == 24*time.Hour {
+			cfg.Portal.Enabled = true
+		}
+	}
+
 	if cfg.Logging.Level == "" {
 		cfg.Logging.Level = "info"
 	}
@@ -260,6 +279,18 @@ func validate(cfg *Config) error {
 
 	if !strings.HasPrefix(cfg.Admin.UIPath, "/") {
 		addErr("admin.ui_path must start with '/'")
+	}
+	if !strings.HasPrefix(cfg.Portal.PathPrefix, "/") {
+		addErr("portal.path_prefix must start with '/'")
+	}
+	if strings.TrimSpace(cfg.Portal.Session.CookieName) == "" {
+		addErr("portal.session.cookie_name is required")
+	}
+	if cfg.Portal.Session.MaxAge <= 0 {
+		addErr("portal.session.max_age must be greater than zero")
+	}
+	if cfg.Portal.Enabled && strings.TrimSpace(cfg.Portal.Addr) == "" {
+		addErr("portal.addr is required when portal.enabled is true")
 	}
 
 	level := strings.ToLower(cfg.Logging.Level)

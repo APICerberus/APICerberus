@@ -695,12 +695,12 @@
 ## v0.0.8 â€” User Portal & Playground
 
 ### 8.1 Portal Backend
-- [ ] Implement `portal.Server` struct with session-based auth
-- [ ] Implement session management: `sessions` table, cookie-based, configurable max_age
-- [ ] Implement `POST /portal/api/v1/auth/login` â€” email + password â†’ create session â†’ set cookie
-- [ ] Implement `POST /portal/api/v1/auth/logout` â€” delete session
-- [ ] Implement `GET /portal/api/v1/auth/me` â€” current user info
-- [ ] Implement session middleware: cookie â†’ hash â†’ lookup â†’ load user â†’ inject into context
+- [x] Implement `portal.Server` struct with session-based auth
+- [x] Implement session management: `sessions` table, cookie-based, configurable max_age
+- [x] Implement `POST /portal/api/v1/auth/login` â€” email + password â†’ create session â†’ set cookie
+- [x] Implement `POST /portal/api/v1/auth/logout` â€” delete session
+- [x] Implement `GET /portal/api/v1/auth/me` â€” current user info
+- [x] Implement session middleware: cookie â†’ hash â†’ lookup â†’ load user â†’ inject into context
 - [ ] Implement all portal API endpoints (API keys, APIs, playground, usage, logs, credits, security, settings)
 - [ ] Implement `POST /portal/api/v1/playground/send` â€” proxy test request on behalf of user (using their API key)
 - [ ] Implement playground templates CRUD (save/load/delete)

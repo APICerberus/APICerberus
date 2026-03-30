@@ -137,6 +137,27 @@ var migrations = []Migration{
 			`CREATE INDEX IF NOT EXISTS idx_audit_logs_status_code ON audit_logs(status_code)`,
 		},
 	},
+	{
+		Version: 4,
+		Name:    "portal_sessions",
+		Statements: []string{
+			`CREATE TABLE IF NOT EXISTS sessions (
+				id TEXT PRIMARY KEY,
+				user_id TEXT NOT NULL,
+				token_hash TEXT NOT NULL UNIQUE,
+				user_agent TEXT NOT NULL DEFAULT '',
+				client_ip TEXT NOT NULL DEFAULT '',
+				expires_at TEXT NOT NULL,
+				last_seen_at TEXT NOT NULL,
+				created_at TEXT NOT NULL,
+				updated_at TEXT NOT NULL,
+				FOREIGN KEY(user_id) REFERENCES users(id)
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash)`,
+			`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`,
+		},
+	},
 }
 
 func Open(cfg *config.Config) (*Store, error) {

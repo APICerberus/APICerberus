@@ -15,6 +15,16 @@ admin:
   ui_enabled: true
   ui_path: "/dashboard"
 
+portal:
+  enabled: true
+  addr: ":9877"
+  path_prefix: "/portal"
+  session:
+    secret: "change-me-in-production"
+    cookie_name: "apicerberus_session"
+    max_age: "24h"
+    secure: false
+
 logging:
   level: "info"
   format: "json"

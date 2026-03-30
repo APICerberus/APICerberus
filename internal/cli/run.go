@@ -47,6 +47,16 @@ func Run(args []string) error {
 		return runUser(args[1:])
 	case "credit":
 		return runCredit(args[1:])
+	case "audit":
+		return runAudit(args[1:])
+	case "analytics":
+		return runAnalytics(args[1:])
+	case "service":
+		return runService(args[1:])
+	case "route":
+		return runRoute(args[1:])
+	case "upstream":
+		return runUpstream(args[1:])
 	case "-h", "--help", "help":
 		printUsage()
 		return nil
@@ -294,6 +304,11 @@ func printUsage() {
 	fmt.Println("  apicerberus mcp start [--config path] [--transport stdio|sse] [--addr :3000]")
 	fmt.Println("  apicerberus user list|create|get|update|suspend|activate|apikey|permission|ip ...")
 	fmt.Println("  apicerberus credit overview|balance|topup|deduct|transactions ...")
+	fmt.Println("  apicerberus audit search|tail|detail|export|stats|cleanup ...")
+	fmt.Println("  apicerberus analytics overview|requests|latency ...")
+	fmt.Println("  apicerberus service list|add|get|update|delete ...")
+	fmt.Println("  apicerberus route list|add|get|update|delete ...")
+	fmt.Println("  apicerberus upstream list|add|get|update|delete ...")
 }
 
 func printBanner(cfg *config.Config, pidFile string) {

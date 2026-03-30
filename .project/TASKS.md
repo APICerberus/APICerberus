@@ -833,8 +833,8 @@
 - [x] Implement `apicerberus user ip list/add/remove`
 - [x] Implement `apicerberus credit overview/balance/topup/deduct/transactions`
 - [ ] Implement `apicerberus audit search/tail/detail/export/stats/cleanup/retention`
-- [ ] Implement `apicerberus analytics overview/requests/latency`
-- [ ] Implement `apicerberus service/route/upstream list/add/get/update/delete` (if not done in v0.0.1)
+- [x] Implement `apicerberus analytics overview/requests/latency`
+- [x] Implement `apicerberus service/route/upstream list/add/get/update/delete` (if not done in v0.0.1)
 - [ ] Implement `apicerberus config export/import/diff`
 - [x] Implement `apicerberus mcp start [--transport stdio|sse] [--port 3000]`
 - [x] Implement CLI table formatter (aligned columns, truncation)

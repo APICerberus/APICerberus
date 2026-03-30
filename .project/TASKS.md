@@ -795,10 +795,10 @@
 - [x] Implement admin UI: alert configuration page, alert history table
 
 ### 9.8 Final (v0.0.9)
-- [ ] Verify React Flow views render correctly (dark + light)
-- [ ] Verify WebSocket real-time updates in dashboard
-- [ ] Verify alert rules trigger correctly
-- [ ] Tag `v0.0.9`
+- [x] Verify React Flow views render correctly (dark + light)
+- [x] Verify WebSocket real-time updates in dashboard
+- [x] Verify alert rules trigger correctly
+- [x] Tag `v0.0.9`
 
 ---
 

@@ -79,6 +79,29 @@ func TestAdminRealtimeWebSocketEndpoint(t *testing.T) {
 	if got := strings.TrimSpace(asString(event["type"])); got != "connected" {
 		t.Fatalf("expected first websocket event type=connected got=%q payload=%s", got, string(frame))
 	}
+
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	defer conn.SetReadDeadline(time.Time{})
+
+	foundLiveEvent := false
+	for i := 0; i < 6; i++ {
+		nextFrame, err := readWebSocketFramePayload(reader)
+		if err != nil {
+			break
+		}
+		var nextEvent map[string]any
+		if err := json.Unmarshal(nextFrame, &nextEvent); err != nil {
+			t.Fatalf("unmarshal websocket frame: %v payload=%q", err, string(nextFrame))
+		}
+		eventType := strings.TrimSpace(asString(nextEvent["type"]))
+		if eventType == "health_change" || eventType == "request_metric" {
+			foundLiveEvent = true
+			break
+		}
+	}
+	if !foundLiveEvent {
+		t.Fatalf("expected websocket to emit realtime event after connected frame")
+	}
 }
 
 func TestAdminRealtimeWebSocketRejectsUnauthorized(t *testing.T) {

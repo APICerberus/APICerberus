@@ -282,6 +282,74 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 	assertStatus(t, resp, http.StatusOK)
 	assertJSONField(t, resp, "reloaded", true)
 
+	// config export/import endpoints
+	status, exportedConfig, headers := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/config/export", "secret-admin")
+	if status != http.StatusOK {
+		t.Fatalf("expected config export status 200 got %d body=%q", status, exportedConfig)
+	}
+	if !strings.Contains(headers.Get("Content-Type"), "application/x-yaml") {
+		t.Fatalf("unexpected config export content type: %s", headers.Get("Content-Type"))
+	}
+	if !strings.Contains(exportedConfig, "services:") {
+		t.Fatalf("expected exported config to include services section")
+	}
+
+	importedConfig := strings.Join([]string{
+		"gateway:",
+		"  http_addr: 127.0.0.1:0",
+		"admin:",
+		"  api_key: secret-admin",
+		"store:",
+		"  path: " + storePath,
+		"services:",
+		"  -",
+		"    id: svc-users",
+		"    name: svc-users",
+		"    protocol: http",
+		"    upstream: up-users",
+		"routes:",
+		"  -",
+		"    id: route-users",
+		"    name: route-users",
+		"    service: svc-users",
+		"    paths:",
+		"      - /users-imported",
+		"    methods:",
+		"      - GET",
+		"upstreams:",
+		"  -",
+		"    id: up-users",
+		"    name: up-users",
+		"    algorithm: round_robin",
+		"    targets:",
+		"      -",
+		"        id: up-users-t1",
+		"        address: " + mustHost(t, upstreamURL),
+		"        weight: 1",
+		"",
+	}, "\n")
+	status, importBody, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/config/import", "secret-admin", "application/x-yaml", []byte(importedConfig))
+	if status != http.StatusOK {
+		t.Fatalf("expected config import status 200 got %d body=%q", status, importBody)
+	}
+	if !strings.Contains(importBody, "\"imported\":true") {
+		t.Fatalf("expected import response to contain imported=true, got %q", importBody)
+	}
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/routes/route-users", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	routeBody, ok := resp["body"].(map[string]any)
+	if !ok {
+		t.Fatalf("route response body is not object: %#v", resp)
+	}
+	paths, ok := routeBody["paths"].([]any)
+	if !ok || len(paths) == 0 {
+		t.Fatalf("route response paths missing: %#v", routeBody)
+	}
+	if got := strings.TrimSpace(asString(paths[0])); got != "/users-imported" {
+		t.Fatalf("expected imported route path /users-imported got %q", got)
+	}
+
 	// user and credit endpoints
 	userPayload := map[string]any{
 		"email":           "user-one@example.com",
@@ -815,6 +883,31 @@ func mustRawRequest(t *testing.T, method, rawURL, adminKey string) (int, string,
 		t.Fatalf("new request: %v", err)
 	}
 	req.Header.Set("X-Admin-Key", adminKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body := new(bytes.Buffer)
+	if _, err := body.ReadFrom(resp.Body); err != nil {
+		t.Fatalf("read raw response body: %v", err)
+	}
+	return resp.StatusCode, body.String(), resp.Header.Clone()
+}
+
+func mustRawRequestWithBody(t *testing.T, method, rawURL, adminKey, contentType string, payload []byte) (int, string, http.Header) {
+	t.Helper()
+
+	req, err := http.NewRequest(method, rawURL, bytes.NewReader(payload))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("X-Admin-Key", adminKey)
+	if strings.TrimSpace(contentType) != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

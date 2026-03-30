@@ -6,9 +6,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,6 +22,7 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/gateway"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/pkg/uuid"
+	yamlpkg "github.com/APICerberus/APICerebrus/internal/pkg/yaml"
 	"github.com/APICerberus/APICerebrus/internal/store"
 	"github.com/APICerberus/APICerebrus/internal/version"
 )
@@ -35,6 +38,8 @@ type Server struct {
 
 	startedAt time.Time
 }
+
+const emptyMapImportSentinel = "__apicerberus_empty_map__"
 
 // NewServer initializes admin routes.
 func NewServer(cfg *config.Config, gw *gateway.Gateway) (*Server, error) {
@@ -70,6 +75,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) registerRoutes() {
 	s.handle("GET /admin/api/v1/status", s.handleStatus)
 	s.handle("GET /admin/api/v1/info", s.handleInfo)
+	s.handle("GET /admin/api/v1/config/export", s.handleConfigExport)
+	s.handle("POST /admin/api/v1/config/import", s.handleConfigImport)
 	s.handle("POST /admin/api/v1/config/reload", s.handleConfigReload)
 
 	s.handle("GET /admin/api/v1/services", s.listServices)
@@ -206,6 +213,119 @@ func (s *Server) handleConfigReload(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{"reloaded": true})
+}
+
+func (s *Server) handleConfigExport(w http.ResponseWriter, _ *http.Request) {
+	s.mu.RLock()
+	cfg := cloneConfig(s.cfg)
+	s.mu.RUnlock()
+
+	raw, err := yamlpkg.Marshal(cfg)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "config_export_failed", err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-yaml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(raw)
+}
+
+func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
+	raw, err := io.ReadAll(io.LimitReader(r.Body, 2<<20))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+		return
+	}
+	if strings.TrimSpace(string(raw)) == "" {
+		writeError(w, http.StatusBadRequest, "invalid_payload", "empty config payload")
+		return
+	}
+	normalized := normalizeYAMLEmptyMaps(raw, emptyMapImportSentinel)
+
+	file, err := os.CreateTemp("", "apicerberus-config-import-*.yaml")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "config_import_failed", err.Error())
+		return
+	}
+	path := file.Name()
+	_ = file.Close()
+	defer os.Remove(path)
+
+	if err := os.WriteFile(path, normalized, 0o600); err != nil {
+		writeError(w, http.StatusInternalServerError, "config_import_failed", err.Error())
+		return
+	}
+	loaded, err := config.Load(path)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
+		return
+	}
+	cleanupImportedConfigSentinel(loaded, emptyMapImportSentinel)
+	next := cloneConfig(loaded)
+	if err := s.mutateConfig(func(cfg *config.Config) error {
+		*cfg = *next
+		return nil
+	}); err != nil {
+		writeError(w, http.StatusBadRequest, "config_import_failed", err.Error())
+		return
+	}
+
+	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+		"imported": true,
+		"summary": map[string]any{
+			"services":  len(next.Services),
+			"routes":    len(next.Routes),
+			"upstreams": len(next.Upstreams),
+		},
+	})
+}
+
+func normalizeYAMLEmptyMaps(raw []byte, sentinel string) []byte {
+	if len(raw) == 0 {
+		return nil
+	}
+	text := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) != "{}" {
+			continue
+		}
+		indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+		lines[i] = indent + sentinel + ": 0"
+	}
+	return []byte(strings.Join(lines, "\n"))
+}
+
+func cleanupImportedConfigSentinel(cfg *config.Config, sentinel string) {
+	if cfg == nil {
+		return
+	}
+	if cfg.Billing.RouteCosts != nil {
+		delete(cfg.Billing.RouteCosts, sentinel)
+	}
+	if cfg.Billing.MethodMultipliers != nil {
+		delete(cfg.Billing.MethodMultipliers, sentinel)
+	}
+	if cfg.Audit.RouteRetentionDays != nil {
+		delete(cfg.Audit.RouteRetentionDays, sentinel)
+	}
+	for i := range cfg.Consumers {
+		if cfg.Consumers[i].Metadata != nil {
+			delete(cfg.Consumers[i].Metadata, sentinel)
+		}
+	}
+	for i := range cfg.GlobalPlugins {
+		if cfg.GlobalPlugins[i].Config != nil {
+			delete(cfg.GlobalPlugins[i].Config, sentinel)
+		}
+	}
+	for i := range cfg.Routes {
+		for j := range cfg.Routes[i].Plugins {
+			if cfg.Routes[i].Plugins[j].Config != nil {
+				delete(cfg.Routes[i].Plugins[j].Config, sentinel)
+			}
+		}
+	}
 }
 
 func (s *Server) listServices(w http.ResponseWriter, _ *http.Request) {

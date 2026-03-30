@@ -852,10 +852,10 @@
 - [ ] Write integration tests with self-signed certs
 
 ### 10.4 Config Export/Import
-- [ ] Implement `GET /admin/api/v1/config/export` â€” current running config as YAML
-- [ ] Implement `POST /admin/api/v1/config/import` â€” upload YAML, validate, apply
+- [x] Implement `GET /admin/api/v1/config/export` â€” current running config as YAML
+- [x] Implement `POST /admin/api/v1/config/import` â€” upload YAML, validate, apply
 - [x] Implement `apicerberus config diff old.yaml new.yaml` â€” diff two configs (line-by-line diff)
-- [ ] Write tests
+- [x] Write tests
 
 ### 10.5 Final (v0.1.0)
 - [ ] Verify MCP server works with Claude Code (`apicerberus mcp start`)

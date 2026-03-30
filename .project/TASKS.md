@@ -786,13 +786,13 @@
 - [x] Implement real-time chart updates (traffic graph)
 
 ### 9.7 Alert Rules Engine
-- [ ] Implement `analytics.AlertEngine` â€” evaluate rules against time-series data
-- [ ] Implement rule types: error_rate > X%, p99_latency > Xms, upstream_health < X%
-- [ ] Implement action types: log, webhook (HTTP POST to configured URL)
-- [ ] Implement cooldown: don't re-fire alert within cooldown period
-- [ ] Implement alert history: store triggered alerts with timestamp + details
-- [ ] Implement Admin API: `GET/POST/PUT/DELETE /admin/api/v1/alerts`
-- [ ] Implement admin UI: alert configuration page, alert history table
+- [x] Implement `analytics.AlertEngine` â€” evaluate rules against time-series data
+- [x] Implement rule types: error_rate > X%, p99_latency > Xms, upstream_health < X%
+- [x] Implement action types: log, webhook (HTTP POST to configured URL)
+- [x] Implement cooldown: don't re-fire alert within cooldown period
+- [x] Implement alert history: store triggered alerts with timestamp + details
+- [x] Implement Admin API: `GET/POST/PUT/DELETE /admin/api/v1/alerts`
+- [x] Implement admin UI: alert configuration page, alert history table
 
 ### 9.8 Final (v0.0.9)
 - [ ] Verify React Flow views render correctly (dark + light)

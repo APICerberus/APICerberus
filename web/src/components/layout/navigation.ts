@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  BellRing,
   Boxes,
   FileCode2,
   GitBranch,
@@ -83,6 +84,12 @@ export const NAV_ITEMS: NavItem[] = [
     path: ROUTES.analytics,
     icon: LineChart,
     description: "Latency, throughput, and error analytics.",
+  },
+  {
+    title: "Alerts",
+    path: ROUTES.alerts,
+    icon: BellRing,
+    description: "Rule-based alerting and history.",
   },
   {
     title: "Cluster",

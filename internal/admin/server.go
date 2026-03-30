@@ -29,6 +29,7 @@ type Server struct {
 	mu          sync.RWMutex
 	cfg         *config.Config
 	gateway     *gateway.Gateway
+	alertEngine *analytics.AlertEngine
 	mux         *http.ServeMux
 	dashboardFS fs.FS
 
@@ -45,10 +46,11 @@ func NewServer(cfg *config.Config, gw *gateway.Gateway) (*Server, error) {
 	}
 
 	s := &Server{
-		cfg:       cfg,
-		gateway:   gw,
-		mux:       http.NewServeMux(),
-		startedAt: time.Now(),
+		cfg:         cfg,
+		gateway:     gw,
+		alertEngine: analytics.NewAlertEngine(analytics.AlertEngineOptions{}),
+		mux:         http.NewServeMux(),
+		startedAt:   time.Now(),
 	}
 	if cfg.Admin.UIEnabled {
 		dashboardFS, err := embeddedDashboardFS()
@@ -133,6 +135,10 @@ func (s *Server) registerRoutes() {
 	s.handle("GET /admin/api/v1/analytics/latency", s.analyticsLatency)
 	s.handle("GET /admin/api/v1/analytics/throughput", s.analyticsThroughput)
 	s.handle("GET /admin/api/v1/analytics/status-codes", s.analyticsStatusCodes)
+	s.handle("GET /admin/api/v1/alerts", s.listAlerts)
+	s.handle("POST /admin/api/v1/alerts", s.createAlert)
+	s.handle("PUT /admin/api/v1/alerts/{id}", s.updateAlert)
+	s.handle("DELETE /admin/api/v1/alerts/{id}", s.deleteAlert)
 
 	s.handle("GET /admin/api/v1/billing/config", s.getBillingConfig)
 	s.handle("PUT /admin/api/v1/billing/config", s.updateBillingConfig)
@@ -1995,6 +2001,139 @@ func (s *Server) analyticsStatusCodes(w http.ResponseWriter, r *http.Request) {
 		"total":        total,
 		"status_codes": items,
 	})
+}
+
+func (s *Server) listAlerts(w http.ResponseWriter, _ *http.Request) {
+	s.evaluateAlerts()
+	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+		"rules":   s.alertEngine.ListRules(),
+		"history": s.alertEngine.History(200),
+	})
+}
+
+func (s *Server) createAlert(w http.ResponseWriter, r *http.Request) {
+	var in analytics.AlertRule
+	if err := jsonutil.ReadJSON(r, &in, 1<<20); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+		return
+	}
+	if strings.TrimSpace(in.ID) == "" {
+		id, err := uuid.NewString()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "id_generation_failed", err.Error())
+			return
+		}
+		in.ID = id
+	}
+	if _, exists := s.alertEngine.GetRule(in.ID); exists {
+		writeError(w, http.StatusConflict, "alert_rule_exists", "alert rule id already exists")
+		return
+	}
+
+	rule, err := s.alertEngine.UpsertRule(in)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_alert_rule", err.Error())
+		return
+	}
+	s.evaluateAlerts()
+	_ = jsonutil.WriteJSON(w, http.StatusCreated, rule)
+}
+
+func (s *Server) updateAlert(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "invalid_alert_rule", "alert id is required")
+		return
+	}
+
+	var in analytics.AlertRule
+	if err := jsonutil.ReadJSON(r, &in, 1<<20); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+		return
+	}
+	if strings.TrimSpace(in.ID) == "" {
+		in.ID = id
+	}
+	if in.ID != id {
+		writeError(w, http.StatusBadRequest, "invalid_alert_rule", "path id and payload id must match")
+		return
+	}
+	if _, exists := s.alertEngine.GetRule(id); !exists {
+		writeError(w, http.StatusNotFound, "alert_rule_not_found", "alert rule not found")
+		return
+	}
+
+	rule, err := s.alertEngine.UpsertRule(in)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_alert_rule", err.Error())
+		return
+	}
+	s.evaluateAlerts()
+	_ = jsonutil.WriteJSON(w, http.StatusOK, rule)
+}
+
+func (s *Server) deleteAlert(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "invalid_alert_rule", "alert id is required")
+		return
+	}
+	if !s.alertEngine.DeleteRule(id) {
+		writeError(w, http.StatusNotFound, "alert_rule_not_found", "alert rule not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) evaluateAlerts() []analytics.AlertHistoryEntry {
+	if s == nil || s.alertEngine == nil || s.gateway == nil {
+		return nil
+	}
+	analyticsEngine := s.gateway.Analytics()
+	if analyticsEngine == nil {
+		return nil
+	}
+
+	metrics := analyticsEngine.Latest(5000)
+	upstreamHealthPercent := s.currentUpstreamHealthPercent()
+	return s.alertEngine.Evaluate(metrics, upstreamHealthPercent, time.Now().UTC())
+}
+
+func (s *Server) currentUpstreamHealthPercent() float64 {
+	if s == nil || s.gateway == nil {
+		return 100
+	}
+
+	upstreams := s.snapshotUpstreams()
+	total := 0
+	healthy := 0
+
+	for _, upstream := range upstreams {
+		lookup := strings.TrimSpace(upstream.ID)
+		if lookup == "" {
+			lookup = strings.TrimSpace(upstream.Name)
+		}
+		if lookup == "" {
+			continue
+		}
+
+		state := s.gateway.UpstreamHealth(lookup)
+		for _, target := range upstream.Targets {
+			targetID := strings.TrimSpace(target.ID)
+			if targetID == "" {
+				continue
+			}
+			total++
+			if state[targetID] {
+				healthy++
+			}
+		}
+	}
+
+	if total == 0 {
+		return 100
+	}
+	return (float64(healthy) / float64(total)) * 100
 }
 
 func (s *Server) getBillingConfig(w http.ResponseWriter, _ *http.Request) {

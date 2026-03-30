@@ -93,6 +93,53 @@ func TestAdminRealtimeWebSocketRejectsUnauthorized(t *testing.T) {
 	}
 }
 
+func TestAdminAlertsCRUD(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	createPayload := map[string]any{
+		"name":      "error spike",
+		"enabled":   true,
+		"type":      "error_rate",
+		"threshold": 10,
+		"window":    "5m",
+		"cooldown":  "1m",
+		"action": map[string]any{
+			"type": "log",
+		},
+	}
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/alerts", "secret-admin", createPayload)
+	assertStatus(t, resp, http.StatusCreated)
+	ruleID := jsonObjectField(t, resp, "id")
+	if strings.TrimSpace(ruleID) == "" {
+		t.Fatalf("expected created alert id")
+	}
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/alerts", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "rules")
+	assertHasJSONField(t, resp, "history")
+
+	updatePayload := map[string]any{
+		"name":      "error spike",
+		"enabled":   false,
+		"type":      "error_rate",
+		"threshold": 12,
+		"window":    "5m",
+		"cooldown":  "1m",
+		"action": map[string]any{
+			"type": "log",
+		},
+	}
+	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/alerts/"+ruleID, "secret-admin", updatePayload)
+	assertStatus(t, resp, http.StatusOK)
+	assertJSONField(t, resp, "enabled", false)
+
+	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/alerts/"+ruleID, "secret-admin", nil)
+	assertStatus(t, resp, http.StatusNoContent)
+}
+
 func TestAdminEndpointsIntegration(t *testing.T) {
 	t.Parallel()
 

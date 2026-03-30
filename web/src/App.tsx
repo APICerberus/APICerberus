@@ -9,6 +9,7 @@ import { usePortalMe } from "@/hooks/use-portal";
 import { ROUTES } from "@/lib/constants";
 import { PORTAL_ROUTES } from "@/lib/portal-routes";
 import { AnalyticsPage } from "@/pages/admin/Analytics";
+import { AlertsPage } from "@/pages/admin/Alerts";
 import { AuditLogDetailPage } from "@/pages/admin/AuditLogDetail";
 import { AuditLogsPage } from "@/pages/admin/AuditLogs";
 import { ClusterPage } from "@/pages/admin/Cluster";
@@ -120,6 +121,7 @@ function AdminRoutesView() {
         <Route path={ROUTES.auditLogs} element={<AuditLogsPage />} />
         <Route path="/audit-logs/:id" element={<AuditLogDetailPage />} />
         <Route path={ROUTES.analytics} element={<AnalyticsPage />} />
+        <Route path={ROUTES.alerts} element={<AlertsPage />} />
         <Route path={ROUTES.cluster} element={<ClusterPage />} />
         <Route path={ROUTES.config} element={<ConfigPage />} />
         <Route path={ROUTES.settings} element={<SettingsPage />} />
@@ -136,6 +138,7 @@ function AdminRoutesView() {
               item.path !== ROUTES.credits &&
               item.path !== ROUTES.auditLogs &&
               item.path !== ROUTES.analytics &&
+              item.path !== ROUTES.alerts &&
               item.path !== ROUTES.cluster &&
               item.path !== ROUTES.config &&
               item.path !== ROUTES.settings,

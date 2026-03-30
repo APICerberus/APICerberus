@@ -664,8 +664,8 @@
 - [x] Implement `admin/ServiceDetail.tsx` â€” service config, associated routes, edit form
 - [x] Implement `admin/Routes.tsx` â€” route list, create dialog, plugin badges
 - [x] Implement `admin/RouteDetail.tsx` â€” route config, plugin configuration, edit form
-- [ ] Implement `admin/Upstreams.tsx` â€” upstream list, health indicators, target management
-- [ ] Implement `admin/UpstreamDetail.tsx` â€” targets list, health check config, algorithm selector
+- [x] Implement `admin/Upstreams.tsx` â€” upstream list, health indicators, target management
+- [x] Implement `admin/UpstreamDetail.tsx` â€” targets list, health check config, algorithm selector
 - [ ] Implement `admin/Consumers.tsx` â€” consumer list, API key management
 - [ ] Implement `admin/Plugins.tsx` â€” global plugin list, enable/disable, config editor
 - [ ] Implement `admin/Users.tsx` â€” user table with Tabs (All/Active/Suspended), search, create dialog

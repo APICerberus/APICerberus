@@ -10,6 +10,8 @@ import { RouteDetailPage } from "@/pages/admin/RouteDetail";
 import { RoutesPage } from "@/pages/admin/Routes";
 import { ServiceDetailPage } from "@/pages/admin/ServiceDetail";
 import { ServicesPage } from "@/pages/admin/Services";
+import { UpstreamDetailPage } from "@/pages/admin/UpstreamDetail";
+import { UpstreamsPage } from "@/pages/admin/Upstreams";
 
 function PlaceholderPage({ title, description }: { title: string; description: string }) {
   return (
@@ -43,8 +45,16 @@ export function App() {
           <Route path="/services/:id" element={<ServiceDetailPage />} />
           <Route path={ROUTES.routes} element={<RoutesPage />} />
           <Route path="/routes/:id" element={<RouteDetailPage />} />
+          <Route path={ROUTES.upstreams} element={<UpstreamsPage />} />
+          <Route path="/upstreams/:id" element={<UpstreamDetailPage />} />
           {NAV_ITEMS
-            .filter((item) => item.path !== ROUTES.dashboard && item.path !== ROUTES.services && item.path !== ROUTES.routes)
+            .filter(
+              (item) =>
+                item.path !== ROUTES.dashboard &&
+                item.path !== ROUTES.services &&
+                item.path !== ROUTES.routes &&
+                item.path !== ROUTES.upstreams,
+            )
             .map((item) => (
             <Route
               key={item.path}

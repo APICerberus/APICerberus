@@ -622,19 +622,19 @@
 - [x] Implement mobile responsive: sidebar collapses at lg:, Sheet menu at md:
 
 ### 7.5 Shared UI Components
-- [ ] Implement `DataTable.tsx` â€” TanStack Table wrapper with sorting, filtering, column visibility
-- [ ] Implement `DataTablePagination.tsx` â€” page controls, per-page selector
-- [ ] Implement `DataTableToolbar.tsx` â€” search input, filter dropdowns, column toggle, export button
-- [ ] Implement `DataTableExport.tsx` â€” CSV/JSON export from table data
-- [ ] Implement `KPICard.tsx` â€” metric card with value, label, trend indicator, Lucide icon
-- [ ] Implement `StatusBadge.tsx` â€” color-coded status: active=green, suspended=red, pending=amber
-- [ ] Implement `CopyButton.tsx` â€” click-to-copy with Sonner toast feedback
-- [ ] Implement `TimeAgo.tsx` â€” relative time display (date-fns)
-- [ ] Implement `CreditBadge.tsx` â€” credit cost/balance display
-- [ ] Implement `EmptyState.tsx` â€” illustration + description + action button
-- [ ] Implement `LoadingState.tsx` â€” Skeleton grid matching content layout
-- [ ] Implement `ErrorState.tsx` â€” Alert (destructive) + retry button
-- [ ] Implement `ConfirmDialog.tsx` â€” reusable AlertDialog for destructive actions
+- [x] Implement `DataTable.tsx` â€” TanStack Table wrapper with sorting, filtering, column visibility
+- [x] Implement `DataTablePagination.tsx` â€” page controls, per-page selector
+- [x] Implement `DataTableToolbar.tsx` â€” search input, filter dropdowns, column toggle, export button
+- [x] Implement `DataTableExport.tsx` â€” CSV/JSON export from table data
+- [x] Implement `KPICard.tsx` â€” metric card with value, label, trend indicator, Lucide icon
+- [x] Implement `StatusBadge.tsx` â€” color-coded status: active=green, suspended=red, pending=amber
+- [x] Implement `CopyButton.tsx` â€” click-to-copy with Sonner toast feedback
+- [x] Implement `TimeAgo.tsx` â€” relative time display (date-fns)
+- [x] Implement `CreditBadge.tsx` â€” credit cost/balance display
+- [x] Implement `EmptyState.tsx` â€” illustration + description + action button
+- [x] Implement `LoadingState.tsx` â€” Skeleton grid matching content layout
+- [x] Implement `ErrorState.tsx` â€” Alert (destructive) + retry button
+- [x] Implement `ConfirmDialog.tsx` â€” reusable AlertDialog for destructive actions
 
 ### 7.6 Chart Components
 - [ ] Implement `AreaChart.tsx` â€” Recharts: real-time traffic (responsive, themed)

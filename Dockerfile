@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:20-alpine AS web-builder
+FROM node:25-alpine AS web-builder
 WORKDIR /app
 COPY . .
 RUN if [ -f web/package.json ]; then \

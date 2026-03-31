@@ -10,9 +10,9 @@ user management, credits/billing, and an admin REST API.
 
 ## Release Status
 
-- Current tagged release: `v0.1.0`
-- Implemented milestones: `v0.0.1` to `v0.1.0`
-- Next milestone: `v0.2.0` (gRPC Support)
+- Current tagged release: `v1.0.0`
+- Implemented milestones: `v0.0.1` to `v1.0.0`
+- Status: Production Ready
 
 Progress is tracked in [`.project/TASKS.md`](./.project/TASKS.md).
 
@@ -57,6 +57,32 @@ Progress is tracked in [`.project/TASKS.md`](./.project/TASKS.md).
 - Implementation guide: [`.project/IMPLEMENTATION.md`](./.project/IMPLEMENTATION.md)
 - Task roadmap and milestones: [`.project/TASKS.md`](./.project/TASKS.md)
 - Example config: [`apicerberus.example.yaml`](./apicerberus.example.yaml)
+
+### Architecture Documentation
+
+Comprehensive architecture documentation is available in [`docs/architecture/`](./docs/architecture/):
+
+- [Overview](docs/architecture/README.md) - High-level system overview and principles
+- [System Design](docs/architecture/system-design.md) - Architecture patterns and component interactions
+- [Components](docs/architecture/components.md) - Detailed component architecture
+- [Deployment](docs/architecture/deployment.md) - Deployment patterns and topology
+- [Data Flow](docs/architecture/data-flow.md) - Request/response lifecycle
+- [Security](docs/architecture/security.md) - Security architecture and threat model
+
+### API Documentation
+
+- OpenAPI 3.0 Specification: [`docs/api/openapi.yaml`](./docs/api/openapi.yaml)
+- View with Swagger UI or import into Postman
+
+## Contributing
+
+Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines, including:
+
+- Setup and prerequisites
+- Branching strategy and commit conventions
+- Testing requirements
+- Code quality standards
+- Security checklist
 
 ## Requirements
 
@@ -225,6 +251,46 @@ Run only end-to-end tests:
 go test ./test
 ```
 
+Run with race detection:
+
+```bash
+go test -race ./...
+```
+
+## CI/CD
+
+This project uses GitHub Actions for continuous integration and deployment.
+
+### Workflows
+
+- **CI** (`.github/workflows/ci.yml`) - Runs on every PR and push to main:
+  - Lint with golangci-lint
+  - Unit tests with coverage
+  - Build for multiple platforms (Linux, macOS, Windows)
+  - Integration tests
+  - Security scanning (Trivy, gosec, govulncheck)
+
+- **Release** (`.github/workflows/release.yml`) - Triggered on version tags:
+  - Creates GitHub release with changelog
+  - Builds multi-arch binaries (amd64, arm64)
+  - Publishes Docker images to GitHub Container Registry
+  - Updates Helm chart repository
+
+### Automated Security Scanning
+
+Security scans run on every build:
+- **Trivy** - Container image vulnerability scanning
+- **gosec** - Go security code analysis
+- **govulncheck** - Go vulnerability database check
+
+### Dependabot
+
+Automated dependency updates are configured for:
+- Go modules (weekly)
+- npm packages (weekly)
+- GitHub Actions (weekly)
+- Docker images (weekly)
+
 ## Docker
 
 Build and run using Docker:
@@ -244,7 +310,7 @@ docker run --rm -p 8080:8080 -p 9876:9876 apicerberus:local
 
 ## Roadmap
 
-Upcoming high-level milestones:
+Completed milestones:
 
 - `v0.2.0`: gRPC support (HTTP/2, gRPC-Web, transcoding)
 - `v0.3.0`: GraphQL support (query depth, complexity, subscriptions)
@@ -252,6 +318,6 @@ Upcoming high-level milestones:
 - `v0.5.0`: Raft Clustering (HA, distributed rate limiting)
 - `v0.6.0`: Advanced features (caching, Prometheus, OpenTelemetry)
 - `v0.7.0`: Enterprise (RBAC, SSO, white-label)
-- `v1.0.0`: Production release
+- `v1.0.0`: Production release with CI/CD and documentation
 
 See the full plan in [`.project/TASKS.md`](./.project/TASKS.md).

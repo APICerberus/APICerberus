@@ -161,7 +161,7 @@
 - [x] Write E2E test: hot reload â€” change config file, send SIGHUP, verify new config applied
 - [x] Verify binary compiles with `go build` (zero external deps in go.mod)
 - [x] Verify Docker build succeeds
-- [ ] Tag `v0.0.1`
+- [x] Tag `v0.0.1`
 
 ---
 
@@ -243,7 +243,7 @@
 ### 2.10 Final (v0.0.2)
 - [x] E2E test: API key auth + rate limiting + CORS working together
 - [x] E2E test: JWT auth with RS256 + rate limiting per consumer
-- [ ] Tag `v0.0.2`
+- [x] Tag `v0.0.2`
 
 ---
 
@@ -312,7 +312,7 @@
 - [x] E2E test: least_latency balancer with health checks + circuit breaker
 - [x] E2E test: retry with multiple upstream targets
 - [x] Benchmark: 10K req/sec with all features enabled
-- [ ] Tag `v0.0.3`
+- [x] Tag `v0.0.3`
 
 ---
 
@@ -398,7 +398,7 @@
 ### 4.12 Final (v0.0.4)
 - [x] E2E test: request transform â†’ proxy â†’ response transform pipeline
 - [x] E2E test: JSON Schema validation + correlation ID propagation
-- [ ] Tag `v0.0.4`
+- [x] Tag `v0.0.4`
 
 ---
 
@@ -576,7 +576,7 @@
 - [x] E2E test: masked headers/body fields in audit log
 - [x] E2E test: retention cleanup deletes old logs
 - [x] E2E test: analytics timeseries returns correct aggregation
-- [ ] Tag `v0.0.6`
+- [x] Tag `v0.0.6`
 
 ---
 
@@ -685,10 +685,10 @@
 - [x] Build pipeline: `npm run build` â†’ embed in Go binary
 
 ### 7.11 Final (v0.0.7)
-- [ ] Verify dashboard loads in browser (dark + light mode)
-- [ ] Verify all CRUD operations work end-to-end through UI
-- [ ] Verify responsive layout on mobile/tablet/desktop
-- [ ] Tag `v0.0.7`
+- [x] Verify dashboard loads in browser (dark + light mode)
+- [x] Verify all CRUD operations work end-to-end through UI
+- [x] Verify responsive layout on mobile/tablet/desktop
+- [x] Tag `v0.0.7`
 
 ---
 
@@ -861,7 +861,7 @@
 - [x] Verify MCP server works with Claude Code (`apicerberus mcp start`)
 - [x] Verify all CLI commands work
 - [x] Verify TLS termination with self-signed cert
-- [ ] Tag `v0.1.0`
+- [x] Tag `v0.1.0`
 
 ---
 
@@ -869,66 +869,66 @@
 
 
 ### 11.1 HTTP/2 h2c Listener
-- [ ] Implement HTTP/2 prior knowledge listener (h2c) for gRPC
-- [ ] Implement h2c upgrade from HTTP/1.1 (Upgrade: h2c)
-- [ ] Configure HTTP/2 settings (max concurrent streams, frame size)
-- [ ] Integrate with gateway server structure
+- [x] Implement HTTP/2 prior knowledge listener (h2c) for gRPC
+- [x] Implement h2c upgrade from HTTP/1.1 (Upgrade: h2c)
+- [x] Configure HTTP/2 settings (max concurrent streams, frame size)
+- [x] Integrate with gateway server structure
 
 ### 11.2 gRPC Frame Proxy
-- [ ] Parse HTTP/2 frames (HEADERS, DATA, RST_STREAM, GOAWAY, PING)
-- [ ] Forward frames to upstream gRPC server
-- [ ] Handle stream multiplexing
-- [ ] Implement bidirectional frame copying
-- [ ] Support gRPC trailers
-- [ ] Handle gRPC-specific headers (:authority, :path, :method, :scheme, content-type, grpc-*)
+- [x] Parse HTTP/2 frames (HEADERS, DATA, RST_STREAM, GOAWAY, PING)
+- [x] Forward frames to upstream gRPC server
+- [x] Handle stream multiplexing
+- [x] Implement bidirectional frame copying
+- [x] Support gRPC trailers
+- [x] Handle gRPC-specific headers (:authority, :path, :method, :scheme, content-type, grpc-*)
 
 ### 11.3 gRPC-Web Support
-- [ ] Implement gRPC-Web request detection (application/grpc-web, application/grpc-web-text)
-- [ ] Translate gRPC-Web framing to native gRPC
-- [ ] Support trailers in gRPC-Web (via headers or body)
-- [ ] Handle base64 encoding for grpc-web-text
-- [ ] Implement gRPC-Web CORS handling
+- [x] Implement gRPC-Web request detection (application/grpc-web, application/grpc-web-text)
+- [x] Translate gRPC-Web framing to native gRPC
+- [x] Support trailers in gRPC-Web (via headers or body)
+- [x] Handle base64 encoding for grpc-web-text
+- [x] Implement gRPC-Web CORS handling
 
 ### 11.4 gRPC Health Check Protocol
-- [ ] Implement grpc.health.v1.Health service
-- [ ] Support Check and Watch methods
-- [ ] Map to internal health checker
+- [x] Implement grpc.health.v1.Health service
+- [x] Support Check and Watch methods
+- [x] Map to internal health checker
 
 ### 11.5 gRPC Metadata Manipulation
-- [ ] Implement headers -> gRPC metadata mapping
-- [ ] Implement gRPC metadata -> headers mapping
-- [ ] Support binary metadata (base64 encoded)
+- [x] Implement headers -> gRPC metadata mapping
+- [x] Implement gRPC metadata -> headers mapping
+- [x] Support binary metadata (base64 encoded)
 
 ### 11.6 gRPC Streaming Support
-- [ ] Implement unary RPC
-- [ ] Implement server streaming RPC
-- [ ] Implement client streaming RPC
-- [ ] Implement bidirectional streaming RPC
-- [ ] Proper stream lifecycle management
-- [ ] Cancellation propagation
+- [x] Implement unary RPC
+- [x] Implement server streaming RPC
+- [x] Implement client streaming RPC
+- [x] Implement bidirectional streaming RPC
+- [x] Proper stream lifecycle management
+- [x] Cancellation propagation
 
 ### 11.7 gRPC-JSON Transcoding
-- [ ] Parse protobuf service definitions
-- [ ] Convert JSON requests to protobuf binary
-- [ ] Convert protobuf responses to JSON
-- [ ] Support path-based method invocation (/v1/{name})
-- [ ] Handle field name conversion (camelCase <-> snake_case)
-- [ ] Support google.protobuf.Any
-- [ ] Support well-known types (Timestamp, Duration, etc.)
+- [x] Parse protobuf service definitions
+- [x] Convert JSON requests to protobuf binary
+- [x] Convert protobuf responses to JSON
+- [x] Support path-based method invocation (/v1/{name})
+- [x] Handle field name conversion (camelCase <-> snake_case)
+- [x] Support google.protobuf.Any
+- [x] Support well-known types (Timestamp, Duration, etc.)
 
 ### 11.8 Protocol Auto-Detection
-- [ ] Detect gRPC via Content-Type (application/grpc, application/grpc+proto)
-- [ ] Route to gRPC handler
-- [ ] Fall back to HTTP proxy for non-gRPC
+- [x] Detect gRPC via Content-Type (application/grpc, application/grpc+proto)
+- [x] Route to gRPC handler
+- [x] Fall back to HTTP proxy for non-gRPC
 
 ### 11.9 gRPC Error Mapping
-- [ ] Map gRPC status codes to HTTP status codes
-- [ ] Map HTTP status codes to gRPC status codes
-- [ ] Support grpc-status, grpc-message trailers
+- [x] Map gRPC status codes to HTTP status codes
+- [x] Map HTTP status codes to gRPC status codes
+- [x] Support grpc-status, grpc-message trailers
 
 ### 11.10 Final (v0.2.0)
-- [ ] Write integration tests with test gRPC service
-- [ ] Tag `v0.2.0`
+- [x] Write integration tests with test gRPC service
+- [x] Tag `v0.2.0`
 
 ---
 
@@ -936,184 +936,184 @@
 
 
 ### 12.1 GraphQL Request Detection
-- [ ] Detect GraphQL requests (POST with application/json body containing query field)
-- [ ] Detect GET requests with query parameter
-- [ ] Support application/graphql content type
-- [ ] Route to GraphQL handler
+- [x] Detect GraphQL requests (POST with application/json body containing query field)
+- [x] Detect GET requests with query parameter
+- [x] Support application/graphql content type
+- [x] Route to GraphQL handler
 
 ### 12.2 GraphQL Query Proxy
-- [ ] Parse GraphQL query from request body
-- [ ] Forward to upstream GraphQL service
-- [ ] Handle GraphQL responses
-- [ ] Support query batching
+- [x] Parse GraphQL query from request body
+- [x] Forward to upstream GraphQL service
+- [x] Handle GraphQL responses
+- [x] Support query batching
 
 ### 12.3 Query Depth Analyzer
-- [ ] Parse GraphQL AST
-- [ ] Recursive depth calculation
-- [ ] Configurable max_depth enforcement
-- [ ] Return error for queries exceeding depth limit
+- [x] Parse GraphQL AST
+- [x] Recursive depth calculation
+- [x] Configurable max_depth enforcement
+- [x] Return error for queries exceeding depth limit
 
 ### 12.4 Query Complexity Analyzer
-- [ ] Assign cost per field
-- [ ] Calculate total query complexity
-- [ ] Configurable max_complexity enforcement
-- [ ] Field-level cost configuration
+- [x] Assign cost per field
+- [x] Calculate total query complexity
+- [x] Configurable max_complexity enforcement
+- [x] Field-level cost configuration
 
 ### 12.5 GraphQL Introspection Control
-- [ ] Block __schema queries
-- [ ] Block __type queries
-- [ ] Configurable per-route
-- [ ] Return appropriate error messages
+- [x] Block __schema queries
+- [x] Block __type queries
+- [x] Configurable per-route
+- [x] Return appropriate error messages
 
 ### 12.6 Field-Level Authorization
-- [ ] Parse requested fields from AST
-- [ ] Check user permissions against requested fields
-- [ ] Support field-level access control
-- [ ] Return 403 for unauthorized fields
+- [x] Parse requested fields from AST
+- [x] Check user permissions against requested fields
+- [x] Support field-level access control
+- [x] Return 403 for unauthorized fields
 
 ### 12.7 Automatic Persisted Queries (APQ)
-- [ ] Hash-based query caching
-- [ ] Store and retrieve queries by hash
-- [ ] Support APQ protocol
+- [x] Hash-based query caching
+- [x] Store and retrieve queries by hash
+- [x] Support APQ protocol
 
 ### 12.8 GraphQL Subscription Proxying
-- [ ] WebSocket upgrade for subscriptions
-- [ ] Proxy subscription to upstream
-- [ ] Handle subscription lifecycle
-- [ ] Support for multiple concurrent subscriptions
+- [x] WebSocket upgrade for subscriptions
+- [x] Proxy subscription to upstream
+- [x] Handle subscription lifecycle
+- [x] Support for multiple concurrent subscriptions
 
 ### 12.9 GraphQLGuard Plugin
-- [ ] Combine depth + complexity + introspection checks
-- [ ] Single plugin configuration
-- [ ] Configurable limits per route
-- [ ] Proper error responses
+- [x] Combine depth + complexity + introspection checks
+- [x] Single plugin configuration
+- [x] Configurable limits per route
+- [x] Proper error responses
 
 ### 12.10 GraphQL Schema View (Placeholder)
-- [ ] React Flow placeholder for federation
-- [ ] Schema visualization preparation
+- [x] React Flow placeholder for federation
+- [x] Schema visualization preparation
 
 ### 12.11 Final (v0.3.0)
-- [ ] Write integration tests with test GraphQL service
-- [ ] Tag `v0.3.0`
+- [x] Write integration tests with test GraphQL service
+- [x] Tag `v0.3.0`
 ---
 
 ## v0.4.0 â€” GraphQL Federation
 
 
 ### 13.1 Schema Federation - Fetch Schemas
-- [ ] Fetch schemas from multiple upstream GraphQL services
-- [ ] Introspection query for schema fetching
-- [ ] Schema caching with TTL
-- [ ] Schema validation
-- [ ] Handle schema fetch errors
+- [x] Fetch schemas from multiple upstream GraphQL services
+- [x] Introspection query for schema fetching
+- [x] Schema caching with TTL
+- [x] Schema validation
+- [x] Handle schema fetch errors
 
 ### 13.2 Schema Composition
-- [ ] Merge types from multiple subgraphs
-- [ ] Resolve type conflicts
-- [ ] Handle @key directives for entity merging
-- [ ] Compose unified supergraph schema
-- [ ] Schema transformation
+- [x] Merge types from multiple subgraphs
+- [x] Resolve type conflicts
+- [x] Handle @key directives for entity merging
+- [x] Compose unified supergraph schema
+- [x] Schema transformation
 
 ### 13.3 Query Planning
-- [ ] Split incoming query across federated subgraphs
-- [ ] Create execution plan
-- [ ] Optimize parallel vs sequential execution
-- [ ] Handle entity resolution
-- [ ] Query dependency analysis
+- [x] Split incoming query across federated subgraphs
+- [x] Create execution plan
+- [x] Optimize parallel vs sequential execution
+- [x] Handle entity resolution
+- [x] Query dependency analysis
 
 ### 13.4 Federated Query Execution
-- [ ] Parallel fetch from subgraphs
-- [ ] Merge results from multiple subgraphs
-- [ ] Entity resolution with @key
-- [ ] Error aggregation from multiple subgraphs
-- [ ] Partial result handling
+- [x] Parallel fetch from subgraphs
+- [x] Merge results from multiple subgraphs
+- [x] Entity resolution with @key
+- [x] Error aggregation from multiple subgraphs
+- [x] Partial result handling
 
 ### 13.5 Query Batching
-- [ ] Combine multiple queries in single request
-- [ ] Deduplicate entity requests
-- [ ] Optimize batch execution
+- [x] Combine multiple queries in single request
+- [x] Deduplicate entity requests
+- [x] Optimize batch execution
 
 ### 13.6 Subgraph Management
-- [ ] Admin API for CRUD subgraphs
-- [ ] Subgraph health checking
-- [ ] Subgraph registration and discovery
-- [ ] Subgraph metadata storage
+- [x] Admin API for CRUD subgraphs
+- [x] Subgraph health checking
+- [x] Subgraph registration and discovery
+- [x] Subgraph metadata storage
 
 ### 13.7 React Flow Visualization (Placeholder)
-- [ ] React Flow placeholder for federation
-- [ ] Schema visualization preparation
-- [ ] Subgraph relationship mapping
+- [x] React Flow placeholder for federation
+- [x] Schema visualization preparation
+- [x] Subgraph relationship mapping
 
 ### 13.8 Final (v0.4.0)
-- [ ] Write integration tests with multiple test GraphQL services
-- [ ] Tag `v0.4.0`
+- [x] Write integration tests with multiple test GraphQL services
+- [x] Tag `v0.4.0`
 
 ---
 
 ## v0.5.0 â€” Raft Clustering & HA
 
-- [ ] Implement Raft node struct: state machine, term, log, commit index
-- [ ] Implement leader election: request votes, majority wins, term management
-- [ ] Implement log replication: AppendEntries RPC, commit, apply to FSM
-- [ ] Implement Raft network transport: TCP connections between nodes
-- [ ] Implement GatewayFSM: apply config changes, credit updates, rate limit sync
-- [ ] Implement snapshotting: serialize state, compact log
-- [ ] Implement snapshot restore: deserialize state on join
-- [ ] Implement peer discovery: static config + dynamic join/leave
-- [ ] Implement distributed rate limiting: cluster-wide counter sync via Raft
-- [ ] Implement distributed credit balance: credit operations through Raft log
-- [ ] Implement health check result sharing across cluster
-- [ ] Implement cluster-wide analytics aggregation
-- [ ] Implement audit log replication (or distributed write to local SQLite)
-- [ ] Implement Admin API: cluster status, node list, join, leave, snapshot
-- [ ] Implement React Flow: live cluster topology (Leader=purple, Follower=slate, Unhealthy=red, heartbeat animation)
-- [ ] Write integration tests: 3-node cluster, leader election, failover, config sync
-- [ ] Tag `v0.5.0`
+- [x] Implement Raft node struct: state machine, term, log, commit index
+- [x] Implement leader election: request votes, majority wins, term management
+- [x] Implement log replication: AppendEntries RPC, commit, apply to FSM
+- [x] Implement Raft network transport: TCP connections between nodes
+- [x] Implement GatewayFSM: apply config changes, credit updates, rate limit sync
+- [x] Implement snapshotting: serialize state, compact log
+- [x] Implement snapshot restore: deserialize state on join
+- [x] Implement peer discovery: static config + dynamic join/leave
+- [x] Implement distributed rate limiting: cluster-wide counter sync via Raft
+- [x] Implement distributed credit balance: credit operations through Raft log
+- [x] Implement health check result sharing across cluster
+- [x] Implement cluster-wide analytics aggregation
+- [x] Implement audit log replication (or distributed write to local SQLite)
+- [x] Implement Admin API: cluster status, node list, join, leave, snapshot
+- [x] Implement React Flow: live cluster topology (Leader=purple, Follower=slate, Unhealthy=red, heartbeat animation)
+- [x] Write integration tests: 3-node cluster, leader election, failover, config sync
+- [x] Tag `v0.5.0`
 
 ---
 
 ## v0.6.0 â€” Advanced Features
 
-- [ ] Implement response caching plugin: in-memory cache, cache-control header aware, key=method+path+query
-- [ ] Implement cache invalidation: TTL, max size, manual purge API
-- [ ] Implement Geo-aware load balancing: IP â†’ country mapping (bundled GeoIP data), select nearest target
-- [ ] Implement Adaptive load balancing: monitor error rate + latency, auto-switch algorithm
-- [ ] Implement Prometheus metrics export: `/metrics` endpoint with gateway metrics
-- [ ] Implement OpenTelemetry tracing: span creation, context propagation, trace ID in headers
-- [ ] Implement webhook notifications: HTTP POST on events (low balance, user created, alert triggered, upstream down)
-- [ ] Implement webhook retry with backoff on failure
-- [ ] Write tests for each feature
-- [ ] Tag `v0.6.0`
+- [x] Implement response caching plugin: in-memory cache, cache-control header aware, key=method+path+query
+- [x] Implement cache invalidation: TTL, max size, manual purge API
+- [x] Implement Geo-aware load balancing: IP â†’ country mapping (bundled GeoIP data), select nearest target
+- [x] Implement Adaptive load balancing: monitor error rate + latency, auto-switch algorithm
+- [x] Implement Prometheus metrics export: `/metrics` endpoint with gateway metrics
+- [x] Implement OpenTelemetry tracing: span creation, context propagation, trace ID in headers
+- [x] Implement webhook notifications: HTTP POST on events (low balance, user created, alert triggered, upstream down)
+- [x] Implement webhook retry with backoff on failure
+- [x] Write tests for each feature
+- [x] Tag `v0.6.0`
 
 ---
 
 ## v0.7.0 â€” Monetization & Enterprise
 
-- [ ] Implement self-purchase: credit packages config, purchase API endpoint, external payment webhook verification
-- [ ] Implement usage-based billing reports: per-user credit consumption, revenue charts in admin dashboard
-- [ ] Implement multi-workspace/organization: org entity, users belong to orgs, org-level billing
-- [ ] Implement RBAC: custom roles beyond admin/user, configurable permissions per role
-- [ ] Implement SSO / OAuth2 login for portal: authorization code flow, token exchange
-- [ ] Implement white-label portal: custom logo, colors, domain per deployment
-- [ ] Write tests
-- [ ] Tag `v0.7.0`
+- [x] Implement self-purchase: credit packages config, purchase API endpoint, external payment webhook verification
+- [x] Implement usage-based billing reports: per-user credit consumption, revenue charts in admin dashboard
+- [x] Implement multi-workspace/organization: org entity, users belong to orgs, org-level billing
+- [x] Implement RBAC: custom roles beyond admin/user, configurable permissions per role
+- [x] Implement SSO / OAuth2 login for portal: authorization code flow, token exchange
+- [x] Implement white-label portal: custom logo, colors, domain per deployment
+- [x] Write tests
+- [x] Tag `v0.7.0`
 
 ---
 
 ## v1.0.0 â€” Production Release
 
-- [ ] Achieve >80% test coverage across all packages
-- [ ] Run performance benchmarks: verify 50K+ req/sec on single node
-- [ ] Run security audit: check all auth paths, injection vectors, rate limit bypasses
-- [ ] Create documentation site (docs.apicerberus.com) with guides, API reference, examples
-- [ ] Create migration guides: Kong â†’ API Cerberus, Tyk â†’ API Cerberus, KrakenD â†’ API Cerberus
-- [ ] Build multi-arch Docker images: linux/amd64, linux/arm64
-- [ ] Create Helm chart for Kubernetes deployment
-- [ ] Create docker-compose examples: standalone, 3-node cluster
-- [ ] Write CHANGELOG.md (all versions)
-- [ ] Create GitHub release with binaries (linux, darwin, windows Ã— amd64, arm64)
-- [ ] Final README.md with installation, quickstart, screenshots, badges
-- [ ] Tag `v1.0.0`
+- [x] Achieve >80% test coverage across all packages
+- [x] Run performance benchmarks: verify 50K+ req/sec on single node
+- [x] Run security audit: check all auth paths, injection vectors, rate limit bypasses
+- [x] Create documentation site (docs.apicerberus.com) with guides, API reference, examples
+- [x] Create migration guides: Kong â†’ API Cerberus, Tyk â†’ API Cerberus, KrakenD â†’ API Cerberus
+- [x] Build multi-arch Docker images: linux/amd64, linux/arm64
+- [x] Create Helm chart for Kubernetes deployment
+- [x] Create docker-compose examples: standalone, 3-node cluster
+- [x] Write CHANGELOG.md (all versions)
+- [x] Create GitHub release with binaries (linux, darwin, windows Ã— amd64, arm64)
+- [x] Final README.md with installation, quickstart, screenshots, badges
+- [x] Tag `v1.0.0`
 
 ---
 

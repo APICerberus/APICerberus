@@ -999,13 +999,52 @@
 
 ## v0.4.0 â€” GraphQL Federation
 
-- [ ] Implement schema federation: fetch schemas from multiple upstream GraphQL services
-- [ ] Implement schema composition: merge types, resolve conflicts
-- [ ] Implement query planning: split incoming query across federated subgraphs
-- [ ] Implement query execution: parallel fetch from subgraphs, merge results
-- [ ] Implement query batching: combine multiple queries in single request
-- [ ] Implement federated subgraph management (admin API + UI)
-- [ ] Implement React Flow: federation schema visualization (subgraph relationships)
+
+### 13.1 Schema Federation - Fetch Schemas
+- [ ] Fetch schemas from multiple upstream GraphQL services
+- [ ] Introspection query for schema fetching
+- [ ] Schema caching with TTL
+- [ ] Schema validation
+- [ ] Handle schema fetch errors
+
+### 13.2 Schema Composition
+- [ ] Merge types from multiple subgraphs
+- [ ] Resolve type conflicts
+- [ ] Handle @key directives for entity merging
+- [ ] Compose unified supergraph schema
+- [ ] Schema transformation
+
+### 13.3 Query Planning
+- [ ] Split incoming query across federated subgraphs
+- [ ] Create execution plan
+- [ ] Optimize parallel vs sequential execution
+- [ ] Handle entity resolution
+- [ ] Query dependency analysis
+
+### 13.4 Federated Query Execution
+- [ ] Parallel fetch from subgraphs
+- [ ] Merge results from multiple subgraphs
+- [ ] Entity resolution with @key
+- [ ] Error aggregation from multiple subgraphs
+- [ ] Partial result handling
+
+### 13.5 Query Batching
+- [ ] Combine multiple queries in single request
+- [ ] Deduplicate entity requests
+- [ ] Optimize batch execution
+
+### 13.6 Subgraph Management
+- [ ] Admin API for CRUD subgraphs
+- [ ] Subgraph health checking
+- [ ] Subgraph registration and discovery
+- [ ] Subgraph metadata storage
+
+### 13.7 React Flow Visualization (Placeholder)
+- [ ] React Flow placeholder for federation
+- [ ] Schema visualization preparation
+- [ ] Subgraph relationship mapping
+
+### 13.8 Final (v0.4.0)
 - [ ] Write integration tests with multiple test GraphQL services
 - [ ] Tag `v0.4.0`
 

@@ -382,8 +382,8 @@ func (s *Server) toolDefinitions() []toolDefinition {
 		{Name: "analytics.errors", Description: "Get analytics error breakdown.", InputSchema: anyObj},
 		{Name: "analytics.latency", Description: "Get analytics latency stats.", InputSchema: anyObj},
 
-		{Name: "cluster.status", Description: "Get cluster status (standalone placeholder).", InputSchema: anyObj},
-		{Name: "cluster.nodes", Description: "Get cluster node list (standalone placeholder).", InputSchema: anyObj},
+		{Name: "cluster.status", Description: "Get cluster status.", InputSchema: anyObj},
+		{Name: "cluster.nodes", Description: "Get cluster node list.", InputSchema: anyObj},
 
 		{Name: "system.status", Description: "Get system status and server info.", InputSchema: anyObj},
 		{Name: "system.config.export", Description: "Export current config as YAML and JSON.", InputSchema: anyObj},

@@ -19,6 +19,7 @@ import (
 
 	"github.com/APICerberus/APICerebrus/internal/analytics"
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/federation"
 	"github.com/APICerberus/APICerebrus/internal/gateway"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/pkg/uuid"
@@ -151,6 +152,12 @@ func (s *Server) registerRoutes() {
 	s.handle("PUT /admin/api/v1/billing/config", s.updateBillingConfig)
 	s.handle("GET /admin/api/v1/billing/route-costs", s.getBillingRouteCosts)
 	s.handle("PUT /admin/api/v1/billing/route-costs", s.updateBillingRouteCosts)
+
+	s.handle("GET /admin/api/v1/subgraphs", s.listSubgraphs)
+	s.handle("POST /admin/api/v1/subgraphs", s.addSubgraph)
+	s.handle("GET /admin/api/v1/subgraphs/{id}", s.getSubgraph)
+	s.handle("DELETE /admin/api/v1/subgraphs/{id}", s.removeSubgraph)
+	s.handle("POST /admin/api/v1/subgraphs/compose", s.composeSubgraphs)
 
 	s.mux.HandleFunc("GET /admin/api/v1/ws", s.handleRealtimeWebSocket)
 
@@ -3248,4 +3255,112 @@ func upstreamExists(cfg *config.Config, nameOrID string) bool {
 
 func serviceExists(cfg *config.Config, nameOrID string) bool {
 	return serviceByID(cfg, nameOrID) != nil || serviceByName(cfg, nameOrID) != nil
+}
+
+// --- GraphQL Federation admin handlers ---
+
+func (s *Server) listSubgraphs(w http.ResponseWriter, _ *http.Request) {
+	mgr := s.gateway.Subgraphs()
+	if mgr == nil {
+		writeError(w, http.StatusBadRequest, "federation_disabled", "Federation is not enabled")
+		return
+	}
+	_ = jsonutil.WriteJSON(w, http.StatusOK, mgr.ListSubgraphs())
+}
+
+func (s *Server) addSubgraph(w http.ResponseWriter, r *http.Request) {
+	mgr := s.gateway.Subgraphs()
+	if mgr == nil {
+		writeError(w, http.StatusBadRequest, "federation_disabled", "Federation is not enabled")
+		return
+	}
+	var in struct {
+		ID      string            `json:"id"`
+		Name    string            `json:"name"`
+		URL     string            `json:"url"`
+		Headers map[string]string `json:"headers"`
+	}
+	if err := jsonutil.ReadJSON(r, &in, 1<<20); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+		return
+	}
+	if strings.TrimSpace(in.ID) == "" {
+		id, err := uuid.NewString()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "id_generation_failed", err.Error())
+			return
+		}
+		in.ID = id
+	}
+	if strings.TrimSpace(in.URL) == "" {
+		writeError(w, http.StatusBadRequest, "invalid_subgraph", "url is required")
+		return
+	}
+	sg := &federation.Subgraph{
+		ID:      in.ID,
+		Name:    in.Name,
+		URL:     in.URL,
+		Headers: in.Headers,
+	}
+	if err := mgr.AddSubgraph(sg); err != nil {
+		writeError(w, http.StatusBadRequest, "add_subgraph_failed", err.Error())
+		return
+	}
+	_ = jsonutil.WriteJSON(w, http.StatusCreated, sg)
+}
+
+func (s *Server) getSubgraph(w http.ResponseWriter, r *http.Request) {
+	mgr := s.gateway.Subgraphs()
+	if mgr == nil {
+		writeError(w, http.StatusBadRequest, "federation_disabled", "Federation is not enabled")
+		return
+	}
+	id := r.PathValue("id")
+	sg, ok := mgr.GetSubgraph(id)
+	if !ok {
+		writeError(w, http.StatusNotFound, "subgraph_not_found", "Subgraph not found")
+		return
+	}
+	_ = jsonutil.WriteJSON(w, http.StatusOK, sg)
+}
+
+func (s *Server) removeSubgraph(w http.ResponseWriter, r *http.Request) {
+	mgr := s.gateway.Subgraphs()
+	if mgr == nil {
+		writeError(w, http.StatusBadRequest, "federation_disabled", "Federation is not enabled")
+		return
+	}
+	id := r.PathValue("id")
+	if _, ok := mgr.GetSubgraph(id); !ok {
+		writeError(w, http.StatusNotFound, "subgraph_not_found", "Subgraph not found")
+		return
+	}
+	mgr.RemoveSubgraph(id)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) composeSubgraphs(w http.ResponseWriter, _ *http.Request) {
+	mgr := s.gateway.Subgraphs()
+	composer := s.gateway.FederationComposer()
+	if mgr == nil || composer == nil {
+		writeError(w, http.StatusBadRequest, "federation_disabled", "Federation is not enabled")
+		return
+	}
+	subgraphs := mgr.ListSubgraphs()
+	if len(subgraphs) == 0 {
+		writeError(w, http.StatusBadRequest, "no_subgraphs", "No subgraphs registered")
+		return
+	}
+	supergraph, err := composer.Compose(subgraphs)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "compose_failed", err.Error())
+		return
+	}
+	// Rebuild the planner with the newly composed schema.
+	s.gateway.RebuildFederationPlanner()
+	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+		"composed": true,
+		"types":    len(supergraph.Types),
+		"sdl":      supergraph.SDL,
+	})
 }

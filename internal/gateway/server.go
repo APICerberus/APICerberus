@@ -17,6 +17,7 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/audit"
 	"github.com/APICerberus/APICerebrus/internal/billing"
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/federation"
 	grpcpkg "github.com/APICerberus/APICerebrus/internal/grpc"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/plugin"
@@ -46,6 +47,13 @@ type Gateway struct {
 	tlsManager     *TLSManager
 	grpcServer     *grpcpkg.H2CServer // gRPC h2c server
 	startedAt      time.Time
+
+	// GraphQL Federation
+	federationEnabled  bool
+	subgraphs          *federation.SubgraphManager
+	federationComposer *federation.Composer
+	federationPlanner  *federation.Planner
+	federationExecutor *federation.Executor
 
 	runCtx       context.Context
 	healthCancel context.CancelFunc
@@ -105,6 +113,13 @@ func New(cfg *config.Config) (*Gateway, error) {
 		routePipelines: routePipelines,
 		routeHasAuth:   routeHasAuth,
 		startedAt:      time.Now(),
+	}
+	if cfg.Federation.Enabled {
+		g.federationEnabled = true
+		g.subgraphs = federation.NewSubgraphManager()
+		g.federationComposer = federation.NewComposer()
+		g.federationExecutor = federation.NewExecutor()
+		// Planner is created after schema composition when subgraphs are registered.
 	}
 	if strings.TrimSpace(cfg.Gateway.HTTPAddr) != "" {
 		g.httpServer = g.newHTTPServer(cfg.Gateway.HTTPAddr)
@@ -331,6 +346,13 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		g.writeBillingError(w, err)
 		return
 	}
+	// GraphQL Federation: route through the federation executor when the
+	// matched service uses protocol "graphql" and federation is enabled.
+	if service.Protocol == "graphql" && g.federationEnabled {
+		g.serveFederation(w, r)
+		return
+	}
+
 	retryPolicy := pipelineCtx.Retry
 
 	pool := findUpstreamPool(upstreamPools, service.Upstream)
@@ -1221,4 +1243,89 @@ func (g *Gateway) UpstreamHealth(upstreamName string) map[string]bool {
 		out[targetID] = state.Healthy
 	}
 	return out
+}
+
+// Subgraphs returns the federation SubgraphManager (nil when federation is disabled).
+func (g *Gateway) Subgraphs() *federation.SubgraphManager {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.subgraphs
+}
+
+// FederationComposer returns the federation Composer (nil when federation is disabled).
+func (g *Gateway) FederationComposer() *federation.Composer {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.federationComposer
+}
+
+// FederationEnabled reports whether GraphQL Federation is active.
+func (g *Gateway) FederationEnabled() bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.federationEnabled
+}
+
+// serveFederation handles a GraphQL request through the federation executor.
+func (g *Gateway) serveFederation(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		g.writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Federation endpoint requires POST")
+		return
+	}
+
+	var gqlReq struct {
+		Query     string                 `json:"query"`
+		Variables map[string]interface{} `json:"variables"`
+	}
+
+	if err := jsonutil.ReadJSON(r, &gqlReq, 1<<20); err != nil {
+		g.writeError(w, http.StatusBadRequest, "invalid_graphql_request", err.Error())
+		return
+	}
+	if strings.TrimSpace(gqlReq.Query) == "" {
+		g.writeError(w, http.StatusBadRequest, "invalid_graphql_request", "query is required")
+		return
+	}
+
+	g.mu.RLock()
+	planner := g.federationPlanner
+	executor := g.federationExecutor
+	g.mu.RUnlock()
+
+	if planner == nil {
+		g.writeError(w, http.StatusServiceUnavailable, "federation_not_ready", "Schema has not been composed yet")
+		return
+	}
+
+	plan, err := planner.Plan(gqlReq.Query, gqlReq.Variables)
+	if err != nil {
+		_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]interface{}{
+			"errors": []map[string]string{{"message": fmt.Sprintf("query planning failed: %v", err)}},
+		})
+		return
+	}
+
+	result, err := executor.Execute(r.Context(), plan)
+	if err != nil {
+		_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]interface{}{
+			"errors": []map[string]string{{"message": fmt.Sprintf("execution failed: %v", err)}},
+		})
+		return
+	}
+
+	_ = jsonutil.WriteJSON(w, http.StatusOK, result)
+}
+
+// RebuildFederationPlanner rebuilds the federation planner from the current
+// subgraphs and composed schema. Called after schema composition.
+func (g *Gateway) RebuildFederationPlanner() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	if g.subgraphs == nil || g.federationComposer == nil {
+		return
+	}
+	subgraphs := g.subgraphs.ListSubgraphs()
+	entities := g.federationComposer.GetEntities()
+	g.federationPlanner = federation.NewPlanner(subgraphs, entities)
 }

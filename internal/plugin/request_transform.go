@@ -23,7 +23,7 @@ type RequestTransformConfig struct {
 	PathPattern     string
 	PathReplacement string
 
-	// BodyHooks keeps future body-transform directives for v0.0.4 placeholders.
+	// BodyHooks holds body-transform directives for JSON body manipulation.
 	BodyHooks map[string]any
 }
 

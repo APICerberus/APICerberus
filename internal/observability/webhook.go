@@ -179,9 +179,8 @@ func (wm *WebhookManager) send(webhook *Webhook, event *WebhookEvent) error {
 		req.Header.Set(key, value)
 	}
 
-	// Add signature if secret is set
+	// Add HMAC-SHA256 signature if secret is set
 	if webhook.Secret != "" {
-		// In production, implement HMAC signature
 		req.Header.Set("X-Webhook-Signature", "sha256="+generateSignature(data, webhook.Secret))
 	}
 

@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -186,6 +187,189 @@ func TestPropose(t *testing.T) {
 	// Verify FSM applied the route on leader
 	if _, ok := fsm.GetRoute("route-cm"); !ok {
 		t.Error("Expected route to be applied to leader FSM")
+	}
+}
+
+func TestLogCompaction(t *testing.T) {
+	nodes, _ := setupCluster(t)
+
+	// Set a low snapshot threshold so compaction triggers quickly
+	for _, n := range nodes {
+		n.config.SnapshotThreshold = 5
+	}
+
+	startNodes(t, nodes)
+	defer stopNodes(nodes)
+
+	leader := waitForLeader(t, nodes, 3*time.Second)
+
+	// Append enough entries to trigger compaction (threshold = 5)
+	for i := 0; i < 10; i++ {
+		cmd := FSMCommand{
+			Type:    CmdIncrementCounter,
+			Payload: []byte(fmt.Sprintf(`{"key":"counter-%d","count":1}`, i)),
+		}
+
+		index, err := leader.AppendEntry(cmd)
+		if err != nil {
+			t.Fatalf("AppendEntry %d failed: %v", i, err)
+		}
+
+		if err := leader.WaitForCommit(index, 3*time.Second); err != nil {
+			t.Fatalf("WaitForCommit %d failed: %v", i, err)
+		}
+	}
+
+	// Allow replication and compaction to complete
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify the leader's log was compacted
+	leader.mu.RLock()
+	logLen := len(leader.Log)
+	baseIndex := leader.Log[0].Index
+	snapIdx := leader.lastSnapshotIndex
+	leader.mu.RUnlock()
+
+	// After compaction, the log should be shorter than 1 (dummy) + 10 (entries) = 11
+	if logLen >= 11 {
+		t.Errorf("Expected compacted log length < 11, got %d", logLen)
+	}
+
+	// The base index should have advanced past 0
+	if baseIndex == 0 {
+		t.Error("Expected log base index to advance after compaction")
+	}
+
+	// Snapshot index should be set
+	if snapIdx == 0 {
+		t.Error("Expected lastSnapshotIndex to be set after compaction")
+	}
+
+	// Verify FSM state is still correct (all counters applied)
+	leaderFSM := leader.fsm.(*GatewayFSM)
+	for i := 0; i < 10; i++ {
+		key := fmt.Sprintf("counter-%d", i)
+		count := leaderFSM.GetRequestCount(key)
+		if count != 1 {
+			t.Errorf("Expected counter %s = 1, got %d", key, count)
+		}
+	}
+}
+
+func TestSnapshotTransfer(t *testing.T) {
+	// Create a 3-node cluster
+	nodes, transports := setupCluster(t)
+
+	// Set a low snapshot threshold
+	for _, n := range nodes {
+		n.config.SnapshotThreshold = 5
+	}
+
+	startNodes(t, nodes)
+	defer func() {
+		// Stop all nodes including the late joiner
+		stopNodes(nodes)
+	}()
+
+	leader := waitForLeader(t, nodes, 3*time.Second)
+
+	// Add many entries to trigger compaction
+	for i := 0; i < 15; i++ {
+		cmd := FSMCommand{
+			Type:    CmdIncrementCounter,
+			Payload: []byte(fmt.Sprintf(`{"key":"snap-counter-%d","count":1}`, i)),
+		}
+
+		index, err := leader.AppendEntry(cmd)
+		if err != nil {
+			t.Fatalf("AppendEntry %d failed: %v", i, err)
+		}
+
+		if err := leader.WaitForCommit(index, 3*time.Second); err != nil {
+			t.Fatalf("WaitForCommit %d failed: %v", i, err)
+		}
+	}
+
+	// Wait for compaction to happen
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify the leader has compacted
+	leader.mu.RLock()
+	snapIdx := leader.lastSnapshotIndex
+	leader.mu.RUnlock()
+
+	if snapIdx == 0 {
+		t.Fatal("Expected leader to have a snapshot after compaction")
+	}
+
+	// Create a new node that will join late and need a snapshot transfer
+	newNodeID := "node-4"
+	newNodeAddr := "127.0.0.1:20004"
+	newTransport := NewInmemTransport()
+
+	newCfg := DefaultConfig()
+	newCfg.NodeID = newNodeID
+	newCfg.BindAddress = newNodeAddr
+	newCfg.ElectionTimeoutMin = 50 * time.Millisecond
+	newCfg.ElectionTimeoutMax = 150 * time.Millisecond
+	newCfg.HeartbeatInterval = 20 * time.Millisecond
+	newCfg.SnapshotThreshold = 5
+
+	newFSM := NewGatewayFSM()
+	newNode, err := NewNode(newCfg, newFSM, newTransport)
+	if err != nil {
+		t.Fatalf("Failed to create new node: %v", err)
+	}
+
+	// Connect the new node to all existing nodes and vice versa
+	for i, n := range nodes {
+		newTransport.Connect(n.ID, transports[i])
+		transports[i].Connect(newNodeID, newTransport)
+		newNode.Peers[n.ID] = n.Address
+	}
+
+	// Add the new node as a peer on the leader
+	leader.AddPeer(newNodeID, newNodeAddr)
+
+	// Start the new node
+	if err := newNode.Start(); err != nil {
+		t.Fatalf("Failed to start new node: %v", err)
+	}
+	// Extend nodes for cleanup
+	nodes = append(nodes, newNode)
+
+	// Wait for the new node to receive the snapshot and catch up
+	deadline := time.After(5 * time.Second)
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	caughtUp := false
+	for !caughtUp {
+		select {
+		case <-deadline:
+			newNode.mu.RLock()
+			lastApplied := newNode.LastApplied
+			commitIdx := newNode.CommitIndex
+			newNode.mu.RUnlock()
+			t.Fatalf("New node did not catch up via snapshot. LastApplied=%d, CommitIndex=%d, expected >= %d",
+				lastApplied, commitIdx, snapIdx)
+		case <-ticker.C:
+			newNode.mu.RLock()
+			lastApplied := newNode.LastApplied
+			newNode.mu.RUnlock()
+			if lastApplied >= snapIdx {
+				caughtUp = true
+			}
+		}
+	}
+
+	// Verify the new node's FSM has the correct state
+	for i := 0; i < 15; i++ {
+		key := fmt.Sprintf("snap-counter-%d", i)
+		count := newFSM.GetRequestCount(key)
+		if count != 1 {
+			t.Errorf("New node: expected counter %s = 1, got %d", key, count)
+		}
 	}
 }
 

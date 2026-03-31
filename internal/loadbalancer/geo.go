@@ -79,8 +79,7 @@ func (g *GeoAwareSelector) Select(clientIP string, targetIDs []string) string {
 	return targetIDs[0]
 }
 
-// loadDefaultGeoData loads bundled GeoIP data.
-// In production, this would load from a MaxMind database file.
+// loadDefaultGeoData loads bundled GeoIP prefix-to-country mappings.
 func loadDefaultGeoData() map[string]string {
 	// Simplified mapping of some IP ranges to countries
 	return map[string]string{

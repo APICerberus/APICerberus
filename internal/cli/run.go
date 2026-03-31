@@ -20,6 +20,7 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/gateway"
 	"github.com/APICerberus/APICerebrus/internal/mcp"
 	"github.com/APICerberus/APICerebrus/internal/portal"
+	"github.com/APICerberus/APICerebrus/internal/raft"
 	"github.com/APICerberus/APICerebrus/internal/store"
 	"github.com/APICerberus/APICerebrus/internal/version"
 )
@@ -96,6 +97,44 @@ func runStart(args []string) error {
 		MaxHeaderBytes: cfg.Gateway.MaxHeaderBytes,
 	}
 
+	// Raft cluster initialization
+	var (
+		raftNode *raft.Node
+		clusterMgr *raft.ClusterManager
+	)
+	if cfg.Cluster.Enabled {
+		raftCfg := &raft.Config{
+			NodeID:             cfg.Cluster.NodeID,
+			BindAddress:        cfg.Cluster.BindAddress,
+			ElectionTimeoutMin: cfg.Cluster.ElectionTimeoutMin,
+			ElectionTimeoutMax: cfg.Cluster.ElectionTimeoutMax,
+			HeartbeatInterval:  cfg.Cluster.HeartbeatInterval,
+		}
+
+		gatewayFSM := raft.NewGatewayFSM()
+		transport := raft.NewHTTPTransport(cfg.Cluster.BindAddress, cfg.Cluster.NodeID)
+
+		var raftErr error
+		raftNode, raftErr = raft.NewNode(raftCfg, gatewayFSM, transport)
+		if raftErr != nil {
+			return fmt.Errorf("initialize raft node: %w", raftErr)
+		}
+
+		for _, peer := range cfg.Cluster.Peers {
+			raftNode.AddPeer(peer.ID, peer.Address)
+		}
+
+		if raftErr = raftNode.Start(); raftErr != nil {
+			return fmt.Errorf("start raft node: %w", raftErr)
+		}
+
+		clusterMgr = raft.NewClusterManager(raftNode, gatewayFSM, cfg.Admin.Addr, cfg.Admin.APIKey)
+		if raftErr = clusterMgr.Start(); raftErr != nil {
+			_ = raftNode.Stop()
+			return fmt.Errorf("start cluster manager: %w", raftErr)
+		}
+	}
+
 	var (
 		portalHTTP  *http.Server
 		portalStore *store.Store
@@ -130,6 +169,14 @@ func runStart(args []string) error {
 	defer func() {
 		if portalStore != nil {
 			_ = portalStore.Close()
+		}
+	}()
+	defer func() {
+		if clusterMgr != nil {
+			_ = clusterMgr.Stop()
+		}
+		if raftNode != nil {
+			_ = raftNode.Stop()
 		}
 	}()
 

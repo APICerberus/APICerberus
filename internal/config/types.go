@@ -4,19 +4,43 @@ import "time"
 
 // Config is the runtime gateway configuration snapshot.
 type Config struct {
-	Gateway       GatewayConfig  `yaml:"gateway" json:"gateway"`
-	Admin         AdminConfig    `yaml:"admin" json:"admin"`
-	Portal        PortalConfig   `yaml:"portal" json:"portal"`
-	Logging       LoggingConfig  `yaml:"logging" json:"logging"`
-	Store         StoreConfig    `yaml:"store" json:"store"`
-	Billing       BillingConfig  `yaml:"billing" json:"billing"`
-	Audit         AuditConfig    `yaml:"audit" json:"audit"`
-	Services      []Service      `yaml:"services" json:"services"`
-	Routes        []Route        `yaml:"routes" json:"routes"`
-	Upstreams     []Upstream     `yaml:"upstreams" json:"upstreams"`
-	Consumers     []Consumer     `yaml:"consumers" json:"consumers"`
-	Auth          AuthConfig     `yaml:"auth" json:"auth"`
-	GlobalPlugins []PluginConfig `yaml:"global_plugins" json:"global_plugins"`
+	Gateway       GatewayConfig    `yaml:"gateway" json:"gateway"`
+	Admin         AdminConfig      `yaml:"admin" json:"admin"`
+	Portal        PortalConfig     `yaml:"portal" json:"portal"`
+	Logging       LoggingConfig    `yaml:"logging" json:"logging"`
+	Store         StoreConfig      `yaml:"store" json:"store"`
+	Billing       BillingConfig    `yaml:"billing" json:"billing"`
+	Audit         AuditConfig      `yaml:"audit" json:"audit"`
+	Cluster       ClusterConfig    `yaml:"cluster" json:"cluster"`
+	Federation    FederationConfig `yaml:"federation" json:"federation"`
+	Services      []Service        `yaml:"services" json:"services"`
+	Routes        []Route          `yaml:"routes" json:"routes"`
+	Upstreams     []Upstream       `yaml:"upstreams" json:"upstreams"`
+	Consumers     []Consumer       `yaml:"consumers" json:"consumers"`
+	Auth          AuthConfig       `yaml:"auth" json:"auth"`
+	GlobalPlugins []PluginConfig   `yaml:"global_plugins" json:"global_plugins"`
+}
+
+// FederationConfig holds GraphQL Federation settings.
+type FederationConfig struct {
+	Enabled bool `yaml:"enabled" json:"enabled"`
+}
+
+// ClusterConfig holds Raft cluster configuration.
+type ClusterConfig struct {
+	Enabled            bool          `yaml:"enabled" json:"enabled"`
+	NodeID             string        `yaml:"node_id" json:"node_id"`
+	BindAddress        string        `yaml:"bind_address" json:"bind_address"`
+	Peers              []ClusterPeer `yaml:"peers" json:"peers"`
+	ElectionTimeoutMin time.Duration `yaml:"election_timeout_min" json:"election_timeout_min"`
+	ElectionTimeoutMax time.Duration `yaml:"election_timeout_max" json:"election_timeout_max"`
+	HeartbeatInterval  time.Duration `yaml:"heartbeat_interval" json:"heartbeat_interval"`
+}
+
+// ClusterPeer represents a peer node in the Raft cluster.
+type ClusterPeer struct {
+	ID      string `yaml:"id" json:"id"`
+	Address string `yaml:"address" json:"address"`
 }
 
 type BillingConfig struct {

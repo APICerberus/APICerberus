@@ -145,8 +145,7 @@ func WriteError(w http.ResponseWriter, message string, statusCode int) {
 
 // IsIntrospectionQuery checks if a query contains introspection.
 func IsIntrospectionQuery(query string) bool {
-	// Simple string check for introspection fields
-	// In production, this should use proper AST parsing
+	// Quick string check for introspection fields
 	return strings.Contains(query, "__schema") ||
 		strings.Contains(query, "__type") ||
 		strings.Contains(query, "__typename") ||

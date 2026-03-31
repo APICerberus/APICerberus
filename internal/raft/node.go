@@ -57,6 +57,10 @@ type Node struct {
 	nextIndex  map[string]uint64
 	matchIndex map[string]uint64
 
+	// Snapshot state
+	lastSnapshotIndex uint64
+	lastSnapshotTerm  uint64
+
 	// State machine
 	State NodeState `json:"state"`
 
@@ -210,6 +214,23 @@ func (n *Node) Start() error {
 		logEntries, err := n.storage.LoadLog()
 		if err == nil && len(logEntries) > 0 {
 			n.Log = logEntries
+		}
+
+		// Restore snapshot if available
+		snapIndex, snapTerm, snapData, err := n.storage.LoadSnapshot()
+		if err == nil && snapIndex > 0 && len(snapData) > 0 {
+			if n.fsm != nil {
+				if err := n.fsm.Restore(snapData); err == nil {
+					n.lastSnapshotIndex = snapIndex
+					n.lastSnapshotTerm = snapTerm
+					if snapIndex > n.LastApplied {
+						n.LastApplied = snapIndex
+					}
+					if snapIndex > n.CommitIndex {
+						n.CommitIndex = snapIndex
+					}
+				}
+			}
 		}
 	}
 
@@ -389,23 +410,88 @@ func (n *Node) replicateTo(peerID string, term, commitIndex uint64) {
 		return
 	}
 
+	// If the follower is too far behind (needs entries we already compacted),
+	// send an InstallSnapshot instead of AppendEntries.
+	if n.lastSnapshotIndex > 0 && nextIdx <= n.lastSnapshotIndex {
+		snapIndex := n.lastSnapshotIndex
+		snapTerm := n.lastSnapshotTerm
+
+		// Load snapshot data
+		var snapData []byte
+		if n.storage != nil {
+			_, _, data, err := n.storage.LoadSnapshot()
+			if err == nil && len(data) > 0 {
+				snapData = data
+			}
+		}
+		// If no storage, take a live snapshot from the FSM
+		if snapData == nil && n.fsm != nil {
+			data, err := n.fsm.Snapshot()
+			if err == nil {
+				snapData = data
+			}
+		}
+		n.mu.RUnlock()
+
+		if snapData == nil {
+			return
+		}
+
+		snapReq := &InstallSnapshotRequest{
+			Term:              term,
+			LeaderID:          n.ID,
+			LastIncludedIndex: snapIndex,
+			LastIncludedTerm:  snapTerm,
+			Data:              snapData,
+			Done:              true,
+		}
+
+		snapResp, err := n.transport.InstallSnapshot(peerID, snapReq)
+		if err != nil {
+			return
+		}
+
+		n.mu.Lock()
+		defer n.mu.Unlock()
+
+		if snapResp.Term > n.CurrentTerm {
+			n.becomeFollower(snapResp.Term)
+			return
+		}
+
+		if snapResp.Success {
+			n.nextIndex[peerID] = snapIndex + 1
+			n.matchIndex[peerID] = snapIndex
+		}
+		return
+	}
+
+	baseIndex := n.Log[0].Index
+
 	// Build PrevLogIndex/PrevLogTerm
 	prevLogIndex := nextIdx - 1
 	prevLogTerm := uint64(0)
-	if prevLogIndex > 0 && prevLogIndex < uint64(len(n.Log)) {
-		prevLogTerm = n.Log[prevLogIndex].Term
+	if prevLogIndex >= baseIndex {
+		offset := prevLogIndex - baseIndex
+		if offset < uint64(len(n.Log)) {
+			prevLogTerm = n.Log[offset].Term
+		}
 	}
 
 	// Collect entries to send
 	var entries []LogEntry
 	lastLogIdx := n.lastLogIndex()
 	if nextIdx <= lastLogIdx {
+		startOffset := nextIdx - baseIndex
 		end := nextIdx + uint64(n.config.MaxEntriesPerAppend)
 		if end > lastLogIdx+1 {
 			end = lastLogIdx + 1
 		}
-		entries = make([]LogEntry, end-nextIdx)
-		copy(entries, n.Log[nextIdx:end])
+		endOffset := end - baseIndex
+		if startOffset < uint64(len(n.Log)) && endOffset <= uint64(len(n.Log)) {
+			entries = make([]LogEntry, endOffset-startOffset)
+			copy(entries, n.Log[startOffset:endOffset])
+		}
 	}
 	n.mu.RUnlock()
 
@@ -457,12 +543,17 @@ func (n *Node) replicateTo(peerID string, term, commitIndex uint64) {
 
 // advanceCommitIndex checks if we can advance the commit index.
 func (n *Node) advanceCommitIndex() {
+	baseIndex := n.Log[0].Index
 	for idx := n.lastLogIndex(); idx > n.CommitIndex; idx-- {
-		if idx >= uint64(len(n.Log)) {
+		if idx < baseIndex {
+			break
+		}
+		offset := idx - baseIndex
+		if offset >= uint64(len(n.Log)) {
 			continue
 		}
 		// Only commit entries from current term (Raft safety property)
-		if n.Log[idx].Term != n.CurrentTerm {
+		if n.Log[offset].Term != n.CurrentTerm {
 			continue
 		}
 
@@ -491,13 +582,75 @@ func (n *Node) advanceCommitIndex() {
 func (n *Node) applyCommitted() {
 	for n.LastApplied < n.CommitIndex {
 		n.LastApplied++
-		if n.LastApplied < uint64(len(n.Log)) {
-			entry := n.Log[n.LastApplied]
+		// Compute the position in the slice relative to the snapshot offset
+		offset := n.LastApplied - n.Log[0].Index
+		if offset > 0 && offset < uint64(len(n.Log)) {
+			entry := n.Log[offset]
 			if n.fsm != nil {
 				n.fsm.Apply(entry)
 			}
 		}
 	}
+	n.maybeSnapshot()
+}
+
+// maybeSnapshot checks whether a snapshot should be taken and triggers compaction.
+// Must be called with n.mu held.
+func (n *Node) maybeSnapshot() {
+	if n.config.SnapshotThreshold == 0 {
+		return
+	}
+	if n.LastApplied-n.lastSnapshotIndex >= n.config.SnapshotThreshold {
+		n.compactLog()
+	}
+}
+
+// compactLog takes a snapshot of the FSM and trims the log.
+// Must be called with n.mu held.
+func (n *Node) compactLog() {
+	if n.fsm == nil {
+		return
+	}
+
+	// Take a snapshot of the FSM
+	snapData, err := n.fsm.Snapshot()
+	if err != nil {
+		return
+	}
+
+	lastIncludedIndex := n.LastApplied
+	lastIncludedTerm := uint64(0)
+	baseIndex := n.Log[0].Index
+
+	// Find the term of the last applied entry using offset-based access
+	appliedOffset := lastIncludedIndex - baseIndex
+	if appliedOffset < uint64(len(n.Log)) {
+		lastIncludedTerm = n.Log[appliedOffset].Term
+	} else if len(n.Log) > 0 {
+		// The entry might have been compacted already; use last log entry's term
+		lastIncludedTerm = n.Log[len(n.Log)-1].Term
+	}
+
+	// Persist the snapshot
+	if n.storage != nil {
+		if err := n.storage.SaveSnapshot(lastIncludedIndex, lastIncludedTerm, snapData); err != nil {
+			return
+		}
+	}
+
+	// Trim the log: keep only entries after lastIncludedIndex
+	// Replace compacted entries with a single dummy entry that records the snapshot boundary
+	if appliedOffset < uint64(len(n.Log)) {
+		tail := make([]LogEntry, len(n.Log)-int(appliedOffset))
+		tail[0] = LogEntry{Index: lastIncludedIndex, Term: lastIncludedTerm}
+		copy(tail[1:], n.Log[appliedOffset+1:])
+		n.Log = tail
+	} else {
+		n.Log = []LogEntry{{Index: lastIncludedIndex, Term: lastIncludedTerm}}
+	}
+
+	n.lastSnapshotIndex = lastIncludedIndex
+	n.lastSnapshotTerm = lastIncludedTerm
 }
 
 // resetElectionTimer resets the election timer with a random timeout.
@@ -548,10 +701,15 @@ func (n *Node) lastLogTerm() uint64 {
 }
 
 func (n *Node) getLogEntry(index uint64) (LogEntry, bool) {
-	if index == 0 || index >= uint64(len(n.Log)) {
+	if len(n.Log) == 0 {
 		return LogEntry{}, false
 	}
-	return n.Log[index], true
+	baseIndex := n.Log[0].Index
+	if index <= baseIndex || index > baseIndex+uint64(len(n.Log))-1 {
+		return LogEntry{}, false
+	}
+	offset := index - baseIndex
+	return n.Log[offset], true
 }
 
 // AddPeer adds a peer to the cluster.
@@ -721,18 +879,26 @@ func (n *Node) HandleAppendEntries(req *AppendEntriesRequest) *AppendEntriesResp
 	n.resetElectionTimer()
 
 	// Check previous log entry consistency
+	baseIndex := n.Log[0].Index
 	if req.PrevLogIndex > 0 {
-		if req.PrevLogIndex >= uint64(len(n.Log)) {
+		if req.PrevLogIndex < baseIndex {
+			// We already have a snapshot past this point; this is stale
 			resp.Success = false
-			resp.ConflictIndex = uint64(len(n.Log))
+			resp.ConflictIndex = baseIndex + 1
 			return resp
 		}
-		if n.Log[req.PrevLogIndex].Term != req.PrevLogTerm {
+		prevOffset := req.PrevLogIndex - baseIndex
+		if prevOffset >= uint64(len(n.Log)) {
 			resp.Success = false
-			resp.ConflictTerm = n.Log[req.PrevLogIndex].Term
-			for i := req.PrevLogIndex; i > 0; i-- {
+			resp.ConflictIndex = baseIndex + uint64(len(n.Log))
+			return resp
+		}
+		if n.Log[prevOffset].Term != req.PrevLogTerm {
+			resp.Success = false
+			resp.ConflictTerm = n.Log[prevOffset].Term
+			for i := prevOffset; i > 0; i-- {
 				if n.Log[i-1].Term != resp.ConflictTerm {
-					resp.ConflictIndex = i
+					resp.ConflictIndex = baseIndex + i
 					break
 				}
 			}
@@ -744,9 +910,10 @@ func (n *Node) HandleAppendEntries(req *AppendEntriesRequest) *AppendEntriesResp
 	var newEntries []LogEntry
 	for i, entry := range req.Entries {
 		index := req.PrevLogIndex + 1 + uint64(i)
-		if index < uint64(len(n.Log)) {
-			if n.Log[index].Term != entry.Term {
-				n.Log = n.Log[:index]
+		offset := index - baseIndex
+		if offset < uint64(len(n.Log)) {
+			if n.Log[offset].Term != entry.Term {
+				n.Log = n.Log[:offset]
 				n.Log = append(n.Log, entry)
 				newEntries = append(newEntries, entry)
 			}
@@ -808,15 +975,34 @@ func (n *Node) HandleInstallSnapshot(req *InstallSnapshotRequest) *InstallSnapsh
 	}
 
 	// Update log to reflect snapshot
-	if req.LastIncludedIndex >= uint64(len(n.Log)) {
+	baseIndex := n.Log[0].Index
+	if req.LastIncludedIndex >= baseIndex+uint64(len(n.Log)) {
+		// Snapshot is ahead of our entire log; discard all entries
 		n.Log = []LogEntry{{Index: req.LastIncludedIndex, Term: req.LastIncludedTerm}}
-	} else {
-		n.Log = n.Log[req.LastIncludedIndex+1:]
-		n.Log = append([]LogEntry{{Index: req.LastIncludedIndex, Term: req.LastIncludedTerm}}, n.Log...)
+	} else if req.LastIncludedIndex >= baseIndex {
+		// Keep entries after the snapshot point
+		offset := req.LastIncludedIndex - baseIndex
+		remaining := n.Log[offset+1:]
+		n.Log = make([]LogEntry, 1+len(remaining))
+		n.Log[0] = LogEntry{Index: req.LastIncludedIndex, Term: req.LastIncludedTerm}
+		copy(n.Log[1:], remaining)
+	}
+	// If req.LastIncludedIndex < baseIndex, we already have a newer snapshot; ignore
+
+	if req.LastIncludedIndex > n.LastApplied {
+		n.LastApplied = req.LastIncludedIndex
+	}
+	if req.LastIncludedIndex > n.CommitIndex {
+		n.CommitIndex = req.LastIncludedIndex
 	}
 
-	n.LastApplied = req.LastIncludedIndex
-	n.CommitIndex = req.LastIncludedIndex
+	n.lastSnapshotIndex = req.LastIncludedIndex
+	n.lastSnapshotTerm = req.LastIncludedTerm
+
+	// Persist the snapshot
+	if n.storage != nil {
+		n.storage.SaveSnapshot(req.LastIncludedIndex, req.LastIncludedTerm, req.Data)
+	}
 
 	resp.Success = true
 	return resp

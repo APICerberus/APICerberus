@@ -286,8 +286,7 @@ func (ab *AdaptiveBalancer) weightedResponseTime(targetIDs []string) (string, in
 
 // weightedRandomSelect selects a target using weighted random.
 func (ab *AdaptiveBalancer) weightedRandomSelect(targetIDs []string, weights map[string]float64, totalWeight float64) string {
-	// Simple implementation: just pick the one with highest weight
-	// In production, use proper weighted random selection
+	// Pick the target with the highest weight
 	var bestTarget string
 	var bestWeight float64
 

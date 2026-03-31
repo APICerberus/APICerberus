@@ -3,6 +3,7 @@ package graphql
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httputil"
@@ -12,9 +13,10 @@ import (
 
 // Proxy proxies GraphQL requests to upstream servers.
 type Proxy struct {
-	target     *url.URL
-	client     *http.Client
-	reverseProxy *httputil.ReverseProxy
+	target            *url.URL
+	client            *http.Client
+	reverseProxy      *httputil.ReverseProxy
+	subscriptionProxy *SubscriptionProxy
 }
 
 // ProxyConfig configures the GraphQL proxy.
@@ -43,19 +45,34 @@ func NewProxy(cfg *ProxyConfig) (*Proxy, error) {
 	reverseProxy.Transport = client.Transport
 
 	return &Proxy{
-		target:       target,
-		client:       client,
-		reverseProxy: reverseProxy,
+		target:            target,
+		client:            client,
+		reverseProxy:      reverseProxy,
+		subscriptionProxy: NewSubscriptionProxy(cfg.TargetURL),
 	}, nil
 }
 
 // ServeHTTP implements http.Handler.
+// It detects GraphQL subscription requests (WebSocket upgrade with graphql-transport-ws
+// sub-protocol) and routes them to the SubscriptionProxy; all other requests are
+// forwarded via the standard reverse proxy.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if IsSubscriptionRequest(r) {
+		p.subscriptionProxy.HandleSubscription(w, r)
+		return
+	}
 	p.reverseProxy.ServeHTTP(w, r)
 }
 
 // Forward forwards a GraphQL request to the upstream.
+// Subscription operations cannot be forwarded over HTTP; use ServeHTTP with a
+// WebSocket upgrade instead. Forward returns an error if the query is a subscription.
 func (p *Proxy) Forward(req *Request) (*Response, error) {
+	// Detect subscription operations which require a WebSocket connection.
+	if IsSubscriptionQuery(req.Query) {
+		return nil, fmt.Errorf("subscription operations must use a WebSocket connection")
+	}
+
 	// Build request body
 	body, err := json.Marshal(req)
 	if err != nil {

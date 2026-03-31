@@ -365,8 +365,7 @@ func (cm *ClusterManager) checkNodeHealth() {
 			cm.nodeHealth[id] = health
 		}
 
-		// Simple health check - try to contact node
-		// In production, this would be a proper health endpoint
+		// Health check via cluster status endpoint
 		client := &http.Client{Timeout: 2 * time.Second}
 		resp, err := client.Get(fmt.Sprintf("http://%s/admin/api/v1/cluster/status", addr))
 

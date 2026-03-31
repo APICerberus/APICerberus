@@ -1,8 +1,11 @@
 package raft
 
 import (
+	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -51,11 +54,14 @@ type Node struct {
 	LastApplied uint64 `json:"last_applied"`
 
 	// Volatile state for leaders
-	nextIndex         map[string]uint64
-	matchIndex        map[string]uint64
+	nextIndex  map[string]uint64
+	matchIndex map[string]uint64
 
 	// State machine
 	State NodeState `json:"state"`
+
+	// Leader tracking
+	leaderID string
 
 	// Cluster membership
 	Peers map[string]string `json:"peers"` // node ID -> address
@@ -72,12 +78,25 @@ type Node struct {
 	// Transport layer
 	transport Transport
 
+	// Persistent storage (optional)
+	storage Storage
+
 	// Configuration
 	config *Config
 
 	// Synchronization
-	mu          sync.RWMutex
+	mu            sync.RWMutex
 	electionTimer *time.Timer
+}
+
+// Storage interface for persisting Raft state.
+type Storage interface {
+	SaveState(term uint64, votedFor string) error
+	LoadState() (term uint64, votedFor string, err error)
+	SaveLog(entries []LogEntry) error
+	LoadLog() ([]LogEntry, error)
+	SaveSnapshot(index, term uint64, data []byte) error
+	LoadSnapshot() (index, term uint64, data []byte, err error)
 }
 
 // Config holds Raft node configuration.
@@ -159,7 +178,7 @@ func NewNode(config *Config, fsm StateMachine, transport Transport) (*Node, erro
 		Peers:             make(map[string]string),
 		nextIndex:         make(map[string]uint64),
 		matchIndex:        make(map[string]uint64),
-		electionTimeoutCh: make(chan struct{}),
+		electionTimeoutCh: make(chan struct{}, 1),
 		heartbeatCh:       make(chan struct{}),
 		applyCh:           make(chan LogEntry, 100),
 		stopCh:            make(chan struct{}),
@@ -174,8 +193,26 @@ func NewNode(config *Config, fsm StateMachine, transport Transport) (*Node, erro
 	return n, nil
 }
 
+// SetStorage sets the persistent storage backend.
+func (n *Node) SetStorage(s Storage) {
+	n.storage = s
+}
+
 // Start starts the Raft node.
 func (n *Node) Start() error {
+	// Restore persisted state if available
+	if n.storage != nil {
+		term, votedFor, err := n.storage.LoadState()
+		if err == nil {
+			n.CurrentTerm = term
+			n.VotedFor = votedFor
+		}
+		logEntries, err := n.storage.LoadLog()
+		if err == nil && len(logEntries) > 0 {
+			n.Log = logEntries
+		}
+	}
+
 	// Start transport
 	if err := n.transport.Start(n); err != nil {
 		return fmt.Errorf("failed to start transport: %w", err)
@@ -193,6 +230,9 @@ func (n *Node) Start() error {
 // Stop stops the Raft node.
 func (n *Node) Stop() error {
 	close(n.stopCh)
+	if n.electionTimer != nil {
+		n.electionTimer.Stop()
+	}
 	return n.transport.Stop()
 }
 
@@ -202,7 +242,7 @@ func (n *Node) run() {
 		select {
 		case <-n.stopCh:
 			return
-		case <-n.electionTimer.C:
+		case <-n.electionTimeoutCh:
 			n.handleElectionTimeout()
 		}
 	}
@@ -214,11 +254,9 @@ func (n *Node) handleElectionTimeout() {
 	defer n.mu.Unlock()
 
 	if n.State == StateLeader {
-		// Leader doesn't need election timer
 		return
 	}
 
-	// Convert to candidate and start election
 	n.becomeCandidate()
 }
 
@@ -227,12 +265,17 @@ func (n *Node) becomeCandidate() {
 	n.State = StateCandidate
 	n.CurrentTerm++
 	n.VotedFor = n.ID
+	n.leaderID = ""
 
-	// Vote for self
-	votesReceived := 1
-	votesNeeded := (len(n.Peers)+1)/2 + 1
+	n.persistState()
 
-	// Request votes from all peers
+	// Use atomic counter for thread-safe vote counting
+	var votesReceived atomic.Int32
+	votesReceived.Store(1) // vote for self
+	votesNeeded := int32((len(n.Peers)+1)/2 + 1)
+
+	currentTerm := n.CurrentTerm
+
 	req := &RequestVoteRequest{
 		Term:         n.CurrentTerm,
 		CandidateID:  n.ID,
@@ -240,13 +283,12 @@ func (n *Node) becomeCandidate() {
 		LastLogTerm:  n.lastLogTerm(),
 	}
 
-	// Send vote requests concurrently
-	for peerID, peerAddr := range n.Peers {
+	for peerID := range n.Peers {
 		if peerID == n.ID {
 			continue
 		}
 
-		go func(id, addr string) {
+		go func(id string) {
 			resp, err := n.transport.RequestVote(id, req)
 			if err != nil {
 				return
@@ -255,31 +297,23 @@ func (n *Node) becomeCandidate() {
 			n.mu.Lock()
 			defer n.mu.Unlock()
 
-			// Check if we're still a candidate in the same term
-			if n.State != StateCandidate || n.CurrentTerm != req.Term {
+			if n.State != StateCandidate || n.CurrentTerm != currentTerm {
 				return
 			}
 
-			// If peer has higher term, step down
 			if resp.Term > n.CurrentTerm {
-				n.CurrentTerm = resp.Term
-				n.State = StateFollower
-				n.VotedFor = ""
-				n.resetElectionTimer()
+				n.becomeFollower(resp.Term)
 				return
 			}
 
-			// Count vote
 			if resp.VoteGranted {
-				votesReceived++
-				if votesReceived >= votesNeeded {
+				if votesReceived.Add(1) >= votesNeeded {
 					n.becomeLeader()
 				}
 			}
-		}(peerID, peerAddr)
+		}(peerID)
 	}
 
-	// Reset election timer
 	n.resetElectionTimer()
 }
 
@@ -290,15 +324,16 @@ func (n *Node) becomeLeader() {
 	}
 
 	n.State = StateLeader
+	n.leaderID = n.ID
 
-	// Initialize leader state
+	// Initialize leader volatile state
 	lastIndex := n.lastLogIndex()
 	for peerID := range n.Peers {
 		n.nextIndex[peerID] = lastIndex + 1
 		n.matchIndex[peerID] = 0
 	}
 
-	// Start sending heartbeats
+	// Start sending heartbeats and replicating log
 	go n.sendHeartbeats()
 }
 
@@ -307,10 +342,11 @@ func (n *Node) becomeFollower(term uint64) {
 	n.State = StateFollower
 	n.CurrentTerm = term
 	n.VotedFor = ""
+	n.persistState()
 	n.resetElectionTimer()
 }
 
-// sendHeartbeats sends periodic heartbeats to all peers.
+// sendHeartbeats sends periodic heartbeats with log entries to all peers.
 func (n *Node) sendHeartbeats() {
 	ticker := time.NewTicker(n.config.HeartbeatInterval)
 	defer ticker.Stop()
@@ -326,24 +362,139 @@ func (n *Node) sendHeartbeats() {
 				return
 			}
 
-			req := &AppendEntriesRequest{
-				Term:         n.CurrentTerm,
-				LeaderID:     n.ID,
-				PrevLogIndex: n.lastLogIndex(),
-				PrevLogTerm:  n.lastLogTerm(),
-				Entries:      []LogEntry{},
-				LeaderCommit: n.CommitIndex,
+			currentTerm := n.CurrentTerm
+			commitIndex := n.CommitIndex
+			peers := make(map[string]string, len(n.Peers))
+			for id, addr := range n.Peers {
+				peers[id] = addr
 			}
 			n.mu.RUnlock()
 
-			// Send to all peers
-			for peerID := range n.Peers {
+			for peerID := range peers {
 				if peerID == n.ID {
 					continue
 				}
-				go func(id string) {
-					n.transport.AppendEntries(id, req)
-				}(peerID)
+				go n.replicateTo(peerID, currentTerm, commitIndex)
+			}
+		}
+	}
+}
+
+// replicateTo sends log entries to a specific peer.
+func (n *Node) replicateTo(peerID string, term, commitIndex uint64) {
+	n.mu.RLock()
+	nextIdx, ok := n.nextIndex[peerID]
+	if !ok {
+		n.mu.RUnlock()
+		return
+	}
+
+	// Build PrevLogIndex/PrevLogTerm
+	prevLogIndex := nextIdx - 1
+	prevLogTerm := uint64(0)
+	if prevLogIndex > 0 && prevLogIndex < uint64(len(n.Log)) {
+		prevLogTerm = n.Log[prevLogIndex].Term
+	}
+
+	// Collect entries to send
+	var entries []LogEntry
+	lastLogIdx := n.lastLogIndex()
+	if nextIdx <= lastLogIdx {
+		end := nextIdx + uint64(n.config.MaxEntriesPerAppend)
+		if end > lastLogIdx+1 {
+			end = lastLogIdx + 1
+		}
+		entries = make([]LogEntry, end-nextIdx)
+		copy(entries, n.Log[nextIdx:end])
+	}
+	n.mu.RUnlock()
+
+	req := &AppendEntriesRequest{
+		Term:         term,
+		LeaderID:     n.ID,
+		PrevLogIndex: prevLogIndex,
+		PrevLogTerm:  prevLogTerm,
+		Entries:      entries,
+		LeaderCommit: commitIndex,
+	}
+
+	resp, err := n.transport.AppendEntries(peerID, req)
+	if err != nil {
+		return
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	// Step down if peer has higher term
+	if resp.Term > n.CurrentTerm {
+		n.becomeFollower(resp.Term)
+		return
+	}
+
+	// Ignore stale responses
+	if n.State != StateLeader || n.CurrentTerm != term {
+		return
+	}
+
+	if resp.Success {
+		// Advance nextIndex and matchIndex
+		newMatchIndex := prevLogIndex + uint64(len(entries))
+		if newMatchIndex > n.matchIndex[peerID] {
+			n.matchIndex[peerID] = newMatchIndex
+		}
+		n.nextIndex[peerID] = newMatchIndex + 1
+		n.advanceCommitIndex()
+	} else {
+		// Backtrack nextIndex using conflict info
+		if resp.ConflictTerm > 0 && resp.ConflictIndex > 0 {
+			n.nextIndex[peerID] = resp.ConflictIndex
+		} else if n.nextIndex[peerID] > 1 {
+			n.nextIndex[peerID]--
+		}
+	}
+}
+
+// advanceCommitIndex checks if we can advance the commit index.
+func (n *Node) advanceCommitIndex() {
+	for idx := n.lastLogIndex(); idx > n.CommitIndex; idx-- {
+		if idx >= uint64(len(n.Log)) {
+			continue
+		}
+		// Only commit entries from current term (Raft safety property)
+		if n.Log[idx].Term != n.CurrentTerm {
+			continue
+		}
+
+		// Count replicas (including self)
+		replicaCount := 1
+		for peerID := range n.Peers {
+			if peerID == n.ID {
+				continue
+			}
+			if n.matchIndex[peerID] >= idx {
+				replicaCount++
+			}
+		}
+
+		// Check for majority
+		totalNodes := len(n.Peers) + 1 // peers + self
+		if replicaCount > totalNodes/2 {
+			n.CommitIndex = idx
+			n.applyCommitted()
+			break
+		}
+	}
+}
+
+// applyCommitted applies committed but unapplied log entries to the FSM.
+func (n *Node) applyCommitted() {
+	for n.LastApplied < n.CommitIndex {
+		n.LastApplied++
+		if n.LastApplied < uint64(len(n.Log)) {
+			entry := n.Log[n.LastApplied]
+			if n.fsm != nil {
+				n.fsm.Apply(entry)
 			}
 		}
 	}
@@ -357,7 +508,7 @@ func (n *Node) resetElectionTimer() {
 
 	// Random timeout between min and max
 	duration := n.config.ElectionTimeoutMin +
-		time.Duration(float64(n.config.ElectionTimeoutMax-n.config.ElectionTimeoutMin)*randFloat())
+		time.Duration(float64(n.config.ElectionTimeoutMax-n.config.ElectionTimeoutMin)*rand.Float64())
 
 	n.electionTimer = time.AfterFunc(duration, func() {
 		select {
@@ -365,6 +516,20 @@ func (n *Node) resetElectionTimer() {
 		default:
 		}
 	})
+}
+
+// persistState persists current term and votedFor to stable storage.
+func (n *Node) persistState() {
+	if n.storage != nil {
+		n.storage.SaveState(n.CurrentTerm, n.VotedFor)
+	}
+}
+
+// persistLog persists new log entries to stable storage.
+func (n *Node) persistLog(entries []LogEntry) {
+	if n.storage != nil {
+		n.storage.SaveLog(entries)
+	}
 }
 
 // Helper functions for log access.
@@ -383,16 +548,10 @@ func (n *Node) lastLogTerm() uint64 {
 }
 
 func (n *Node) getLogEntry(index uint64) (LogEntry, bool) {
-	if index == 0 || index > uint64(len(n.Log)) {
+	if index == 0 || index >= uint64(len(n.Log)) {
 		return LogEntry{}, false
 	}
 	return n.Log[index], true
-}
-
-// randFloat returns a random float between 0 and 1.
-func randFloat() float64 {
-	// Simple deterministic for now
-	return 0.5
 }
 
 // AddPeer adds a peer to the cluster.
@@ -440,12 +599,60 @@ func (n *Node) IsLeader() bool {
 func (n *Node) GetLeaderID() string {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
+	return n.leaderID
+}
 
-	if n.State == StateLeader {
-		return n.ID
+// AppendEntry appends a new entry to the leader's log.
+// Returns the index of the new entry.
+func (n *Node) AppendEntry(command interface{}) (uint64, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if n.State != StateLeader {
+		return 0, fmt.Errorf("not leader")
 	}
-	// In a real implementation, track leader ID from AppendEntries
-	return ""
+
+	data, err := json.Marshal(command)
+	if err != nil {
+		return 0, err
+	}
+
+	entry := LogEntry{
+		Index:   n.lastLogIndex() + 1,
+		Term:    n.CurrentTerm,
+		Command: data,
+	}
+
+	n.Log = append(n.Log, entry)
+	n.persistLog([]LogEntry{entry})
+
+	// Update own matchIndex
+	n.matchIndex[n.ID] = entry.Index
+
+	return entry.Index, nil
+}
+
+// WaitForCommit waits until the given index is committed or timeout.
+func (n *Node) WaitForCommit(index uint64, timeout time.Duration) error {
+	deadline := time.After(timeout)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-deadline:
+			return fmt.Errorf("commit timeout for index %d", index)
+		case <-n.stopCh:
+			return fmt.Errorf("node stopped")
+		case <-ticker.C:
+			n.mu.RLock()
+			committed := n.CommitIndex >= index
+			n.mu.RUnlock()
+			if committed {
+				return nil
+			}
+		}
+	}
 }
 
 // HandleRequestVote handles incoming RequestVote RPCs.
@@ -457,28 +664,27 @@ func (n *Node) HandleRequestVote(req *RequestVoteRequest) *RequestVoteResponse {
 		Term: n.CurrentTerm,
 	}
 
-	// If candidate's term is lower, reject
 	if req.Term < n.CurrentTerm {
 		resp.VoteGranted = false
 		return resp
 	}
 
-	// If candidate's term is higher, update our term and become follower
 	if req.Term > n.CurrentTerm {
 		n.CurrentTerm = req.Term
 		n.State = StateFollower
 		n.VotedFor = ""
+		n.leaderID = ""
+		n.persistState()
 	}
 
-	// Check if we can vote for this candidate
 	if n.VotedFor == "" || n.VotedFor == req.CandidateID {
-		// Check if candidate's log is at least as up-to-date as ours
 		lastIndex := n.lastLogIndex()
 		lastTerm := n.lastLogTerm()
 
 		if req.LastLogTerm > lastTerm ||
 			(req.LastLogTerm == lastTerm && req.LastLogIndex >= lastIndex) {
 			n.VotedFor = req.CandidateID
+			n.persistState()
 			n.resetElectionTimer()
 			resp.VoteGranted = true
 			return resp
@@ -498,23 +704,23 @@ func (n *Node) HandleAppendEntries(req *AppendEntriesRequest) *AppendEntriesResp
 		Term: n.CurrentTerm,
 	}
 
-	// If leader's term is lower, reject
 	if req.Term < n.CurrentTerm {
 		resp.Success = false
 		return resp
 	}
 
-	// If leader's term is higher, update our term and become follower
-	if req.Term > n.CurrentTerm {
+	// Valid leader — track it and reset to follower
+	n.leaderID = req.LeaderID
+	if req.Term > n.CurrentTerm || n.State != StateFollower {
 		n.CurrentTerm = req.Term
 		n.State = StateFollower
 		n.VotedFor = ""
+		n.persistState()
 	}
 
-	// Reset election timer since we heard from leader
 	n.resetElectionTimer()
 
-	// Check if we have the previous log entry
+	// Check previous log entry consistency
 	if req.PrevLogIndex > 0 {
 		if req.PrevLogIndex >= uint64(len(n.Log)) {
 			resp.Success = false
@@ -523,9 +729,7 @@ func (n *Node) HandleAppendEntries(req *AppendEntriesRequest) *AppendEntriesResp
 		}
 		if n.Log[req.PrevLogIndex].Term != req.PrevLogTerm {
 			resp.Success = false
-			// Find conflict term
 			resp.ConflictTerm = n.Log[req.PrevLogIndex].Term
-			// Find first index with this term
 			for i := req.PrevLogIndex; i > 0; i-- {
 				if n.Log[i-1].Term != resp.ConflictTerm {
 					resp.ConflictIndex = i
@@ -537,18 +741,23 @@ func (n *Node) HandleAppendEntries(req *AppendEntriesRequest) *AppendEntriesResp
 	}
 
 	// Append new entries
+	var newEntries []LogEntry
 	for i, entry := range req.Entries {
 		index := req.PrevLogIndex + 1 + uint64(i)
 		if index < uint64(len(n.Log)) {
-			// If entry exists with different term, delete it and all following
 			if n.Log[index].Term != entry.Term {
 				n.Log = n.Log[:index]
 				n.Log = append(n.Log, entry)
+				newEntries = append(newEntries, entry)
 			}
 		} else {
-			// Append new entry
 			n.Log = append(n.Log, entry)
+			newEntries = append(newEntries, entry)
 		}
+	}
+
+	if len(newEntries) > 0 {
+		n.persistLog(newEntries)
 	}
 
 	// Update commit index
@@ -559,6 +768,7 @@ func (n *Node) HandleAppendEntries(req *AppendEntriesRequest) *AppendEntriesResp
 		} else {
 			n.CommitIndex = lastNewIndex
 		}
+		n.applyCommitted()
 	}
 
 	resp.Success = true
@@ -574,20 +784,19 @@ func (n *Node) HandleInstallSnapshot(req *InstallSnapshotRequest) *InstallSnapsh
 		Term: n.CurrentTerm,
 	}
 
-	// If leader's term is lower, reject
 	if req.Term < n.CurrentTerm {
 		resp.Success = false
 		return resp
 	}
 
-	// If leader's term is higher, update our term and become follower
+	n.leaderID = req.LeaderID
 	if req.Term > n.CurrentTerm {
 		n.CurrentTerm = req.Term
 		n.State = StateFollower
 		n.VotedFor = ""
+		n.persistState()
 	}
 
-	// Reset election timer
 	n.resetElectionTimer()
 
 	// Apply snapshot to FSM

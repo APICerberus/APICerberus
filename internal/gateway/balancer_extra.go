@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/loadbalancer"
 )
 
 // LeastConn selects the target with the fewest active in-flight requests.
@@ -568,29 +569,161 @@ func (a *Adaptive) mode() string {
 	return "round_robin"
 }
 
-// GeoAware is a placeholder balancer for future geo routing support.
+// GeoAware selects targets based on the client's geographic location.
+// It resolves the client IP to a country using the GeoIPResolver, then
+// picks a target in the same country via the GeoAwareSelector. When no
+// geo match is found it falls back to round-robin selection.
 type GeoAware struct {
-	rr *RoundRobin
+	mu       sync.RWMutex
+	targets  []config.UpstreamTarget
+	health   map[string]bool
+	rr       *RoundRobin
+	resolver *loadbalancer.GeoIPResolver
+	selector *loadbalancer.GeoAwareSelector
 }
 
+// NewGeoAware creates a geo-aware balancer. Target locations are derived
+// from the first two octets of each target's address via the GeoIP resolver.
 func NewGeoAware(targets []config.UpstreamTarget) *GeoAware {
-	return &GeoAware{rr: NewRoundRobin(targets)}
+	g := &GeoAware{
+		rr:       NewRoundRobin(targets),
+		resolver: loadbalancer.NewGeoIPResolver(),
+		selector: loadbalancer.NewGeoAwareSelector(),
+	}
+	g.UpdateTargets(targets)
+	return g
+}
+
+// registerTargetLocations resolves each target's address to a country code
+// and registers the mapping with the GeoAwareSelector.
+func (g *GeoAware) registerTargetLocations() {
+	for _, t := range g.targets {
+		key := targetKey(t)
+		// Extract the host portion of the target address.
+		host := t.Address
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		country := g.resolver.Resolve(host)
+		g.selector.SetTargetLocation(key, country)
+	}
 }
 
 func (g *GeoAware) Next(ctx *RequestContext) (*config.UpstreamTarget, error) {
+	// Collect healthy target IDs.
+	g.mu.RLock()
+	healthy := make([]config.UpstreamTarget, 0, len(g.targets))
+	for _, t := range g.targets {
+		key := targetKey(t)
+		if h, ok := g.health[key]; ok && !h {
+			continue
+		}
+		healthy = append(healthy, t)
+	}
+	g.mu.RUnlock()
+
+	if len(healthy) == 0 {
+		return nil, ErrNoHealthyTargets
+	}
+
+	// Extract client IP from the request context.
+	clientIP := extractClientIP(ctx)
+	if clientIP != "" {
+		ids := make([]string, len(healthy))
+		idToTarget := make(map[string]config.UpstreamTarget, len(healthy))
+		for i, t := range healthy {
+			key := targetKey(t)
+			ids[i] = key
+			idToTarget[key] = t
+		}
+
+		selected := g.selector.Select(clientIP, ids)
+		if target, ok := idToTarget[selected]; ok {
+			// Only return the geo match if the selector actually found a
+			// country match (not just the fallback first-element).
+			clientCountry := g.resolver.Resolve(clientIP)
+			g.mu.RLock()
+			// Check: did the selector find a real geo match?
+			for _, t := range healthy {
+				key := targetKey(t)
+				host := t.Address
+				if h, _, err := net.SplitHostPort(host); err == nil {
+					host = h
+				}
+				targetCountry := g.resolver.Resolve(host)
+				if key == selected && targetCountry == clientCountry && clientCountry != "UNKNOWN" {
+					g.mu.RUnlock()
+					return &target, nil
+				}
+			}
+			g.mu.RUnlock()
+		}
+	}
+
+	// Fall back to round-robin when geo resolution fails or no match.
 	return g.rr.Next(ctx)
 }
 
 func (g *GeoAware) UpdateTargets(targets []config.UpstreamTarget) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	g.targets = cloneTargets(targets)
+	if g.health == nil {
+		g.health = make(map[string]bool, len(targets))
+	}
+	newHealth := make(map[string]bool, len(targets))
+	for _, t := range g.targets {
+		key := targetKey(t)
+		healthy, ok := g.health[key]
+		if !ok {
+			healthy = true
+		}
+		newHealth[key] = healthy
+	}
+	g.health = newHealth
+
+	g.registerTargetLocations()
 	g.rr.UpdateTargets(targets)
 }
 
 func (g *GeoAware) ReportHealth(targetID string, healthy bool, latency time.Duration) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.health == nil {
+		g.health = make(map[string]bool)
+	}
+	g.health[targetID] = healthy
 	g.rr.ReportHealth(targetID, healthy, latency)
 }
 
 func (g *GeoAware) Done(targetID string) {
 	g.rr.Done(targetID)
+}
+
+// extractClientIP returns the client IP from a RequestContext.
+func extractClientIP(ctx *RequestContext) string {
+	if ctx == nil || ctx.Request == nil {
+		return ""
+	}
+	req := ctx.Request
+
+	// Prefer X-Forwarded-For header.
+	if xff := strings.TrimSpace(req.Header.Get("X-Forwarded-For")); xff != "" {
+		parts := strings.Split(xff, ",")
+		if len(parts) > 0 {
+			first := strings.TrimSpace(parts[0])
+			if first != "" {
+				return first
+			}
+		}
+	}
+
+	// Fall back to RemoteAddr.
+	if host, _, err := net.SplitHostPort(strings.TrimSpace(req.RemoteAddr)); err == nil && host != "" {
+		return host
+	}
+	return strings.TrimSpace(req.RemoteAddr)
 }
 
 // HealthWeighted chooses targets by score = health_score * configured weight.

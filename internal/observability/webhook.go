@@ -2,6 +2,9 @@ package observability
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -210,15 +213,9 @@ func generateEventID() string {
 	return fmt.Sprintf("evt_%d", time.Now().UnixNano())
 }
 
-// generateSignature generates an HMAC signature (simplified).
+// generateSignature generates an HMAC-SHA256 signature.
 func generateSignature(data []byte, secret string) string {
-	// In production, use proper HMAC-SHA256
-	return fmt.Sprintf("%x", data[:min(len(data), 32)])
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(data)
+	return hex.EncodeToString(mac.Sum(nil))
 }

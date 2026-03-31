@@ -93,7 +93,7 @@ func (e *Executor) executeStep(ctx context.Context, step *PlanStep, depData map[
 
 	// Add dependency data as variables if this is an entity resolution
 	if len(depData) > 0 && step.ResultType != "scalar" {
-		variables["representations"] = e.buildRepresentations(depData)
+		variables["representations"] = e.buildRepresentations(depData, step.ResultType)
 	}
 
 	// Build request
@@ -167,11 +167,12 @@ func (e *Executor) executeStep(ctx context.Context, step *PlanStep, depData map[
 }
 
 // buildRepresentations builds entity representations for Apollo Federation.
-func (e *Executor) buildRepresentations(depData map[string]interface{}) []interface{} {
+func (e *Executor) buildRepresentations(depData map[string]interface{}, typeName string) []interface{} {
 	representations := make([]interface{}, 0)
 
 	// Build representation with __typename and key fields
 	rep := make(map[string]interface{})
+	rep["__typename"] = typeName
 	for k, v := range depData {
 		rep[k] = v
 	}

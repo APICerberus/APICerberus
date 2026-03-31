@@ -386,29 +386,22 @@ func (cm *ClusterManager) checkNodeHealth() {
 	}
 }
 
-// Propose proposes a command to be applied to the FSM.
+// Propose proposes a command to be applied to the FSM via Raft consensus.
 func (cm *ClusterManager) Propose(cmd FSMCommand) error {
 	if !cm.node.IsLeader() {
 		return fmt.Errorf("not leader")
 	}
 
-	// Create log entry
-	data, err := json.Marshal(cmd)
+	// Append entry to leader's log
+	index, err := cm.node.AppendEntry(cmd)
 	if err != nil {
 		return err
 	}
 
-	entry := LogEntry{
-		Index:   cm.node.lastLogIndex() + 1,
-		Term:    cm.node.CurrentTerm,
-		Command: data,
+	// Wait for the entry to be committed (replicated to majority)
+	if err := cm.node.WaitForCommit(index, 5*time.Second); err != nil {
+		return fmt.Errorf("proposal failed: %w", err)
 	}
-
-	// Append to log (in real implementation, replicate to followers)
-	cm.node.Log = append(cm.node.Log, entry)
-
-	// Apply to FSM
-	cm.fsm.Apply(entry)
 
 	return nil
 }

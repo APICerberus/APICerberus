@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"sync"
 	"time"
@@ -10,9 +11,10 @@ import (
 
 // Tracer provides distributed tracing capabilities.
 type Tracer struct {
-	mu     sync.RWMutex
-	spans  map[string]*Span
-	config *TraceConfig
+	mu       sync.RWMutex
+	spans    map[string]*Span
+	config   *TraceConfig
+	exporter Exporter
 }
 
 // TraceConfig holds tracer configuration.
@@ -46,6 +48,7 @@ type Span struct {
 	Tags       map[string]string `json:"tags"`
 	Status     SpanStatus        `json:"status"`
 	Children   []*Span           `json:"children,omitempty"`
+	tracer     *Tracer           // back-reference for export on Finish
 }
 
 // SpanStatus represents the status of a span.
@@ -68,10 +71,26 @@ func NewTracer(config *TraceConfig) *Tracer {
 	}
 }
 
+// SetExporter sets the exporter for the tracer. Finished spans will be
+// queued for export via the configured exporter.
+func (t *Tracer) SetExporter(e Exporter) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.exporter = e
+}
+
 // StartSpan starts a new span.
 func (t *Tracer) StartSpan(name string, opts ...SpanOption) *Span {
 	if !t.config.Enabled {
 		return nil
+	}
+
+	// Sample rate check: skip creating this span if it falls outside the
+	// configured sample rate. A SampleRate of 1.0 means keep all spans.
+	if t.config.SampleRate < 1.0 && t.config.SampleRate >= 0 {
+		if rand.Float64() >= t.config.SampleRate { //nolint:gosec // sampling does not need crypto rand
+			return nil
+		}
 	}
 
 	span := &Span{
@@ -81,6 +100,7 @@ func (t *Tracer) StartSpan(name string, opts ...SpanOption) *Span {
 		StartTime: time.Now(),
 		Tags:      make(map[string]string),
 		Status:    SpanStatusOK,
+		tracer:    t,
 	}
 
 	// Apply service tags
@@ -123,13 +143,23 @@ func (t *Tracer) StartSpanFromContext(ctx context.Context, name string, opts ...
 	return span, ctx
 }
 
-// Finish finishes a span.
+// Finish finishes a span and queues it for export if an exporter is configured.
 func (s *Span) Finish() {
 	if s == nil {
 		return
 	}
 	s.EndTime = time.Now()
 	s.Duration = s.EndTime.Sub(s.StartTime)
+
+	// Queue span for export
+	if s.tracer != nil {
+		s.tracer.mu.RLock()
+		exp := s.tracer.exporter
+		s.tracer.mu.RUnlock()
+		if exp != nil {
+			_ = exp.Export(s)
+		}
+	}
 }
 
 // SetTag sets a tag on the span.

@@ -3,6 +3,8 @@ package federation
 import (
 	"fmt"
 	"strings"
+
+	"github.com/APICerberus/APICerebrus/internal/graphql"
 )
 
 // Planner plans federated GraphQL queries.
@@ -258,68 +260,103 @@ type GraphQLField struct {
 	Fields []GraphQLField
 }
 
-// ParseGraphQLQuery parses a GraphQL query string.
+// ParseGraphQLQuery parses a GraphQL query string using the proper AST parser.
 func ParseGraphQLQuery(query string) (*GraphQLDocument, error) {
-	// This is a simplified parser
-	// In production, use a proper GraphQL parser like graphql-go/graphql
-	doc := &GraphQLDocument{
-		Operations: make([]GraphQLOperation, 0),
-	}
-
-	// Parse operation type
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, fmt.Errorf("empty query")
 	}
 
-	if strings.HasPrefix(query, "query") || strings.HasPrefix(query, "{") {
-		op := GraphQLOperation{
-			Type:   "query",
-			Fields: make([]GraphQLField, 0),
-		}
-
-		// Extract fields (simplified)
-		if idx := strings.Index(query, "{"); idx != -1 {
-			fields := extractFields(query[idx:])
-			op.Fields = fields
-		}
-
-		doc.Operations = append(doc.Operations, op)
+	node, err := graphql.ParseQuery(query)
+	if err != nil {
+		return nil, fmt.Errorf("parse error: %w", err)
 	}
 
-	return doc, nil
+	return convertDocument(node)
 }
 
-// extractFields extracts fields from a GraphQL selection set.
-func extractFields(selection string) []GraphQLField {
-	fields := make([]GraphQLField, 0)
-
-	// Very simplified field extraction
-	// In production, use a proper parser
-	selection = strings.Trim(selection, "{}")
-	selection = strings.TrimSpace(selection)
-
-	// Split by newlines
-	lines := strings.Split(selection, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		// Remove commas
-		line = strings.TrimSuffix(line, ",")
-
-		// Simple field name extraction
-		fieldName := strings.Fields(line)[0]
-		fieldName = strings.TrimSpace(fieldName)
-
-		if fieldName != "" {
-			fields = append(fields, GraphQLField{
-				Name: fieldName,
-			})
-		}
+// convertDocument converts a graphql.Node (expected to be *graphql.Document)
+// into the federation GraphQLDocument used by the planner.
+func convertDocument(node graphql.Node) (*GraphQLDocument, error) {
+	doc, ok := node.(*graphql.Document)
+	if !ok {
+		return nil, fmt.Errorf("expected *graphql.Document, got %T", node)
 	}
 
+	fedDoc := &GraphQLDocument{
+		Operations: make([]GraphQLOperation, 0),
+	}
+
+	for _, def := range doc.Definitions {
+		switch d := def.(type) {
+		case *graphql.Operation:
+			op := GraphQLOperation{
+				Type:   d.Type,
+				Name:   d.Name,
+				Fields: convertSelections(d.Selections),
+			}
+			fedDoc.Operations = append(fedDoc.Operations, op)
+		}
+		// Fragment definitions are ignored for now; they would be
+		// resolved at a higher level before planning.
+	}
+
+	return fedDoc, nil
+}
+
+// convertSelections converts a slice of graphql.Node selections into
+// federation GraphQLField slices.
+func convertSelections(selections []graphql.Node) []GraphQLField {
+	fields := make([]GraphQLField, 0, len(selections))
+	for _, sel := range selections {
+		switch s := sel.(type) {
+		case *graphql.Field:
+			f := GraphQLField{
+				Name:   s.Name,
+				Alias:  s.Alias,
+				Args:   convertArguments(s.Arguments),
+				Fields: convertSelections(s.Selections),
+			}
+			fields = append(fields, f)
+		}
+	}
 	return fields
+}
+
+// convertArguments converts graphql.Argument slices into a map used by
+// the federation planner.
+func convertArguments(args []graphql.Argument) map[string]interface{} {
+	if len(args) == 0 {
+		return nil
+	}
+	result := make(map[string]interface{}, len(args))
+	for _, arg := range args {
+		result[arg.Name] = convertValue(arg.Value)
+	}
+	return result
+}
+
+// convertValue converts a graphql.Value into a plain Go value.
+func convertValue(v graphql.Value) interface{} {
+	if v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case *graphql.ScalarValue:
+		return val.Value
+	case *graphql.ListValue:
+		list := make([]interface{}, 0, len(val.Values))
+		for _, item := range val.Values {
+			list = append(list, convertValue(item))
+		}
+		return list
+	case *graphql.ObjectValue:
+		obj := make(map[string]interface{}, len(val.Fields))
+		for k, fv := range val.Fields {
+			obj[k] = convertValue(fv)
+		}
+		return obj
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }

@@ -42,10 +42,10 @@ func (o *Operation) NodeKind() string { return "Operation" }
 
 // Depth returns the depth of the operation.
 func (o *Operation) Depth() int {
-	maxDepth := 1
+	maxDepth := 0
 	for _, sel := range o.Selections {
-		if depth := sel.Depth(); depth+1 > maxDepth {
-			maxDepth = depth + 1
+		if depth := sel.Depth(); depth > maxDepth {
+			maxDepth = depth
 		}
 	}
 	return maxDepth

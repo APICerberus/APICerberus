@@ -125,10 +125,15 @@ func (c *Composer) mergeTypes(existing *Type, new *Type, subgraph *Subgraph) err
 
 // isEntity checks if a type is a federated entity (has @key directive).
 func (c *Composer) isEntity(t *Type) bool {
-	// Check for @key directive in the type's description or fields
-	// In a full implementation, this would parse the actual directive
+	// Check for @key directive on the type
+	for _, dir := range t.Directives {
+		if dir.Name == "key" {
+			return true
+		}
+	}
+
+	// Fall back to checking for "id" field as heuristic
 	for _, field := range t.Fields {
-		// Check if field name suggests it's a key (e.g., id)
 		if field.Name == "id" {
 			return true
 		}
@@ -139,9 +144,21 @@ func (c *Composer) isEntity(t *Type) bool {
 // addEntity adds an entity to the federation.
 func (c *Composer) addEntity(name string, subgraph *Subgraph) {
 	if _, ok := c.entities[name]; !ok {
+		// Extract key fields from @key directive if present
+		keyFields := []string{"id"}
+		if t, ok := subgraph.Schema.Types[name]; ok {
+			for _, dir := range t.Directives {
+				if dir.Name == "key" {
+					if fields, ok := dir.Args["fields"]; ok && fields != "" {
+						keyFields = strings.Fields(fields)
+					}
+				}
+			}
+		}
+
 		c.entities[name] = &Entity{
 			Name:      name,
-			KeyFields: []string{"id"},
+			KeyFields: keyFields,
 			Subgraphs: make(map[string]*Subgraph),
 			Resolvers: make(map[string]*Resolver),
 		}

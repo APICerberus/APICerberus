@@ -28,6 +28,12 @@ type Proxy struct {
 	// Transcoding enables JSON transcoding for REST requests
 	Transcoding bool
 
+	// Transcoder handles JSON<->Proto conversion when Transcoding is enabled.
+	Transcoder *Transcoder
+
+	// StreamProxy handles gRPC streaming RPCs over HTTP.
+	StreamProxy *StreamProxy
+
 	// client is the gRPC client connection
 	client *grpc.ClientConn
 	mu     sync.RWMutex
@@ -60,6 +66,8 @@ func NewProxy(cfg *ProxyConfig) (*Proxy, error) {
 		Target:      cfg.Target,
 		EnableWeb:   cfg.EnableWeb,
 		Transcoding: cfg.EnableTranscoding,
+		Transcoder:  NewTranscoder(),
+		StreamProxy: NewStreamProxy(),
 		client:      conn,
 	}, nil
 }
@@ -250,14 +258,34 @@ func (p *Proxy) handleTranscoding(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	// For now, forward as-is with content-type conversion
-	// In full implementation, this would parse proto definitions
+	// Ensure proto descriptors are loaded for proper transcoding.
+	if p.Transcoder == nil || !p.Transcoder.IsLoaded() {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]any{
+			"code":    int(codes.FailedPrecondition),
+			"message": "gRPC transcoding is not available: proto descriptors have not been loaded",
+		})
+		return
+	}
+
+	// Convert JSON request to protobuf.
+	protoBody, err := p.Transcoder.JSONToProto(method, jsonBody)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]any{
+			"code":    int(codes.InvalidArgument),
+			"message": fmt.Sprintf("failed to transcode request: %v", err),
+		})
+		return
+	}
+
 	ctx := metadata.NewOutgoingContext(r.Context(), metadataFromHeaders(r.Header))
 
 	var respBuf bytes.Buffer
-	err = p.client.Invoke(ctx, method, jsonBody, &respBuf)
+	err = p.client.Invoke(ctx, method, protoBody, &respBuf)
 
-	// Convert response to JSON
 	w.Header().Set("Content-Type", "application/json")
 
 	if err != nil {
@@ -275,9 +303,18 @@ func (p *Proxy) handleTranscoding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return raw bytes as JSON for now
-	// Full implementation would properly unmarshal proto
-	w.Write(respBuf.Bytes())
+	// Convert protobuf response to JSON.
+	jsonResp, err := p.Transcoder.ProtoToJSON(method, respBuf.Bytes())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]any{
+			"code":    int(codes.Internal),
+			"message": fmt.Sprintf("failed to transcode response: %v", err),
+		})
+		return
+	}
+
+	w.Write(jsonResp)
 }
 
 // metadataFromHeaders converts HTTP headers to gRPC metadata.

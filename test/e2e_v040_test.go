@@ -72,7 +72,7 @@ func testSubgraphManagement(t *testing.T) {
 	}
 
 	// Add subgraph via admin API
-	body, _ := json.Marshal(subgraph)
+	body, _ := json.Marshal(&subgraph)
 	req, err := http.NewRequest("POST", "http://127.0.0.1:18080/admin/api/v1/subgraphs", bytes.NewReader(body))
 	if err != nil {
 		t.Logf("Admin API not available: %v", err)

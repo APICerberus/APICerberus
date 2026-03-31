@@ -19,7 +19,7 @@ type Subgraph struct {
 	Headers     map[string]string `json:"headers,omitempty"`
 	Health      HealthStatus      `json:"health"`
 	LastUpdated time.Time         `json:"last_updated"`
-	mu          sync.RWMutex
+	mu          sync.RWMutex `json:"-"`
 }
 
 // HealthStatus represents the health of a subgraph.
@@ -64,6 +64,13 @@ type Type struct {
 	EnumValues    []string               `json:"enum_values,omitempty"`
 	InputFields   map[string]*InputField `json:"input_fields,omitempty"`
 	OfType        string                 `json:"of_type,omitempty"`
+	Directives    []TypeDirective        `json:"directives,omitempty"`
+}
+
+// TypeDirective represents a directive applied to a type.
+type TypeDirective struct {
+	Name string            `json:"name"`
+	Args map[string]string `json:"args,omitempty"`
 }
 
 // Field represents a GraphQL field.

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
@@ -130,8 +131,16 @@ func TestH2CServer(t *testing.T) {
 	// Get actual address
 	addr := server.Addr()
 
-	// Make request
-	resp, err := http.Get("http://" + addr + "/test")
+	// Wait for server to be ready
+	var resp *http.Response
+	var err error
+	for i := 0; i < 20; i++ {
+		resp, err = http.Get("http://" + addr + "/test")
+		if err == nil {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}

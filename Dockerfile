@@ -15,7 +15,7 @@ COPY --from=web-builder /app/web/dist ./web/dist
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/apicerberus ./cmd/apicerberus
 
-FROM alpine:3.20
+FROM alpine:3.23
 WORKDIR /app
 RUN adduser -D -u 10001 apicerberus
 COPY --from=go-builder /out/apicerberus /usr/local/bin/apicerberus

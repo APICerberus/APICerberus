@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "apicerberus.fullname" . }}-config
+  labels:
+    {{- include "apicerberus.labels" . | nindent 4 }}
+data:
+  apicerberus.yaml: |
+    version: "1.0"
+
+    server:
+      address: "{{ .Values.config.server.address }}"
+      read_timeout: {{ .Values.config.server.read_timeout }}
+      write_timeout: {{ .Values.config.server.write_timeout }}
+      idle_timeout: {{ .Values.config.server.idle_timeout }}
+      max_header_bytes: {{ .Values.config.server.max_header_bytes }}
+
+    https:
+      enabled: {{ .Values.config.https.enabled }}
+      {{- if .Values.config.https.enabled }}
+      address: "{{ .Values.config.https.address }}"
+      cert_file: "{{ .Values.config.https.cert_file }}"
+      key_file: "{{ .Values.config.https.key_file }}"
+      {{- end }}
+
+    logging:
+      level: "{{ .Values.config.logging.level }}"
+      format: "{{ .Values.config.logging.format }}"
+      output: "{{ .Values.config.logging.output }}"
+
+    auth:
+      jwt:
+        enabled: {{ .Values.config.auth.jwt.enabled }}
+        issuer: "{{ .Values.config.auth.jwt.issuer }}"
+        expiry: "{{ .Values.config.auth.jwt.expiry }}"
+      api_key:
+        enabled: {{ .Values.config.auth.api_key.enabled }}
+        header: "{{ .Values.config.auth.api_key.header }}"
+
+    rate_limiting:
+      enabled: {{ .Values.config.rate_limiting.enabled }}
+      requests_per_second: {{ .Values.config.rate_limiting.requests_per_second }}
+      burst_size: {{ .Values.config.rate_limiting.burst_size }}
+      per_user: {{ .Values.config.rate_limiting.per_user }}
+      per_ip: {{ .Values.config.rate_limiting.per_ip }}
+
+    cache:
+      enabled: {{ .Values.config.cache.enabled }}
+      max_size: {{ .Values.config.cache.max_size }}
+      ttl: "{{ .Values.config.cache.ttl }}"
+      max_item_size: {{ .Values.config.cache.max_item_size }}
+
+    metrics:
+      enabled: {{ .Values.config.metrics.enabled }}
+      endpoint: "{{ .Values.config.metrics.endpoint }}"
+      port: {{ .Values.config.metrics.port }}
+
+    tracing:
+      enabled: {{ .Values.config.tracing.enabled }}
+      service_name: "{{ .Values.config.tracing.service_name }}"
+      sample_rate: {{ .Values.config.tracing.sample_rate }}
+      {{- if .Values.config.tracing.endpoint }}
+      endpoint: "{{ .Values.config.tracing.endpoint }}"
+      {{- end }}
+
+    raft:
+      enabled: {{ .Values.config.raft.enabled }}
+      node_id: "{{ include "apicerberus.raftNodeID" . }}"
+      bind_address: "{{ .Values.config.raft.bind_address }}"
+      peers:
+        {{- toYaml .Values.config.raft.peers | nindent 8 }}
+
+    federation:
+      enabled: {{ .Values.config.federation.enabled }}
+      endpoint: "{{ .Values.config.federation.endpoint }}"
+      introspection: {{ .Values.config.federation.introspection }}
+      query_batching: {{ .Values.config.federation.query_batching }}
+      parallel_execution: {{ .Values.config.federation.parallel_execution }}
+
+    admin:
+      enabled: {{ .Values.config.admin.enabled }}
+      address: "{{ .Values.config.admin.address }}"

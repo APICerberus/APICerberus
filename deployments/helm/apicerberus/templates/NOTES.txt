@@ -1,0 +1,57 @@
+Thank you for installing {{ .Chart.Name }}.
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }}
+  $ helm get all {{ .Release.Name }}
+
+## Accessing API Cerberus
+
+{{- if .Values.ingress.enabled }}
+Ingress is enabled. Access the gateway at:
+  http{{ if .Values.ingress.tls }}s{{ end }}://{{ (index .Values.ingress.hosts 0).host }}
+{{- else if eq .Values.service.type "NodePort" }}
+Service is using NodePort. Access the gateway at:
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "apicerberus.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if eq .Values.service.type "LoadBalancer" }}
+Service is using LoadBalancer. Get the external IP:
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "apicerberus.fullname" . }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+  echo http://$SERVICE_IP:{{ .Values.service.httpPort }}
+{{- else if eq .Values.service.type "ClusterIP" }}
+Service is using ClusterIP. Use port-forward to access:
+  kubectl port-forward --namespace {{ .Release.Namespace }} svc/{{ include "apicerberus.fullname" . }} {{ .Values.service.httpPort }}:{{ .Values.service.httpPort }}
+  echo "Visit http://127.0.0.1:{{ .Values.service.httpPort }}"
+{{- end }}
+
+## Admin API
+
+The Admin API is available at port {{ .Values.service.adminPort }}.
+Use the Admin API Key for authentication (stored in secret).
+
+## Features Enabled
+
+{{- if .Values.config.cache.enabled }}
+- ✅ Response Caching
+{{- end }}
+{{- if .Values.config.metrics.enabled }}
+- ✅ Prometheus Metrics ({{ .Values.config.metrics.endpoint }})
+{{- end }}
+{{- if .Values.config.tracing.enabled }}
+- ✅ OpenTelemetry Tracing
+{{- end }}
+{{- if .Values.config.raft.enabled }}
+- ✅ Raft Clustering
+{{- end }}
+{{- if .Values.config.federation.enabled }}
+- ✅ GraphQL Federation
+{{- end }}
+
+## Documentation
+
+For more information, visit:
+  - https://apicerberus.com/docs
+  - https://github.com/APICerberus/APICerebrus

@@ -1,0 +1,20 @@
+apiVersion: v2
+name: apicerberus
+description: A Helm chart for API Cerberus - Advanced API Gateway with GraphQL Federation, Raft Clustering, and Security Features
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - api-gateway
+  - graphql
+  - federation
+  - raft
+  - clustering
+  - security
+  - rate-limiting
+home: https://apicerberus.com
+sources:
+  - https://github.com/APICerberus/APICerebrus
+maintainers:
+  - name: API Cerberus Team
+    email: maintainers@apicerberus.com

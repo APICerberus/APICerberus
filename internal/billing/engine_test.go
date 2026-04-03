@@ -189,6 +189,11 @@ func createBillingUser(t *testing.T, st *store.Store, email string, balance int6
 	return user
 }
 
+// Helper function for int64 pointer
+func int64Ptr(i int64) *int64 {
+	return &i
+}
+
 // Test Enabled function
 func TestEngineEnabled(t *testing.T) {
 	t.Parallel()
@@ -224,6 +229,334 @@ func TestEngineEnabled(t *testing.T) {
 			result := tt.engine.Enabled()
 			if result != tt.expected {
 				t.Errorf("Enabled() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+// Test NewEngine with nil store
+func TestNewEngine_NilStore(t *testing.T) {
+	engine := NewEngine(nil, config.BillingConfig{Enabled: true})
+	if engine != nil {
+		t.Error("NewEngine(nil) should return nil")
+	}
+}
+
+// Test CalculateCost edge cases
+func TestEngineCalculateCost_EdgeCases(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		engine   *Engine
+		meta     RequestMeta
+		expected int64
+	}{
+		{
+			name:     "nil engine",
+			engine:   nil,
+			meta:     RequestMeta{Route: &config.Route{ID: "route-1"}, Method: "GET"},
+			expected: 0,
+		},
+		{
+			name:     "disabled billing",
+			engine:   &Engine{cfg: config.BillingConfig{Enabled: false, DefaultCost: 10}},
+			meta:     RequestMeta{Route: &config.Route{ID: "route-1"}, Method: "GET"},
+			expected: 0,
+		},
+		{
+			name:     "negative cost override",
+			engine:   &Engine{cfg: config.BillingConfig{Enabled: true, DefaultCost: 10}},
+			meta:     RequestMeta{CostOverride: int64Ptr(-5)},
+			expected: 0,
+		},
+		{
+			name:     "positive cost override",
+			engine:   &Engine{cfg: config.BillingConfig{Enabled: true, DefaultCost: 10}},
+			meta:     RequestMeta{CostOverride: int64Ptr(25)},
+			expected: 25,
+		},
+		{
+			name:     "zero cost override",
+			engine:   &Engine{cfg: config.BillingConfig{Enabled: true, DefaultCost: 10}},
+			meta:     RequestMeta{CostOverride: int64Ptr(0)},
+			expected: 0,
+		},
+		{
+			name:     "negative default cost",
+			engine:   &Engine{cfg: config.BillingConfig{Enabled: true, DefaultCost: -10}},
+			meta:     RequestMeta{Route: &config.Route{ID: "route-1"}, Method: "GET"},
+			expected: 0,
+		},
+		{
+			name:     "zero base cost after route check",
+			engine:   &Engine{cfg: config.BillingConfig{Enabled: true, DefaultCost: 0, RouteCosts: map[string]int64{"route-1": 0}}},
+			meta:     RequestMeta{Route: &config.Route{ID: "route-1"}, Method: "GET"},
+			expected: 0,
+		},
+		{
+			name:     "nil route",
+			engine:   &Engine{cfg: config.BillingConfig{Enabled: true, DefaultCost: 5}},
+			meta:     RequestMeta{Route: nil, Method: "GET"},
+			expected: 5,
+		},
+		{
+			name:     "route by name",
+			engine:   &Engine{cfg: config.BillingConfig{Enabled: true, DefaultCost: 1, RouteCosts: map[string]int64{"Test Route": 10}}},
+			meta:     RequestMeta{Route: &config.Route{ID: "", Name: "Test Route"}, Method: "GET"},
+			expected: 10,
+		},
+		{
+			name:     "empty method",
+			engine:   &Engine{cfg: config.BillingConfig{Enabled: true, DefaultCost: 10, MethodMultipliers: map[string]float64{"POST": 2.0}}},
+			meta:     RequestMeta{Route: &config.Route{ID: "route-1"}, Method: ""},
+			expected: 10,
+		},
+		{
+			name:     "method with zero multiplier",
+			engine:   &Engine{cfg: config.BillingConfig{Enabled: true, DefaultCost: 10, MethodMultipliers: map[string]float64{"GET": 0}}},
+			meta:     RequestMeta{Route: &config.Route{ID: "route-1"}, Method: "GET"},
+			expected: 10, // multiplier is 0 but base * 1.0 = 10
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.engine.CalculateCost(tt.meta)
+			if result != tt.expected {
+				t.Errorf("CalculateCost() = %d, want %d", result, tt.expected)
+			}
+		})
+	}
+}
+
+// Test Deduct edge cases
+func TestEngineDeduct_EdgeCases(t *testing.T) {
+	t.Parallel()
+
+	st := openBillingStore(t)
+	defer st.Close()
+
+	engine := NewEngine(st, config.BillingConfig{
+		Enabled:     true,
+		DefaultCost: 5,
+	})
+
+	tests := []struct {
+		name        string
+		engine      *Engine
+		result      *PreCheckResult
+		requestID   string
+		routeID     string
+		wantBalance int64
+		wantErr     bool
+	}{
+		{
+			name:        "nil engine",
+			engine:      nil,
+			result:      &PreCheckResult{UserID: "user-1", Cost: 5, ShouldDeduct: true, Balance: 100},
+			wantBalance: 100,
+			wantErr:     false,
+		},
+		{
+			name:        "disabled billing",
+			engine:      &Engine{cfg: config.BillingConfig{Enabled: false}},
+			result:      &PreCheckResult{UserID: "user-1", Cost: 5, ShouldDeduct: true, Balance: 100},
+			wantBalance: 100,
+			wantErr:     false,
+		},
+		{
+			name:        "nil result",
+			engine:      engine,
+			result:      nil,
+			wantBalance: 0,
+			wantErr:     false,
+		},
+		{
+			name:        "should not deduct",
+			engine:      engine,
+			result:      &PreCheckResult{UserID: "user-1", Cost: 5, ShouldDeduct: false, Balance: 100},
+			wantBalance: 100,
+			wantErr:     false,
+		},
+		{
+			name:        "empty userID",
+			engine:      engine,
+			result:      &PreCheckResult{UserID: "", Cost: 5, ShouldDeduct: true, Balance: 100},
+			wantBalance: 100,
+			wantErr:     false,
+		},
+		{
+			name:        "zero cost",
+			engine:      engine,
+			result:      &PreCheckResult{UserID: "user-1", Cost: 0, ShouldDeduct: true, Balance: 100},
+			wantBalance: 100,
+			wantErr:     false,
+		},
+		{
+			name:        "negative cost",
+			engine:      engine,
+			result:      &PreCheckResult{UserID: "user-1", Cost: -5, ShouldDeduct: true, Balance: 100},
+			wantBalance: 100,
+			wantErr:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			balance, err := tt.engine.Deduct(tt.result, tt.requestID, tt.routeID)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Deduct() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if balance != tt.wantBalance {
+				t.Errorf("Deduct() balance = %d, want %d", balance, tt.wantBalance)
+			}
+		})
+	}
+}
+
+// Test routeID function
+func TestRouteID(t *testing.T) {
+	tests := []struct {
+		name string
+		route *config.Route
+		want string
+	}{
+		{
+			name:  "nil route",
+			route: nil,
+			want:  "",
+		},
+		{
+			name:  "route with ID",
+			route: &config.Route{ID: "route-1", Name: "Test Route"},
+			want:  "route-1",
+		},
+		{
+			name:  "route with empty ID, has Name",
+			route: &config.Route{ID: "", Name: "Test Route"},
+			want:  "Test Route",
+		},
+		{
+			name:  "route with whitespace ID",
+			route: &config.Route{ID: "  ", Name: "Test Route"},
+			want:  "Test Route",
+		},
+		{
+			name:  "route with both empty",
+			route: &config.Route{ID: "", Name: ""},
+			want:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := routeID(tt.route)
+			if got != tt.want {
+				t.Errorf("routeID() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// Test PreCheck edge cases
+func TestEnginePreCheck_EdgeCases(t *testing.T) {
+	t.Parallel()
+
+	st := openBillingStore(t)
+	defer st.Close()
+
+	user := createBillingUser(t, st, "precheck-edge@example.com", 100)
+	engine := NewEngine(st, config.BillingConfig{
+		Enabled:     true,
+		DefaultCost: 5,
+	})
+
+	tests := []struct {
+		name    string
+		engine  *Engine
+		meta    RequestMeta
+		wantErr bool
+		checkFn func(*testing.T, *PreCheckResult)
+	}{
+		{
+			name:    "nil engine",
+			engine:  nil,
+			meta:    RequestMeta{Consumer: &config.Consumer{ID: user.ID}},
+			wantErr: false,
+			checkFn: func(t *testing.T, r *PreCheckResult) {
+				if r.ShouldDeduct {
+					t.Error("nil engine should not deduct")
+				}
+			},
+		},
+		{
+			name:    "disabled billing",
+			engine:  NewEngine(st, config.BillingConfig{Enabled: false}),
+			meta:    RequestMeta{Consumer: &config.Consumer{ID: user.ID}},
+			wantErr: false,
+			checkFn: func(t *testing.T, r *PreCheckResult) {
+				if r.ShouldDeduct {
+					t.Error("disabled billing should not deduct")
+				}
+			},
+		},
+		{
+			name:    "nil consumer",
+			engine:  engine,
+			meta:    RequestMeta{Consumer: nil},
+			wantErr: false,
+			checkFn: func(t *testing.T, r *PreCheckResult) {
+				if r.ShouldDeduct {
+					t.Error("nil consumer should not deduct")
+				}
+			},
+		},
+		{
+			name:    "empty consumer ID",
+			engine:  engine,
+			meta:    RequestMeta{Consumer: &config.Consumer{ID: "  "}},
+			wantErr: false,
+			checkFn: func(t *testing.T, r *PreCheckResult) {
+				if r.ShouldDeduct {
+					t.Error("empty consumer ID should not deduct")
+				}
+			},
+		},
+		{
+			name:    "test key bypass",
+			engine:  NewEngine(st, config.BillingConfig{Enabled: true, TestModeEnabled: true}),
+			meta:    RequestMeta{Consumer: &config.Consumer{ID: user.ID}, RawAPIKey: "ck_test_abc123"},
+			wantErr: false,
+			checkFn: func(t *testing.T, r *PreCheckResult) {
+				if r.ShouldDeduct {
+					t.Error("test key should bypass deduction")
+				}
+			},
+		},
+		{
+			name:    "zero cost",
+			engine:  NewEngine(st, config.BillingConfig{Enabled: true, DefaultCost: 0}),
+			meta:    RequestMeta{Consumer: &config.Consumer{ID: user.ID}},
+			wantErr: false,
+			checkFn: func(t *testing.T, r *PreCheckResult) {
+				if r.ShouldDeduct {
+					t.Error("zero cost should not deduct")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tt.engine.PreCheck(tt.meta)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("PreCheck() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.checkFn != nil {
+				tt.checkFn(t, result)
 			}
 		})
 	}

@@ -58,6 +58,34 @@ func TestReadJSONUnknownField(t *testing.T) {
 	}
 }
 
+func TestReadJSON_DefaultMaxBytes(t *testing.T) {
+	t.Parallel()
+
+	type payload struct {
+		Name string `json:"name"`
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"cerberus"}`))
+	var got payload
+	// Pass 0 or negative maxBytes to use default
+	if err := ReadJSON(req, &got, 0); err != nil {
+		t.Fatalf("ReadJSON with default maxBytes error: %v", err)
+	}
+	if got.Name != "cerberus" {
+		t.Fatalf("unexpected payload: %#v", got)
+	}
+
+	// Test negative maxBytes
+	req2 := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"test2"}`))
+	var got2 payload
+	if err := ReadJSON(req2, &got2, -1); err != nil {
+		t.Fatalf("ReadJSON with negative maxBytes error: %v", err)
+	}
+	if got2.Name != "test2" {
+		t.Fatalf("unexpected payload: %#v", got2)
+	}
+}
+
 func TestMarshalJSON(t *testing.T) {
 	t.Parallel()
 

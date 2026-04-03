@@ -477,3 +477,227 @@ func TestErrorInterface(t *testing.T) {
 		}
 	}
 }
+
+// Test claimValueToHeader function
+func TestClaimValueToHeader(t *testing.T) {
+	tests := []struct {
+		name      string
+		claim     any
+		wantValue string
+		wantOK    bool
+	}{
+		{
+			name:      "string claim",
+			claim:     "test-value",
+			wantValue: "test-value",
+			wantOK:    true,
+		},
+		{
+			name:      "empty string claim",
+			claim:     "",
+			wantValue: "",
+			wantOK:    false,
+		},
+		{
+			name:      "int claim",
+			claim:     42,
+			wantValue: "42",
+			wantOK:    true,
+		},
+		{
+			name:      "bool claim true",
+			claim:     true,
+			wantValue: "true",
+			wantOK:    true,
+		},
+		{
+			name:      "bool claim false",
+			claim:     false,
+			wantValue: "false",
+			wantOK:    true,
+		},
+		{
+			name:      "float64 claim",
+			claim:     3.14,
+			wantValue: "3",
+			wantOK:    true,
+		},
+		{
+			name:      "nil claim",
+			claim:     nil,
+			wantValue: "<nil>",
+			wantOK:    true,
+		},
+		{
+			name:      "slice claim",
+			claim:     []string{"a", "b"},
+			wantValue: "[a b]",
+			wantOK:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotValue, gotOK := claimValueToHeader(tt.claim)
+			if gotValue != tt.wantValue {
+				t.Errorf("claimValueToHeader() value = %q, want %q", gotValue, tt.wantValue)
+			}
+			if gotOK != tt.wantOK {
+				t.Errorf("claimValueToHeader() ok = %v, want %v", gotOK, tt.wantOK)
+			}
+		})
+	}
+}
+
+// Test hasClaimValue function
+func TestHasClaimValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		claim    any
+		expected bool
+	}{
+		{
+			name:     "non-empty string",
+			claim:    "value",
+			expected: true,
+		},
+		{
+			name:     "empty string",
+			claim:    "",
+			expected: false,
+		},
+		{
+			name:     "whitespace only string",
+			claim:    "   ",
+			expected: false,
+		},
+		{
+			name:     "nil",
+			claim:    nil,
+			expected: false,
+		},
+		{
+			name:     "int",
+			claim:    42,
+			expected: true,
+		},
+		{
+			name:     "bool true",
+			claim:    true,
+			expected: true,
+		},
+		{
+			name:     "bool false",
+			claim:    false,
+			expected: true,
+		},
+		{
+			name:     "empty slice",
+			claim:    []string{},
+			expected: false,
+		},
+		{
+			name:     "non-empty slice",
+			claim:    []string{"a"},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hasClaimValue(tt.claim)
+			if got != tt.expected {
+				t.Errorf("hasClaimValue() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test Retry MaxAttempts function
+func TestRetry_MaxAttempts(t *testing.T) {
+	r := NewRetry(RetryConfig{
+		MaxRetries: 5,
+	})
+
+	// MaxAttempts returns maxRetries + 1
+	if r.MaxAttempts("GET") != 6 {
+		t.Errorf("MaxAttempts() = %d, want 6", r.MaxAttempts("GET"))
+	}
+}
+
+// Test TimeoutError Error method
+func TestTimeoutError_Error(t *testing.T) {
+	err := &TimeoutError{Message: "timeout occurred"}
+	if err.Error() != "timeout occurred" {
+		t.Errorf("Error() = %q, want %q", err.Error(), "timeout occurred")
+	}
+}
+
+// Test URLRewriteError Error method
+func TestURLRewriteError_Error(t *testing.T) {
+	err := &URLRewriteError{Message: "rewrite failed"}
+	if err.Error() != "rewrite failed" {
+		t.Errorf("Error() = %q, want %q", err.Error(), "rewrite failed")
+	}
+}
+
+// Test UserIPWhitelistError Error method
+func TestUserIPWhitelistError_Error(t *testing.T) {
+	err := &UserIPWhitelistError{Message: "IP not whitelisted"}
+	if err.Error() != "IP not whitelisted" {
+		t.Errorf("Error() = %q, want %q", err.Error(), "IP not whitelisted")
+	}
+}
+
+// Test RequestValidatorError Error method
+func TestRequestValidatorError_Error(t *testing.T) {
+	err := &RequestValidatorError{Message: "validation failed"}
+	if err.Error() != "validation failed" {
+		t.Errorf("Error() = %q, want %q", err.Error(), "validation failed")
+	}
+}
+
+// Test normalizeIPRuleList function
+func TestNormalizeIPRuleList(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []string
+		expected []string
+	}{
+		{
+			name:     "empty list",
+			input:    []string{},
+			expected: []string{},
+		},
+		{
+			name:     "single IP",
+			input:    []string{"192.168.1.1"},
+			expected: []string{"192.168.1.1"},
+		},
+		{
+			name:     "multiple IPs",
+			input:    []string{"192.168.1.1", "10.0.0.0/8"},
+			expected: []string{"192.168.1.1", "10.0.0.0/8"},
+		},
+		{
+			name:     "with whitespace",
+			input:    []string{" 192.168.1.1 ", " 10.0.0.0/8 "},
+			expected: []string{"192.168.1.1", "10.0.0.0/8"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeIPRuleList(tt.input)
+			if len(got) != len(tt.expected) {
+				t.Errorf("normalizeIPRuleList() returned %d items, want %d", len(got), len(tt.expected))
+				return
+			}
+			for i, v := range got {
+				if v != tt.expected[i] {
+					t.Errorf("normalizeIPRuleList()[%d] = %q, want %q", i, v, tt.expected[i])
+				}
+			}
+		})
+	}
+}

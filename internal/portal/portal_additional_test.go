@@ -1061,3 +1061,238 @@ func TestMyActivity(t *testing.T) {
 	assertPortalStatus(t, activityResp, http.StatusOK)
 }
 
+// Test helper functions
+func TestAsStringSlice(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    any
+		expected []string
+	}{
+		{
+			name:     "string slice",
+			value:    []string{"a", "b", "c"},
+			expected: []string{"a", "b", "c"},
+		},
+		{
+			name:     "any slice",
+			value:    []any{"a", "b", "c"},
+			expected: []string{"a", "b", "c"},
+		},
+		{
+			name:     "empty string slice",
+			value:    []string{},
+			expected: []string{},
+		},
+		{
+			name:     "nil",
+			value:    nil,
+			expected: nil,
+		},
+		{
+			name:     "string",
+			value:    "not a slice",
+			expected: nil,
+		},
+		{
+			name:     "slice with empty strings",
+			value:    []string{"a", "", "  ", "b"},
+			expected: []string{"a", "b"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := asStringSlice(tt.value)
+			if len(result) != len(tt.expected) {
+				t.Errorf("asStringSlice() = %v, want %v", result, tt.expected)
+			}
+			for i := range result {
+				if result[i] != tt.expected[i] {
+					t.Errorf("asStringSlice()[%d] = %v, want %v", i, result[i], tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
+func TestAsInt64(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    any
+		fallback int64
+		expected int64
+	}{
+		{
+			name:     "int",
+			value:    42,
+			fallback: 0,
+			expected: 42,
+		},
+		{
+			name:     "int64",
+			value:    int64(42),
+			fallback: 0,
+			expected: 42,
+		},
+		{
+			name:     "int32",
+			value:    int32(42),
+			fallback: 0,
+			expected: 42,
+		},
+		{
+			name:     "float64",
+			value:    float64(42.5),
+			fallback: 0,
+			expected: 42,
+		},
+		{
+			name:     "string valid",
+			value:    "42",
+			fallback: 0,
+			expected: 42,
+		},
+		{
+			name:     "string empty",
+			value:    "",
+			fallback: 99,
+			expected: 99,
+		},
+		{
+			name:     "string invalid",
+			value:    "not a number",
+			fallback: 99,
+			expected: 99,
+		},
+		{
+			name:     "nil",
+			value:    nil,
+			fallback: 99,
+			expected: 99,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := asInt64(tt.value, tt.fallback)
+			if result != tt.expected {
+				t.Errorf("asInt64(%v, %d) = %d, want %d", tt.value, tt.fallback, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParsePortalLogFilters(t *testing.T) {
+	tests := []struct {
+		name        string
+		params      url.Values
+		expectedMin int
+		expectedMax int
+		expectedErr bool
+	}{
+		{
+			name:        "empty params",
+			params:      url.Values{},
+			expectedMin: 0,
+			expectedMax: 0,
+			expectedErr: false,
+		},
+		{
+			name: "with status_min",
+			params: url.Values{
+				"status_min": []string{"200"},
+			},
+			expectedMin: 200,
+			expectedMax: 0,
+			expectedErr: false,
+		},
+		{
+			name: "with status_max",
+			params: url.Values{
+				"status_max": []string{"500"},
+			},
+			expectedMin: 0,
+			expectedMax: 500,
+			expectedErr: false,
+		},
+		{
+			name: "with method",
+			params: url.Values{
+				"method": []string{"GET"},
+			},
+			expectedMin: 0,
+			expectedMax: 0,
+			expectedErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parsePortalLogFilters(tt.params)
+			if (err != nil) != tt.expectedErr {
+				t.Errorf("parsePortalLogFilters() error = %v, expectedErr %v", err, tt.expectedErr)
+				return
+			}
+			if result.StatusMin != tt.expectedMin {
+				t.Errorf("StatusMin = %v, want %v", result.StatusMin, tt.expectedMin)
+			}
+			if result.StatusMax != tt.expectedMax {
+				t.Errorf("StatusMax = %v, want %v", result.StatusMax, tt.expectedMax)
+			}
+		})
+	}
+}
+
+func TestCloneFloat64Map(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]float64
+		expected map[string]float64
+	}{
+		{
+			name:     "nil map",
+			input:    nil,
+			expected: nil,
+		},
+		{
+			name:     "empty map",
+			input:    map[string]float64{},
+			expected: map[string]float64{},
+		},
+		{
+			name: "map with values",
+			input: map[string]float64{
+				"a": 1.0,
+				"b": 2.5,
+			},
+			expected: map[string]float64{
+				"a": 1.0,
+				"b": 2.5,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := cloneFloat64Map(tt.input)
+			if len(result) != len(tt.expected) {
+				t.Errorf("cloneFloat64Map() length = %d, want %d", len(result), len(tt.expected))
+			}
+			for k, v := range tt.expected {
+				if result[k] != v {
+					t.Errorf("cloneFloat64Map()[%s] = %v, want %v", k, result[k], v)
+				}
+			}
+
+			// Verify it's a clone (modifying result doesn't affect input)
+			if len(result) > 0 {
+				result["new"] = 99.0
+				if _, ok := tt.expected["new"]; ok {
+					t.Error("cloneFloat64Map() returned map that affects original")
+				}
+			}
+		})
+	}
+}
+
+

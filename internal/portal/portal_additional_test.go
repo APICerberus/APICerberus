@@ -1601,26 +1601,276 @@ func TestSanitizeUser(t *testing.T) {
 	}
 }
 
-// Test isUserActive function
-func TestIsUserActive(t *testing.T) {
+// Test findPermissionForRoute function
+func TestFindPermissionForRoute(t *testing.T) {
 	tests := []struct {
-		name     string
-		status   string
-		expected bool
+		name         string
+		route        *config.Route
+		permsByRoute map[string]*store.EndpointPermission
+		want         *store.EndpointPermission
 	}{
-		{"active", "active", true},
-		{"empty", "", true},
-		{"inactive", "inactive", false},
-		{"pending", "pending", false},
-		{"suspended", "suspended", false},
+		{
+			name:         "nil route",
+			route:        nil,
+			permsByRoute: map[string]*store.EndpointPermission{},
+			want:         nil,
+		},
+		{
+			name: "route with ID match",
+			route: &config.Route{
+				ID:   "route-1",
+				Name: "Test Route",
+			},
+			permsByRoute: map[string]*store.EndpointPermission{
+				"route-1": {CreditCost: int64Ptr(10)},
+			},
+			want: &store.EndpointPermission{CreditCost: int64Ptr(10)},
+		},
+		{
+			name: "route with Name match (no ID match)",
+			route: &config.Route{
+				ID:   "route-2",
+				Name: "Test Route",
+			},
+			permsByRoute: map[string]*store.EndpointPermission{
+				"Test Route": {CreditCost: int64Ptr(20)},
+			},
+			want: &store.EndpointPermission{CreditCost: int64Ptr(20)},
+		},
+		{
+			name: "no match",
+			route: &config.Route{
+				ID:   "route-3",
+				Name: "Unknown Route",
+			},
+			permsByRoute: map[string]*store.EndpointPermission{
+				"other-route": {CreditCost: int64Ptr(30)},
+			},
+			want: nil,
+		},
+		{
+			name: "empty route ID and Name",
+			route: &config.Route{
+				ID:   "",
+				Name: "",
+			},
+			permsByRoute: map[string]*store.EndpointPermission{
+				"some-route": {CreditCost: int64Ptr(40)},
+			},
+			want: nil,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			user := &store.User{Status: tt.status}
-			got := isUserActive(user)
-			if got != tt.expected {
-				t.Errorf("isUserActive() = %v, want %v", got, tt.expected)
+			got := findPermissionForRoute(tt.permsByRoute, tt.route)
+			if tt.want == nil {
+				if got != nil {
+					t.Errorf("findPermissionForRoute() = %v, want nil", got)
+				}
+				return
+			}
+			if got == nil {
+				t.Errorf("findPermissionForRoute() = nil, want non-nil")
+				return
+			}
+			if got.CreditCost != nil && tt.want.CreditCost != nil {
+				if *got.CreditCost != *tt.want.CreditCost {
+					t.Errorf("findPermissionForRoute() CreditCost = %v, want %v", *got.CreditCost, *tt.want.CreditCost)
+				}
+			}
+		})
+	}
+}
+
+// Test parsePortalTimeRange error paths
+func TestParsePortalTimeRange_Errors(t *testing.T) {
+	tests := []struct {
+		name      string
+		query     url.Values
+		wantError string
+	}{
+		{
+			name: "invalid to date",
+			query: url.Values{
+				"to": []string{"not-a-valid-date"},
+			},
+			wantError: "to must be RFC3339",
+		},
+		{
+			name: "invalid from date",
+			query: url.Values{
+				"from": []string{"not-a-valid-date"},
+			},
+			wantError: "from must be RFC3339",
+		},
+		{
+			name: "invalid window duration",
+			query: url.Values{
+				"window": []string{"not-a-duration"},
+			},
+			wantError: "window must be a valid duration",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := parsePortalTimeRange(tt.query)
+			if err == nil {
+				t.Errorf("parsePortalTimeRange() error = nil, want error containing %q", tt.wantError)
+				return
+			}
+			if !strings.Contains(err.Error(), tt.wantError) {
+				t.Errorf("parsePortalTimeRange() error = %q, want error containing %q", err.Error(), tt.wantError)
+			}
+		})
+	}
+}
+
+// Test parsePortalLogFilters error paths
+func TestParsePortalLogFilters_Errors(t *testing.T) {
+	tests := []struct {
+		name      string
+		query     url.Values
+		wantError string
+	}{
+		{
+			name: "invalid status_min",
+			query: url.Values{
+				"status_min": []string{"not-a-number"},
+			},
+			wantError: "status_min must be numeric",
+		},
+		{
+			name: "invalid status_max",
+			query: url.Values{
+				"status_max": []string{"not-a-number"},
+			},
+			wantError: "status_max must be numeric",
+		},
+		{
+			name: "invalid from date",
+			query: url.Values{
+				"from": []string{"not-a-valid-date"},
+			},
+			wantError: "from must be RFC3339",
+		},
+		{
+			name: "invalid to date",
+			query: url.Values{
+				"to": []string{"not-a-valid-date"},
+			},
+			wantError: "to must be RFC3339",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parsePortalLogFilters(tt.query)
+			if err == nil {
+				t.Errorf("parsePortalLogFilters() error = nil, want error containing %q", tt.wantError)
+				return
+			}
+			if !strings.Contains(err.Error(), tt.wantError) {
+				t.Errorf("parsePortalLogFilters() error = %q, want error containing %q", err.Error(), tt.wantError)
+			}
+		})
+	}
+}
+
+// Test parsePortalGranularity error paths
+func TestParsePortalGranularity_Errors(t *testing.T) {
+	tests := []struct {
+		name      string
+		query     url.Values
+		wantError string
+	}{
+		{
+			name: "invalid duration",
+			query: url.Values{
+				"granularity": []string{"not-a-duration"},
+			},
+			wantError: "granularity must be a valid duration",
+		},
+		{
+			name: "zero or negative duration",
+			query: url.Values{
+				"granularity": []string{"0s"},
+			},
+			wantError: "granularity must be greater than zero",
+		},
+		{
+			name: "negative duration",
+			query: url.Values{
+				"granularity": []string{"-1h"},
+			},
+			wantError: "granularity must be greater than zero",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parsePortalGranularity(tt.query)
+			if err == nil {
+				t.Errorf("parsePortalGranularity() error = nil, want error containing %q", tt.wantError)
+				return
+			}
+			if !strings.Contains(err.Error(), tt.wantError) {
+				t.Errorf("parsePortalGranularity() error = %q, want error containing %q", err.Error(), tt.wantError)
+			}
+		})
+	}
+}
+
+// Test resolveGatewayBaseURL function
+func TestResolveGatewayBaseURL(t *testing.T) {
+	tests := []struct {
+		name string
+		addr string
+		want string
+	}{
+		{
+			name: "empty address",
+			addr: "",
+			want: "http://127.0.0.1:8080",
+		},
+		{
+			name: "http prefix",
+			addr: "http://localhost:8080",
+			want: "http://localhost:8080",
+		},
+		{
+			name: "https prefix",
+			addr: "https://api.example.com",
+			want: "https://api.example.com",
+		},
+		{
+			name: "port only",
+			addr: ":9090",
+			want: "http://127.0.0.1:9090",
+		},
+		{
+			name: "host and port",
+			addr: "localhost:8080",
+			want: "http://localhost:8080",
+		},
+		{
+			name: "with trailing slash",
+			addr: "http://localhost:8080/",
+			want: "http://localhost:8080",
+		},
+		{
+			name: "with whitespace",
+			addr: "  localhost:8080  ",
+			want: "http://localhost:8080",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveGatewayBaseURL(tt.addr)
+			if got != tt.want {
+				t.Errorf("resolveGatewayBaseURL(%q) = %q, want %q", tt.addr, got, tt.want)
 			}
 		})
 	}

@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"math/big"
 	"os"
 	"path/filepath"
 	"testing"
@@ -635,4 +636,187 @@ func TestACMEProvider_ObtainCertificate_InvalidDomain(t *testing.T) {
 	if err == nil {
 		t.Error("ObtainCertificate should return error with empty domain")
 	}
+}
+
+// Test storeChallengeResponse (currently empty implementation)
+func TestACMEProvider_StoreChallengeResponse(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// This should not panic even though it's an empty implementation
+	provider.storeChallengeResponse("test-token", "test-response")
+}
+
+// Test storeCertificateLocally with various error conditions
+func TestACMEProvider_StoreCertificateLocally_Errors(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// Test successful storage
+	cert := &CachedCertificate{
+		Domain:    "test.example.com",
+		CertPEM:   []byte("test cert"),
+		KeyPEM:    []byte("test key"),
+		IssuedAt:  time.Now(),
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+	}
+
+	err = provider.storeCertificateLocally(cert)
+	if err != nil {
+		t.Errorf("storeCertificateLocally() error = %v", err)
+	}
+
+	// Verify files were created
+	certPath := filepath.Join(tmpDir, "test.example.com", "cert.pem")
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		t.Error("cert.pem was not created")
+	}
+
+	keyPath := filepath.Join(tmpDir, "test.example.com", "key.pem")
+	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+		t.Error("key.pem was not created")
+	}
+}
+
+// Test loadCertificateFromDisk with missing files
+func TestACMEProvider_LoadCertificateFromDisk_Missing(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// Try to load certificate that doesn't exist
+	_, err = provider.loadCertificateFromDisk("nonexistent.example.com")
+	if err == nil {
+		t.Error("loadCertificateFromDisk should return error for missing certificate")
+	}
+}
+
+// Test loadCertificateFromDisk with corrupted cert file
+func TestACMEProvider_LoadCertificateFromDisk_CorruptedCert(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	domain := "corrupted.example.com"
+	domainDir := filepath.Join(tmpDir, domain)
+	os.MkdirAll(domainDir, 0750)
+
+	// Create corrupted cert file
+	certPath := filepath.Join(domainDir, "cert.pem")
+	os.WriteFile(certPath, []byte("not a valid PEM"), 0600)
+
+	// Create valid key file
+	keyPath := filepath.Join(domainDir, "key.pem")
+	os.WriteFile(keyPath, []byte("not a valid key PEM"), 0600)
+
+	// Try to load corrupted certificate
+	_, err = provider.loadCertificateFromDisk(domain)
+	if err == nil {
+		t.Error("loadCertificateFromDisk should return error for corrupted certificate")
+	}
+}
+
+// Test loadCertificateFromDisk with missing key file
+func TestACMEProvider_LoadCertificateFromDisk_MissingKey(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	domain := "missingkey.example.com"
+	domainDir := filepath.Join(tmpDir, domain)
+	os.MkdirAll(domainDir, 0750)
+
+	// Create valid cert file but no key file
+	certPath := filepath.Join(domainDir, "cert.pem")
+	certPEM := generateTestCertPEM(t, domain)
+	os.WriteFile(certPath, certPEM, 0600)
+
+	// Try to load certificate with missing key
+	_, err = provider.loadCertificateFromDisk(domain)
+	if err == nil {
+		t.Error("loadCertificateFromDisk should return error for missing key")
+	}
+}
+
+// Helper function to generate test certificate PEM
+func generateTestCertPEM(t *testing.T, domain string) []byte {
+	t.Helper()
+
+	// Generate a self-signed certificate for testing
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("Failed to generate key: %v", err)
+	}
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		DNSNames:     []string{domain},
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(24 * time.Hour),
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &priv.PublicKey, priv)
+	if err != nil {
+		t.Fatalf("Failed to create certificate: %v", err)
+	}
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	return certPEM
 }

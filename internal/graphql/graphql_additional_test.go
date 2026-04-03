@@ -1,7 +1,12 @@
 package graphql
 
 import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 // Test ValueKind methods
@@ -441,3 +446,120 @@ func TestParseQuery_DeepInlineFragment(t *testing.T) {
 		t.Errorf("Depth() = %d, want 5", node.Depth())
 	}
 }
+
+// Test Proxy ServeHTTP with regular request
+func TestProxy_ServeHTTP_RegularRequest(t *testing.T) {
+	// Create a simple upstream server
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"data":{"users":[]}}`))
+	}))
+	defer upstream.Close()
+
+	proxy, err := NewProxy(&ProxyConfig{
+		TargetURL: upstream.URL,
+		Timeout:   5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewProxy() error = %v", err)
+	}
+
+	req := httptest.NewRequest("POST", "/graphql", strings.NewReader(`{"query":"{ users { id } }"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	proxy.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("StatusCode = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), `"data"`) {
+		t.Errorf("Response body does not contain data: %s", string(body))
+	}
+}
+
+// Test Proxy ServeHTTP with subscription request (WebSocket upgrade)
+func TestProxy_ServeHTTP_SubscriptionRequest(t *testing.T) {
+	// Create upstream server that accepts WebSocket
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Just check the headers, don't actually upgrade
+		if r.Header.Get("Upgrade") == "websocket" {
+			w.WriteHeader(http.StatusSwitchingProtocols)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	proxy, err := NewProxy(&ProxyConfig{
+		TargetURL: upstream.URL,
+		Timeout:   5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewProxy() error = %v", err)
+	}
+
+	// Request with WebSocket upgrade headers
+	req := httptest.NewRequest("GET", "/graphql", nil)
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Connection", "Upgrade")
+	w := httptest.NewRecorder()
+
+	// This will attempt WebSocket upgrade path
+	proxy.ServeHTTP(w, req)
+}
+
+// Test isBenignClose function
+func TestIsBenignClose(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "nil error",
+			err:      nil,
+			expected: true, // nil is considered benign
+		},
+		{
+			name:     "io.EOF error",
+			err:      io.EOF,
+			expected: true, // EOF is considered benign
+		},
+		{
+			name:     "other error",
+			err:      http.ErrHandlerTimeout,
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isBenignClose(tt.err)
+			if result != tt.expected {
+				t.Errorf("isBenignClose() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+// Test closeDone helper
+func TestCloseDone(t *testing.T) {
+	done := make(chan struct{})
+	closeDone(done)
+	// Should not panic and channel should be closed
+	select {
+	case <-done:
+		// Expected - channel is closed
+	default:
+		t.Error("Expected done channel to be closed")
+	}
+
+	// Closing already closed channel should not panic
+	closeDone(done)
+}
+

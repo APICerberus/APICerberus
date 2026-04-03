@@ -188,3 +188,70 @@ func createBillingUser(t *testing.T, st *store.Store, email string, balance int6
 	}
 	return user
 }
+
+// Test Enabled function
+func TestEngineEnabled(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		engine   *Engine
+		expected bool
+	}{
+		{
+			name:     "nil engine",
+			engine:   nil,
+			expected: false,
+		},
+		{
+			name: "enabled config",
+			engine: &Engine{
+				cfg: config.BillingConfig{Enabled: true},
+			},
+			expected: true,
+		},
+		{
+			name: "disabled config",
+			engine: &Engine{
+				cfg: config.BillingConfig{Enabled: false},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.engine.Enabled()
+			if result != tt.expected {
+				t.Errorf("Enabled() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+// Test Enabled with store integration
+func TestEngineEnabled_Integration(t *testing.T) {
+	t.Parallel()
+
+	st := openBillingStore(t)
+	defer st.Close()
+
+	// Enabled engine
+	enabledEngine := NewEngine(st, config.BillingConfig{Enabled: true})
+	if !enabledEngine.Enabled() {
+		t.Error("Expected enabled engine to return true")
+	}
+
+	// Disabled engine
+	disabledEngine := NewEngine(st, config.BillingConfig{Enabled: false})
+	if disabledEngine.Enabled() {
+		t.Error("Expected disabled engine to return false")
+	}
+
+	// Nil engine
+	var nilEngine *Engine
+	if nilEngine.Enabled() {
+		t.Error("Expected nil engine to return false")
+	}
+}
+

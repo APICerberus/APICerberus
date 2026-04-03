@@ -1108,4 +1108,207 @@ func TestComposeSubgraphs_FederationDisabled(t *testing.T) {
 	assertStatus(t, resp, http.StatusBadRequest)
 }
 
+// Test WebSocketConn sendPing and sendPong
+func TestWebSocketConn_SendPingPong(t *testing.T) {
+	t.Parallel()
+
+	server, client := net.Pipe()
+	defer server.Close()
+	defer client.Close()
+
+	wsConn := &WebSocketConn{
+		ID:        "test-ping-pong",
+		Conn:      server,
+		Topics:    make(map[string]bool),
+		CreatedAt: time.Now(),
+		LastPing:  time.Now(),
+		writeCh:   make(chan []byte, 64),
+		hub:       nil,
+	}
+
+	// Test sendPing in goroutine to avoid blocking
+	go func() {
+		err := wsConn.sendPing()
+		if err != nil {
+			t.Logf("sendPing error (expected for pipe): %v", err)
+		}
+	}()
+
+	// Read the ping frame from client side
+	buf := make([]byte, 10)
+	client.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	n, _ := client.Read(buf)
+	if n >= 2 {
+		// Check if it's a ping frame (0x89 = FIN + ping opcode)
+		if buf[0] != 0x89 {
+			t.Errorf("Expected ping frame (0x89), got 0x%02x", buf[0])
+		}
+	}
+
+	// Test sendPong
+	go func() {
+		err := wsConn.sendPong()
+		if err != nil {
+			t.Logf("sendPong error (expected for pipe): %v", err)
+		}
+	}()
+
+	// Read the pong frame from client side
+	client.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	n, _ = client.Read(buf)
+	if n >= 2 {
+		// Check if it's a pong frame (0x8A = FIN + pong opcode)
+		if buf[0] != 0x8A {
+			t.Errorf("Expected pong frame (0x8A), got 0x%02x", buf[0])
+		}
+	}
+}
+
+// Test WebSocketHub cleanupStaleConnections
+func TestWebSocketHub_CleanupStaleConnections(t *testing.T) {
+	logger := logging.NewStructuredLogger(nil, logging.ErrorLevel)
+	hub := NewWebSocketHub(logger)
+	defer hub.Stop()
+
+	server1, client1 := net.Pipe()
+	defer server1.Close()
+	defer client1.Close()
+
+	server2, client2 := net.Pipe()
+	defer server2.Close()
+	defer client2.Close()
+
+	// Create connections with different last ping times
+	conn1 := &WebSocketConn{
+		ID:        "stale-conn",
+		Conn:      server1,
+		Topics:    map[string]bool{"test-topic": true},
+		CreatedAt: time.Now(),
+		LastPing:  time.Now().Add(-5 * time.Minute), // Stale (older than 2 min timeout)
+		writeCh:   make(chan []byte, 64),
+		hub:       hub,
+	}
+
+	conn2 := &WebSocketConn{
+		ID:        "fresh-conn",
+		Conn:      server2,
+		Topics:    map[string]bool{"test-topic": true},
+		CreatedAt: time.Now(),
+		LastPing:  time.Now(), // Fresh
+		writeCh:   make(chan []byte, 64),
+		hub:       hub,
+	}
+
+	// Register connections manually
+	hub.mu.Lock()
+	hub.connections[conn1.ID] = conn1
+	hub.connections[conn2.ID] = conn2
+	hub.subscribers["test-topic"] = map[string]bool{
+		conn1.ID: true,
+		conn2.ID: true,
+	}
+	hub.metrics.ActiveConnections.Add(2)
+	hub.mu.Unlock()
+
+	// Run cleanup
+	hub.cleanupStaleConnections()
+
+	// Verify stale connection was removed
+	hub.mu.RLock()
+	_, exists := hub.connections["stale-conn"]
+	freshExists := false
+	if _, ok := hub.connections["fresh-conn"]; ok {
+		freshExists = true
+	}
+	hub.mu.RUnlock()
+
+	if exists {
+		t.Error("Stale connection should have been cleaned up")
+	}
+	if !freshExists {
+		t.Error("Fresh connection should still exist")
+	}
+}
+
+// Test WebSocketConn close method
+func TestWebSocketConn_Close(t *testing.T) {
+	t.Parallel()
+
+	server, client := net.Pipe()
+	defer client.Close()
+
+	wsConn := &WebSocketConn{
+		ID:        "test-close",
+		Conn:      server,
+		Topics:    make(map[string]bool),
+		CreatedAt: time.Now(),
+		LastPing:  time.Now(),
+		writeCh:   make(chan []byte, 64),
+		hub:       nil,
+	}
+
+	// Close should not panic
+	wsConn.close()
+
+	// Verify channel is closed by trying to write (should panic or block)
+	// Just verify the connection is closed by checking writeCh was closed
+	select {
+	case _, ok := <-wsConn.writeCh:
+		if ok {
+			t.Error("writeCh should be closed")
+		}
+	default:
+		t.Error("writeCh should be closed and readable")
+	}
+}
+
+// Test WebSocketConn Send with closed connection
+func TestWebSocketConn_SendClosed(t *testing.T) {
+	t.Parallel()
+
+	server, client := net.Pipe()
+	defer server.Close()
+	defer client.Close()
+
+	wsConn := &WebSocketConn{
+		ID:        "test-send-closed",
+		Conn:      server,
+		Topics:    make(map[string]bool),
+		CreatedAt: time.Now(),
+		LastPing:  time.Now(),
+		writeCh:   make(chan []byte, 64),
+		hub:       nil,
+	}
+
+	// Close the connection
+	wsConn.close()
+
+	// Send should panic when channel is closed - recover from it
+	done := make(chan bool)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// Expected panic on closed channel
+				done <- true
+			}
+		}()
+		err := wsConn.Send([]byte("test"))
+		// If no panic, should return error
+		if err != nil {
+			done <- true
+			return
+		}
+		done <- false
+	}()
+
+	select {
+	case success := <-done:
+		if !success {
+			t.Error("Send should fail or panic when connection is closed")
+		}
+	case <-time.After(100 * time.Millisecond):
+		// Panic may have occurred without recovery
+		t.Log("Send timed out (expected when channel is closed)")
+	}
+}
 

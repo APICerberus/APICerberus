@@ -1047,12 +1047,65 @@ func TestAddUpstreamTarget_UpstreamNotFound(t *testing.T) {
 	baseURL, _, _ := newAdminTestServer(t)
 
 	// Try to add target to non-existent upstream
-	targetBody := map[string]any{
-		"address": "localhost:8080",
-		"weight":  100,
+	body := map[string]any{
+		"id":      "target-1",
+		"address": "127.0.0.1:8080",
 	}
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream-12345/targets", "secret-admin", targetBody)
+
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream/targets", "secret-admin", body)
 	assertStatus(t, resp, http.StatusNotFound)
+}
+
+// Test subgraph endpoints when federation is disabled
+func TestListSubgraphs_FederationDisabled(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/subgraphs", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusBadRequest)
+}
+
+func TestAddSubgraph_FederationDisabled(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	body := map[string]any{
+		"id":   "subgraph-1",
+		"name": "Test Subgraph",
+		"url":  "http://localhost:4001",
+	}
+
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/subgraphs", "secret-admin", body)
+	assertStatus(t, resp, http.StatusBadRequest)
+}
+
+func TestGetSubgraph_FederationDisabled(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/subgraphs/nonexistent", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusBadRequest)
+}
+
+func TestRemoveSubgraph_FederationDisabled(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/subgraphs/nonexistent", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusBadRequest)
+}
+
+func TestComposeSubgraphs_FederationDisabled(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/subgraphs/compose", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusBadRequest)
 }
 
 

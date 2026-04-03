@@ -563,3 +563,160 @@ func TestCloseDone(t *testing.T) {
 	closeDone(done)
 }
 
+// Test isWSUpgrade function
+func TestIsWSUpgrade(t *testing.T) {
+	tests := []struct {
+		name     string
+		headers  map[string][]string
+		expected bool
+	}{
+		{
+			name:     "no upgrade header",
+			headers:  map[string][]string{},
+			expected: false,
+		},
+		{
+			name: "upgrade websocket",
+			headers: map[string][]string{
+				"Connection": []string{"upgrade"},
+				"Upgrade":    []string{"websocket"},
+			},
+			expected: true,
+		},
+		{
+			name: "upgrade WebSocket (case insensitive)",
+			headers: map[string][]string{
+				"Connection": []string{"Upgrade"},
+				"Upgrade":    []string{"WebSocket"},
+			},
+			expected: true,
+		},
+		{
+			name: "upgrade other",
+			headers: map[string][]string{
+				"Upgrade": []string{"HTTP/2"},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Header = tt.headers
+			result := isWSUpgrade(req)
+			if result != tt.expected {
+				t.Errorf("isWSUpgrade() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+// Test queryParser peekN function
+func TestQueryParser_PeekN(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		n        int
+		expected byte
+	}{
+		{
+			name:     "peek 0",
+			input:    "query",
+			n:        0,
+			expected: 'q',
+		},
+		{
+			name:     "peek 1",
+			input:    "query",
+			n:        1,
+			expected: 'u',
+		},
+		{
+			name:     "peek 4",
+			input:    "query",
+			n:        4,
+			expected: 'y',
+		},
+		{
+			name:     "peek beyond end",
+			input:    "ab",
+			n:        10,
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &queryParser{input: tt.input, pos: 0}
+			result := p.peekN(tt.n)
+			if result != tt.expected {
+				t.Errorf("peekN(%d) = %q, want %q", tt.n, result, tt.expected)
+			}
+		})
+	}
+}
+
+// Test queryParser advance function
+func TestQueryParser_Advance(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		advanceCount int
+		expectedPos  int
+		expectedChar byte
+	}{
+		{
+			name:         "advance 1",
+			input:        "query",
+			advanceCount: 1,
+			expectedPos:  1,
+			expectedChar: 'u',
+		},
+		{
+			name:         "advance 3",
+			input:        "query",
+			advanceCount: 3,
+			expectedPos:  3,
+			expectedChar: 'r',
+		},
+		{
+			name:         "advance beyond end",
+			input:        "ab",
+			advanceCount: 10,
+			expectedPos:  2,
+			expectedChar: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &queryParser{input: tt.input, pos: 0}
+			p.advance(tt.advanceCount)
+			if p.pos != tt.expectedPos {
+				t.Errorf("pos = %d, want %d", p.pos, tt.expectedPos)
+			}
+			if p.peek() != tt.expectedChar {
+				t.Errorf("peek() = %q, want %q", p.peek(), tt.expectedChar)
+			}
+		})
+	}
+}
+
+// Test parseSelection with fragment spread
+func TestParseSelection_FragmentSpread(t *testing.T) {
+	input := "...TestFragment"
+	p := &queryParser{input: input, pos: 0}
+	selection, err := p.parseSelection()
+	if err != nil {
+		t.Fatalf("parseSelection() error = %v", err)
+	}
+	if selection == nil {
+		t.Fatal("parseSelection() returned nil")
+	}
+	// Should be a FragmentSpread
+	if _, ok := selection.(*FragmentSpread); !ok {
+		t.Errorf("Expected FragmentSpread, got %T", selection)
+	}
+}
+

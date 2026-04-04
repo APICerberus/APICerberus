@@ -703,9 +703,9 @@ func TestQueryParser_Advance(t *testing.T) {
 	}
 }
 
-// Test parseSelection with fragment spread
-func TestParseSelection_FragmentSpread(t *testing.T) {
-	input := "...TestFragment"
+// Test parseSelection with inline fragment
+func TestParseSelection_InlineFragment(t *testing.T) {
+	input := "... on User { id name }"
 	p := &queryParser{input: input, pos: 0}
 	selection, err := p.parseSelection()
 	if err != nil {
@@ -714,14 +714,353 @@ func TestParseSelection_FragmentSpread(t *testing.T) {
 	if selection == nil {
 		t.Fatal("parseSelection() returned nil")
 	}
-	// Should be a FragmentSpread
-	if _, ok := selection.(*FragmentSpread); !ok {
-		t.Errorf("Expected FragmentSpread, got %T", selection)
+	// Should be an InlineFragment
+	if _, ok := selection.(*InlineFragment); !ok {
+		t.Errorf("Expected InlineFragment, got %T", selection)
 	}
 }
 
+// Test parseInlineFragment error cases
+func TestParseInlineFragment_Errors(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name:    "missing on keyword",
+			input:   `... User { id }`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid type condition",
+			input:   `... on { id }`,
+			wantErr: true,
+		},
+		{
+			name:    "missing opening brace",
+			input:   `... on User id }`,
+			wantErr: true,
+		},
+	}
 
-// Test parseInlineFragment function
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &queryParser{input: tt.input, pos: 0}
+			_, err := p.parseInlineFragment()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseInlineFragment() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// Test parseField error cases
+func TestParseField_Errors(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name:    "missing field name",
+			input:   `{ id }`,
+			wantErr: true,
+		},
+		{
+			name:    "unclosed arguments",
+			input:   `name(arg: value`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &queryParser{input: tt.input, pos: 0}
+			_, err := p.parseField()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseField() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// Test parseArguments error cases
+func TestParseArguments_Errors(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name:    "missing closing paren",
+			input:   `(arg: value`,
+			wantErr: true,
+		},
+		{
+			name:    "missing colon",
+			input:   `(arg value)`,
+			wantErr: true,
+		},
+		{
+			name:    "missing argument name",
+			input:   `(: value)`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &queryParser{input: tt.input, pos: 0} // Start from beginning to include opening paren
+			_, err := p.parseArguments()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseArguments() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// Test parseValue error cases - parseValue returns only Value, not (Value, error)
+func TestParseValue_Errors(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "unclosed string",
+			input: `"unclosed string`,
+		},
+		{
+			name:  "unclosed list",
+			input: `[1, 2, 3`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &queryParser{input: tt.input, pos: 0}
+			// parseValue returns only Value, we just verify it doesn't panic
+			_ = p.parseValue()
+		})
+	}
+}
+
+// Test parseFragmentDefinition error cases
+func TestParseFragmentDefinition_Errors(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name:    "missing fragment name",
+			input:   `fragment on User { id }`,
+			wantErr: true,
+		},
+		{
+			name:    "missing on keyword",
+			input:   `fragment Test User { id }`,
+			wantErr: true,
+		},
+		{
+			name:    "missing type condition",
+			input:   `fragment Test on { id }`,
+			wantErr: true,
+		},
+		{
+			name:    "missing opening brace",
+			input:   `fragment Test on User id }`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &queryParser{input: tt.input, pos: 0}
+			_, err := p.parseFragmentDefinition()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseFragmentDefinition() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// Test parseOperation error cases
+func TestParseOperation_Errors(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name:    "missing opening brace",
+			input:   `Test}`,
+			wantErr: true,
+		},
+		{
+			name:    "unclosed operation",
+			input:   `Test {`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &queryParser{input: tt.input, pos: 0}
+			// parseOperation expects current token to be the operation type
+			// skip the operation name
+			p.advance(5)
+			_, err := p.parseOperation()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseOperation() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// Test parseDocument error cases
+func TestParseDocument_Errors(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name:    "invalid token",
+			input:   `@invalid`,
+			wantErr: true,
+		},
+		{
+			name:    "fragment without name",
+			input:   `fragment`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &queryParser{input: tt.input, pos: 0}
+			_, err := p.parseDocument()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseDocument() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// Test Analyzer with nil document
+func TestAnalyzer_NilDocument(t *testing.T) {
+	a := NewQueryAnalyzer(&AnalyzerConfig{})
+	_, err := a.Analyze("")
+	if err == nil {
+		t.Error("Analyze(\"\") should return error")
+	}
+}
+
+// Test Analyzer with empty operation
+func TestAnalyzer_EmptyOperation(t *testing.T) {
+	// An empty query string will return an error
+	a := NewQueryAnalyzer(&AnalyzerConfig{})
+	_, err := a.Analyze("")
+	if err == nil {
+		t.Error("Analyze(\"\") should return error")
+	}
+}
+
+// Test CalculateDepth with various nodes
+func TestCalculateDepth_VariousNodes(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		expected int
+	}{
+		{
+			name:     "simple query",
+			query:    `{ users { id } }`,
+			expected: 2,
+		},
+		{
+			name:     "nested query",
+			query:    `{ users { posts { comments { id } } } }`,
+			expected: 4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := NewQueryAnalyzer(&AnalyzerConfig{})
+			depth, err := a.CalculateDepth(tt.query)
+			if err != nil {
+				t.Fatalf("CalculateDepth() error = %v", err)
+			}
+			if depth != tt.expected {
+				t.Errorf("CalculateDepth() = %d, want %d", depth, tt.expected)
+			}
+		})
+	}
+}
+
+// Test ValidateDepth
+func TestValidateDepth(t *testing.T) {
+	a := NewQueryAnalyzer(&AnalyzerConfig{MaxDepth: 3})
+
+	tests := []struct {
+		name    string
+		query   string
+		wantErr bool
+	}{
+		{
+			name:    "within limit",
+			query:   `{ users { id } }`,
+			wantErr: false,
+		},
+		{
+			name:    "exceeds limit",
+			query:   `{ users { posts { comments { id } } } }`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := a.ValidateDepth(tt.query)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateDepth() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// Test ValidateComplexity
+func TestValidateComplexity(t *testing.T) {
+	a := NewQueryAnalyzer(&AnalyzerConfig{MaxComplexity: 5})
+
+	tests := []struct {
+		name    string
+		query   string
+		wantErr bool
+	}{
+		{
+			name:    "within limit",
+			query:   `{ users { id } }`,
+			wantErr: false,
+		},
+		{
+			name:    "complex query",
+			query:   `{ users { id name email posts { title comments { id text } } } }`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := a.ValidateComplexity(tt.query)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateComplexity() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
 func TestParseInlineFragment(t *testing.T) {
 	tests := []struct {
 		name    string

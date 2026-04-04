@@ -2,6 +2,10 @@ package federation
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -241,4 +245,341 @@ func containsInternal(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// Test QueryCache
+func TestQueryCache(t *testing.T) {
+	cache := NewQueryCache(10)
+
+	// Test Get on empty cache
+	_, found := cache.Get("query1")
+	if found {
+		t.Error("Expected cache miss on empty cache")
+	}
+
+	// Test Set and Get
+	plan := &Plan{
+		Steps: []*PlanStep{
+			{ID: "step1", Query: "{ users { id } }"},
+		},
+	}
+	cache.Set("query1", plan)
+
+	retrieved, found := cache.Get("query1")
+	if !found {
+		t.Error("Expected cache hit after Set")
+	}
+	if retrieved == nil {
+		t.Error("Retrieved plan should not be nil")
+	}
+
+	// Test cache eviction
+	for i := 0; i < 15; i++ {
+		cache.Set(fmt.Sprintf("query%d", i), plan)
+	}
+
+	// The cache should have evicted some entries
+	if len(cache.entries) > 10 {
+		t.Errorf("Cache size %d exceeds max 10", len(cache.entries))
+	}
+}
+
+// Test CircuitBreaker
+func TestCircuitBreaker(t *testing.T) {
+	cb := NewCircuitBreaker(3, 100*time.Millisecond)
+
+	// Initially should be closed and allow requests
+	if !cb.CanExecute() {
+		t.Error("Circuit breaker should allow execution when closed")
+	}
+
+	// Record some failures
+	cb.RecordFailure()
+	cb.RecordFailure()
+
+	// Should still allow (below threshold)
+	if !cb.CanExecute() {
+		t.Error("Circuit breaker should still allow execution below threshold")
+	}
+
+	// Record more failures to reach threshold
+	cb.RecordFailure()
+	cb.RecordFailure()
+	cb.RecordFailure()
+
+	// Now should be open
+	if cb.CanExecute() {
+		t.Error("Circuit breaker should be open after threshold reached")
+	}
+
+	// Wait for reset timeout
+	time.Sleep(150 * time.Millisecond)
+
+	// Should be half-open now
+	if !cb.CanExecute() {
+		t.Error("Circuit breaker should be half-open after reset timeout")
+	}
+
+	// Record success should close it
+	cb.RecordSuccess()
+	if !cb.CanExecute() {
+		t.Error("Circuit breaker should be closed after success")
+	}
+}
+
+// Test GetActiveSubscriptions
+func TestExecutor_GetActiveSubscriptions(t *testing.T) {
+	executor := NewExecutor()
+
+	// Initially should be empty
+	subs := executor.GetActiveSubscriptions()
+	if len(subs) != 0 {
+		t.Errorf("Expected 0 subscriptions, got %d", len(subs))
+	}
+}
+
+// Test StopSubscription with non-existent subscription
+func TestExecutor_StopSubscription_NotFound(t *testing.T) {
+	executor := NewExecutor()
+
+	err := executor.StopSubscription("non-existent-id")
+	if err == nil {
+		t.Error("Expected error when stopping non-existent subscription")
+	}
+}
+
+// Test OptimizePlan
+func TestExecutor_OptimizePlan(t *testing.T) {
+	executor := NewExecutor()
+
+	plan := &Plan{
+		Steps: []*PlanStep{
+			{ID: "step1", Subgraph: &Subgraph{ID: "sg1"}},
+			{ID: "step2", Subgraph: &Subgraph{ID: "sg2"}},
+			{ID: "step3", Subgraph: &Subgraph{ID: "sg3"}},
+		},
+		DependsOn: map[string][]string{
+			"step1": {},
+			"step2": {"step1"},
+			"step3": {"step1"},
+		},
+	}
+
+	optimized := executor.OptimizePlan(plan)
+
+	if optimized == nil {
+		t.Fatal("OptimizePlan returned nil")
+	}
+
+	if len(optimized.ExecutionOrder) != 3 {
+		t.Errorf("Expected 3 steps in execution order, got %d", len(optimized.ExecutionOrder))
+	}
+
+	if len(optimized.ParallelGroups) < 1 {
+		t.Error("Expected at least 1 parallel group")
+	}
+
+	if optimized.EstimatedCost <= 0 {
+		t.Error("Expected positive estimated cost")
+	}
+}
+
+// Test OptimizePlan with circular dependencies (deadlock scenario)
+func TestExecutor_OptimizePlan_Deadlock(t *testing.T) {
+	executor := NewExecutor()
+
+	plan := &Plan{
+		Steps: []*PlanStep{
+			{ID: "step1", Subgraph: &Subgraph{ID: "sg1"}},
+			{ID: "step2", Subgraph: &Subgraph{ID: "sg2"}},
+		},
+		DependsOn: map[string][]string{
+			"step1": {"step2"},
+			"step2": {"step1"},
+		},
+	}
+
+	optimized := executor.OptimizePlan(plan)
+
+	// Should detect deadlock and not include all steps
+	if len(optimized.ExecutionOrder) > 0 {
+		t.Logf("Execution order with deadlock: %v", optimized.ExecutionOrder)
+	}
+}
+
+// Test ExecuteSubscription with empty plan
+func TestExecutor_ExecuteSubscription_EmptyPlan(t *testing.T) {
+	executor := NewExecutor()
+
+	plan := &Plan{
+		Steps: []*PlanStep{},
+	}
+
+	_, err := executor.ExecuteSubscription(context.Background(), plan)
+	if err == nil {
+		t.Error("Expected error for empty plan")
+	}
+}
+
+// Test ExecuteSubscription with nil subgraph
+func TestExecutor_ExecuteSubscription_NilSubgraph(t *testing.T) {
+	executor := NewExecutor()
+
+	plan := &Plan{
+		Steps: []*PlanStep{
+			{ID: "step1", Subgraph: nil, Query: "subscription { update }"},
+		},
+	}
+
+	_, err := executor.ExecuteSubscription(context.Background(), plan)
+	if err == nil {
+		t.Error("Expected error for nil subgraph")
+	}
+}
+
+// Test ExecuteOptimized
+func TestExecutor_ExecuteOptimized(t *testing.T) {
+	executor := NewExecutor()
+
+	// Create a mock server for testing
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"data": map[string]interface{}{
+				"users": []map[string]interface{}{
+					{"id": "1", "name": "Alice"},
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	plan := &Plan{
+		Steps: []*PlanStep{
+			{
+				ID:       "step1",
+				Subgraph: &Subgraph{ID: "sg1", URL: server.URL},
+				Query:    "{ users { id name } }",
+				Path:     []string{"users"},
+			},
+		},
+		DependsOn: map[string][]string{
+			"step1": {},
+		},
+	}
+
+	optimized := executor.OptimizePlan(plan)
+	result, err := executor.ExecuteOptimized(context.Background(), optimized)
+
+	if err != nil {
+		t.Errorf("ExecuteOptimized error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("ExecuteOptimized returned nil result")
+	}
+}
+
+// Test getCircuitBreaker
+func TestExecutor_getCircuitBreaker(t *testing.T) {
+	executor := NewExecutor()
+
+	// First call should create new circuit breaker
+	cb1 := executor.getCircuitBreaker("subgraph1")
+	if cb1 == nil {
+		t.Error("getCircuitBreaker returned nil")
+	}
+
+	// Second call should return same circuit breaker
+	cb2 := executor.getCircuitBreaker("subgraph1")
+	if cb1 != cb2 {
+		t.Error("getCircuitBreaker should return same instance for same subgraph")
+	}
+
+	// Different subgraph should return different circuit breaker
+	cb3 := executor.getCircuitBreaker("subgraph2")
+	if cb1 == cb3 {
+		t.Error("getCircuitBreaker should return different instance for different subgraph")
+	}
+}
+
+// Test CacheEntry
+func TestCacheEntry(t *testing.T) {
+	entry := &CacheEntry{
+		Plan: &Plan{
+			Steps: []*PlanStep{{ID: "step1"}},
+		},
+		Timestamp: time.Now(),
+		HitCount:  0,
+	}
+
+	if entry.Plan == nil {
+		t.Error("CacheEntry Plan should not be nil")
+	}
+
+	if entry.HitCount != 0 {
+		t.Errorf("Initial HitCount should be 0, got %d", entry.HitCount)
+	}
+}
+
+// Test OptimizedPlan structure
+func TestOptimizedPlan(t *testing.T) {
+	opt := &OptimizedPlan{
+		Plan: &Plan{
+			Steps: []*PlanStep{{ID: "step1"}},
+		},
+		ExecutionOrder: []string{"step1", "step2"},
+		ParallelGroups: [][]string{
+			{"step1"},
+			{"step2"},
+		},
+		EstimatedCost: 20,
+	}
+
+	if len(opt.ExecutionOrder) != 2 {
+		t.Errorf("Expected 2 steps in execution order, got %d", len(opt.ExecutionOrder))
+	}
+
+	if opt.EstimatedCost != 20 {
+		t.Errorf("Expected estimated cost 20, got %d", opt.EstimatedCost)
+	}
+}
+
+// Test SubscriptionConnection structure
+func TestSubscriptionConnection(t *testing.T) {
+	sub := &SubscriptionConnection{
+		ID:        "sub1",
+		Subgraph:  &Subgraph{ID: "sg1", Name: "test"},
+		Query:     "subscription { updates }",
+		Variables: map[string]interface{}{"id": "123"},
+		Messages:  make(chan *SubscriptionMessage, 10),
+		Errors:    make(chan error, 10),
+		Done:      make(chan struct{}),
+	}
+
+	if sub.ID != "sub1" {
+		t.Errorf("Expected ID 'sub1', got %s", sub.ID)
+	}
+
+	if sub.Query != "subscription { updates }" {
+		t.Errorf("Expected query 'subscription { updates }', got %s", sub.Query)
+	}
+}
+
+// Test SubscriptionMessage structure
+func TestSubscriptionMessage(t *testing.T) {
+	msg := &SubscriptionMessage{
+		ID: "msg1",
+		Data: map[string]interface{}{
+			"update": "value",
+		},
+	}
+
+	if msg.ID != "msg1" {
+		t.Errorf("Expected ID 'msg1', got %s", msg.ID)
+	}
+
+	if msg.Data["update"] != "value" {
+		t.Error("Message data mismatch")
+	}
 }

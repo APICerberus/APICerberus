@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,7 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
 
@@ -1374,4 +1377,152 @@ func TestTranscoder_IsLoaded_StateTransitions(t *testing.T) {
 	// If load succeeded, it should be true
 	// If load failed, it should still be false
 	_ = tc.IsLoaded() // Just verify it doesn't panic
+}
+
+// Test StreamProxy with real gRPC connection
+func TestStreamProxy_WithConnection(t *testing.T) {
+	// Create a gRPC server
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skipf("Failed to create listener: %v", err)
+	}
+	defer lis.Close()
+
+	grpcServer := grpc.NewServer()
+	defer grpcServer.Stop()
+
+	go func() {
+		grpcServer.Serve(lis)
+	}()
+
+	// Give server time to start
+	time.Sleep(10 * time.Millisecond)
+
+	// Create client connection
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Skipf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	sp := NewStreamProxy()
+
+	t.Run("ProxyServerStream executes without panic", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/test.Service/Method", strings.NewReader(`{"test": "data"}`))
+		req.Header.Set("Content-Type", "application/grpc")
+
+		// This will fail since the method doesn't exist, but it shouldn't panic
+		sp.ProxyServerStream(rec, req, conn, "/test.Service/Method")
+	})
+
+	t.Run("ProxyClientStream executes without panic", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/test.Service/Method", strings.NewReader(`{"test": "data"}`))
+		req.Header.Set("Content-Type", "application/grpc")
+
+		sp.ProxyClientStream(rec, req, conn, "/test.Service/Method")
+	})
+
+	t.Run("ProxyBidiStream executes without panic", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/test.Service/Method", strings.NewReader(`{"test": "data"}`))
+		req.Header.Set("Content-Type", "application/grpc")
+
+		sp.ProxyBidiStream(rec, req, conn, "/test.Service/Method")
+	})
+}
+
+// Test writeStreamError function
+func TestWriteStreamError_Extended(t *testing.T) {
+	t.Run("with gRPC status error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		st := status.New(codes.NotFound, "resource not found")
+		writeStreamError(rec, st.Err())
+
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("Expected status %d, got %d", http.StatusNotFound, rec.Code)
+		}
+	})
+
+	t.Run("with internal error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		writeStreamError(rec, io.EOF)
+
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, rec.Code)
+		}
+	})
+}
+
+// Test handleTranscoding error paths
+func TestProxy_handleTranscoding_Errors(t *testing.T) {
+	t.Run("nil transcoder returns service unavailable", func(t *testing.T) {
+		proxy := &Proxy{}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/test.Service/Method", strings.NewReader(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+
+		proxy.handleTranscoding(rec, req)
+
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("Expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, "not available") {
+			t.Errorf("Body should contain 'not available', got %s", body)
+		}
+	})
+
+	t.Run("unloaded transcoder returns service unavailable", func(t *testing.T) {
+		tc := NewTranscoder()
+		proxy := &Proxy{Transcoder: tc}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/test.Service/Method", strings.NewReader(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+
+		proxy.handleTranscoding(rec, req)
+
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("Expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+		}
+	})
+
+	t.Run("invalid JSON body returns bad request", func(t *testing.T) {
+		// Create a reader that returns an error
+		proxy := &Proxy{}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/test.Service/Method", &failingReader{})
+		req.Header.Set("Content-Type", "application/json")
+
+		proxy.handleTranscoding(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("Expected status %d, got %d", http.StatusBadRequest, rec.Code)
+		}
+	})
+
+	t.Run("path without leading slash", func(t *testing.T) {
+		proxy := &Proxy{}
+		rec := httptest.NewRecorder()
+		// httptest.NewRequest requires a valid URL with leading slash
+		req := httptest.NewRequest(http.MethodPost, "/test.Service/Method", strings.NewReader(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+		// Modify the URL path to remove leading slash
+		req.URL.Path = "test.Service/Method"
+
+		proxy.handleTranscoding(rec, req)
+
+		// Should handle path without leading slash
+		if rec.Code == http.StatusOK {
+			t.Error("Should not succeed with nil transcoder")
+		}
+	})
+}
+
+// failingReader is an io.Reader that always returns an error
+type failingReader struct{}
+
+func (e *failingReader) Read(p []byte) (n int, err error) {
+	return 0, io.ErrUnexpectedEOF
 }

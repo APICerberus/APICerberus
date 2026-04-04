@@ -829,3 +829,165 @@ func TestAsStringSlice(t *testing.T) {
 		})
 	}
 }
+
+// Test plugin interface methods
+func TestCorrelationID_Methods(t *testing.T) {
+	plugin := &CorrelationID{}
+
+	if plugin.Name() != "correlation-id" {
+		t.Errorf("Name() = %v, want correlation-id", plugin.Name())
+	}
+
+	if plugin.Phase() != PhasePreAuth {
+		t.Errorf("Phase() = %v, want PhasePreAuth", plugin.Phase())
+	}
+
+	if plugin.Priority() != 0 {
+		t.Errorf("Priority() = %v, want 0", plugin.Priority())
+	}
+}
+
+func TestTimeout_Methods(t *testing.T) {
+	timeout := NewTimeout(TimeoutConfig{Duration: time.Second})
+
+	if timeout.Name() != "timeout" {
+		t.Errorf("Name() = %v, want timeout", timeout.Name())
+	}
+
+	if timeout.Phase() != PhaseProxy {
+		t.Errorf("Phase() = %v, want PhaseProxy", timeout.Phase())
+	}
+
+	if timeout.Priority() != 10 {
+		t.Errorf("Priority() = %v, want 10", timeout.Priority())
+	}
+}
+
+func TestCompression_Methods(t *testing.T) {
+	comp := NewCompression(CompressionConfig{})
+
+	if comp.Name() != "compression" {
+		t.Errorf("Name() = %v, want compression", comp.Name())
+	}
+
+	if comp.Phase() != PhasePostProxy {
+		t.Errorf("Phase() = %v, want PhasePostProxy", comp.Phase())
+	}
+}
+
+func TestCompression_DefaultLevel(t *testing.T) {
+	// Test with default level (0 means no compression)
+	comp := NewCompression(CompressionConfig{})
+	if comp == nil {
+		t.Error("NewCompression should not return nil")
+	}
+}
+
+// Test simple plugin interface methods
+func TestPluginInterfaceMethods(t *testing.T) {
+	t.Run("CorrelationID", func(t *testing.T) {
+		p := &CorrelationID{}
+		if p.Name() != "correlation-id" {
+			t.Errorf("Name() = %v", p.Name())
+		}
+		if p.Phase() != PhasePreAuth {
+			t.Errorf("Phase() = %v", p.Phase())
+		}
+		if p.Priority() != 0 {
+			t.Errorf("Priority() = %v", p.Priority())
+		}
+	})
+
+	t.Run("Compression", func(t *testing.T) {
+		p := NewCompression(CompressionConfig{})
+		if p.Name() != "compression" {
+			t.Errorf("Name() = %v", p.Name())
+		}
+		if p.Phase() != PhasePostProxy {
+			t.Errorf("Phase() = %v", p.Phase())
+		}
+	})
+
+	t.Run("Timeout", func(t *testing.T) {
+		p := NewTimeout(TimeoutConfig{Duration: time.Second})
+		if p.Name() != "timeout" {
+			t.Errorf("Name() = %v", p.Name())
+		}
+		if p.Phase() != PhaseProxy {
+			t.Errorf("Phase() = %v", p.Phase())
+		}
+		if p.Priority() != 10 {
+			t.Errorf("Priority() = %v", p.Priority())
+		}
+	})
+
+	t.Run("BotDetect", func(t *testing.T) {
+		p := NewBotDetect(BotDetectConfig{})
+		if p.Name() != "bot-detect" {
+			t.Errorf("Name() = %v", p.Name())
+		}
+		if p.Phase() != PhasePreAuth {
+			t.Errorf("Phase() = %v", p.Phase())
+		}
+	})
+
+	t.Run("CircuitBreaker", func(t *testing.T) {
+		p := NewCircuitBreaker(CircuitBreakerConfig{})
+		if p.Name() != "circuit-breaker" {
+			t.Errorf("Name() = %v", p.Name())
+		}
+		if p.Phase() != PhaseProxy {
+			t.Errorf("Phase() = %v", p.Phase())
+		}
+	})
+
+	t.Run("CORS", func(t *testing.T) {
+		p := NewCORS(CORSConfig{})
+		if p.Name() != "cors" {
+			t.Errorf("Name() = %v", p.Name())
+		}
+		if p.Phase() != PhasePreAuth {
+			t.Errorf("Phase() = %v", p.Phase())
+		}
+	})
+
+	t.Run("Redirect", func(t *testing.T) {
+		p := NewRedirect(RedirectConfig{})
+		if p.Name() != "redirect" {
+			t.Errorf("Name() = %v", p.Name())
+		}
+		if p.Phase() != PhasePreProxy {
+			t.Errorf("Phase() = %v", p.Phase())
+		}
+	})
+
+	t.Run("RequestSizeLimit", func(t *testing.T) {
+		p := NewRequestSizeLimit(RequestSizeLimitConfig{})
+		if p.Name() != "request-size-limit" {
+			t.Errorf("Name() = %v", p.Name())
+		}
+		if p.Phase() != PhasePreProxy {
+			t.Errorf("Phase() = %v", p.Phase())
+		}
+	})
+
+	t.Run("ResponseTransform", func(t *testing.T) {
+		p := NewResponseTransform(ResponseTransformConfig{})
+		if p.Name() != "response-transform" {
+			t.Errorf("Name() = %v", p.Name())
+		}
+		if p.Phase() != PhasePostProxy {
+			t.Errorf("Phase() = %v", p.Phase())
+		}
+	})
+
+	t.Run("URLRewrite", func(t *testing.T) {
+		p, _ := NewURLRewrite(URLRewriteConfig{})
+		if p.Name() != "url-rewrite" {
+			t.Errorf("Name() = %v", p.Name())
+		}
+		if p.Phase() != PhasePreProxy {
+			t.Errorf("Phase() = %v", p.Phase())
+		}
+	})
+}

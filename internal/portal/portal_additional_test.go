@@ -1875,3 +1875,410 @@ func TestResolveGatewayBaseURL(t *testing.T) {
 		})
 	}
 }
+
+// Test listMyLogs error paths
+func TestListMyLogs_Errors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unauthorized", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		// Request without session
+		resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/logs", nil, nil)
+		assertPortalStatus(t, resp, http.StatusUnauthorized)
+	})
+}
+
+// Test getMyLogDetail error paths
+func TestGetMyLogDetail_Errors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unauthorized", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/logs/123", nil, nil)
+		assertPortalStatus(t, resp, http.StatusUnauthorized)
+	})
+
+	t.Run("missing log id", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+		createPortalTestUser(t, st, "log-detail@example.com", "portal-pass")
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		// Login first
+		loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+			"email":    "log-detail@example.com",
+			"password": "portal-pass",
+		})
+		sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+		// Request with empty ID
+		resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/logs/  ", []*http.Cookie{sessionCookie}, nil)
+		assertPortalStatus(t, resp, http.StatusBadRequest)
+	})
+}
+
+// Test myBalance error paths
+func TestMyBalance_Errors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unauthorized", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/credits/balance", nil, nil)
+		assertPortalStatus(t, resp, http.StatusUnauthorized)
+	})
+}
+
+// Test myTransactions error paths
+func TestMyTransactions_Errors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unauthorized", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/credits/transactions", nil, nil)
+		assertPortalStatus(t, resp, http.StatusUnauthorized)
+	})
+}
+
+// Test listMyAPIKeys error paths
+func TestListMyAPIKeys_Errors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unauthorized", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/api-keys", nil, nil)
+		assertPortalStatus(t, resp, http.StatusUnauthorized)
+	})
+}
+
+// Test changePassword error paths
+func TestChangePassword_Errors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unauthorized", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/auth/password", nil, map[string]any{
+			"old_password": "old",
+			"new_password": "new",
+		})
+		assertPortalStatus(t, resp, http.StatusUnauthorized)
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+		createPortalTestUser(t, st, "change-pwd@example.com", "portal-pass")
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		// Login first
+		loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+			"email":    "change-pwd@example.com",
+			"password": "portal-pass",
+		})
+		sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+		// Send invalid JSON
+		req, _ := http.NewRequest(http.MethodPut, httpSrv.URL+"/portal/api/v1/auth/password", strings.NewReader(`{"invalid json`))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(sessionCookie)
+		client := httpSrv.Client()
+		resp, _ := client.Do(req)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("Status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+		}
+	})
+}
+
+// Test renameMyAPIKey error paths
+func TestRenameMyAPIKey_Errors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unauthorized", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/api-keys/123", nil, map[string]any{
+			"name": "newname",
+		})
+		assertPortalStatus(t, resp, http.StatusUnauthorized)
+	})
+
+	t.Run("missing key id", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+		createPortalTestUser(t, st, "rename-key@example.com", "portal-pass")
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		// Login first
+		loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+			"email":    "rename-key@example.com",
+			"password": "portal-pass",
+		})
+		sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+		resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/api-keys/  ", []*http.Cookie{sessionCookie}, map[string]any{
+			"name": "newname",
+		})
+		assertPortalStatus(t, resp, http.StatusBadRequest)
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+		createPortalTestUser(t, st, "rename-key2@example.com", "portal-pass")
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		// Login first
+		loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+			"email":    "rename-key2@example.com",
+			"password": "portal-pass",
+		})
+		sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+		// Send invalid JSON
+		req, _ := http.NewRequest(http.MethodPut, httpSrv.URL+"/portal/api/v1/api-keys/123", strings.NewReader(`{"invalid`))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(sessionCookie)
+		client := httpSrv.Client()
+		resp, _ := client.Do(req)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("Status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+		}
+	})
+}
+
+// Test removeMyIP error paths
+func TestRemoveMyIP_Errors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unauthorized", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodDelete, httpSrv.URL+"/portal/api/v1/security/ip-whitelist/192.168.1.1", nil, nil)
+		assertPortalStatus(t, resp, http.StatusUnauthorized)
+	})
+
+	t.Run("missing ip", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+		createPortalTestUser(t, st, "remove-ip@example.com", "portal-pass")
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		// Login first
+		loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+			"email":    "remove-ip@example.com",
+			"password": "portal-pass",
+		})
+		sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+		resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodDelete, httpSrv.URL+"/portal/api/v1/security/ip-whitelist/  ", []*http.Cookie{sessionCookie}, nil)
+		assertPortalStatus(t, resp, http.StatusBadRequest)
+	})
+}
+
+// Test addMyIP error paths
+func TestAddMyIP_Errors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unauthorized", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/security/ip-whitelist", nil, map[string]any{
+			"ip": "192.168.1.1",
+		})
+		assertPortalStatus(t, resp, http.StatusUnauthorized)
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+		createPortalTestUser(t, st, "add-ip@example.com", "portal-pass")
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		// Login first
+		loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+			"email":    "add-ip@example.com",
+			"password": "portal-pass",
+		})
+		sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+		// Send invalid JSON
+		req, _ := http.NewRequest(http.MethodPost, httpSrv.URL+"/portal/api/v1/security/ip-whitelist", strings.NewReader(`{"invalid`))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(sessionCookie)
+		client := httpSrv.Client()
+		resp, _ := client.Do(req)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("Status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+		}
+	})
+}
+
+// Test listMyIPs error paths
+func TestListMyIPs_Errors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unauthorized", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/security/ip-whitelist", nil, nil)
+		assertPortalStatus(t, resp, http.StatusUnauthorized)
+	})
+}
+
+// Test myActivity error paths
+func TestMyActivity_Errors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unauthorized", func(t *testing.T) {
+		t.Parallel()
+		cfg, st := openPortalTestStore(t)
+		defer st.Close()
+
+		srv, err := NewServer(cfg, st)
+		if err != nil {
+			t.Fatalf("NewServer error: %v", err)
+		}
+		httpSrv := httptest.NewServer(srv)
+		defer httpSrv.Close()
+
+		resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/security/activity", nil, nil)
+		assertPortalStatus(t, resp, http.StatusUnauthorized)
+	})
+}

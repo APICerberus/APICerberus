@@ -16,7 +16,116 @@ import (
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"golang.org/x/crypto/acme"
 )
+
+// mockACMEClient implements ACMEClient interface for testing
+type mockACMEClient struct {
+	authorizeOrderFunc      func(ctx context.Context, id []acme.AuthzID, opt ...acme.OrderOption) (*acme.Order, error)
+	getAuthorizationFunc    func(ctx context.Context, url string) (*acme.Authorization, error)
+	http01ChallengeResponse func(token string) (string, error)
+	acceptFunc              func(ctx context.Context, chal *acme.Challenge) (*acme.Challenge, error)
+	waitAuthorizationFunc   func(ctx context.Context, url string) (*acme.Authorization, error)
+	waitOrderFunc           func(ctx context.Context, url string) (*acme.Order, error)
+	createOrderCertFunc     func(ctx context.Context, url string, csr []byte, fetchAlternateChain bool) ([][]byte, string, error)
+}
+
+func (m *mockACMEClient) AuthorizeOrder(ctx context.Context, id []acme.AuthzID, opt ...acme.OrderOption) (*acme.Order, error) {
+	if m.authorizeOrderFunc != nil {
+		return m.authorizeOrderFunc(ctx, id, opt...)
+	}
+	return &acme.Order{
+		URI:       "https://acme.test/order/1",
+		AuthzURLs: []string{"https://acme.test/authz/1"},
+	}, nil
+}
+
+func (m *mockACMEClient) GetAuthorization(ctx context.Context, url string) (*acme.Authorization, error) {
+	if m.getAuthorizationFunc != nil {
+		return m.getAuthorizationFunc(ctx, url)
+	}
+	return &acme.Authorization{
+		URI:    url,
+		Status: acme.StatusPending,
+		Challenges: []*acme.Challenge{
+			{
+				Type:  "http-01",
+				Token: "test-token",
+				URI:   "https://acme.test/challenge/1",
+			},
+		},
+	}, nil
+}
+
+func (m *mockACMEClient) HTTP01ChallengeResponse(token string) (string, error) {
+	if m.http01ChallengeResponse != nil {
+		return m.http01ChallengeResponse(token)
+	}
+	return "test-response", nil
+}
+
+func (m *mockACMEClient) Accept(ctx context.Context, chal *acme.Challenge) (*acme.Challenge, error) {
+	if m.acceptFunc != nil {
+		return m.acceptFunc(ctx, chal)
+	}
+	return chal, nil
+}
+
+func (m *mockACMEClient) WaitAuthorization(ctx context.Context, url string) (*acme.Authorization, error) {
+	if m.waitAuthorizationFunc != nil {
+		return m.waitAuthorizationFunc(ctx, url)
+	}
+	return &acme.Authorization{
+		URI:    url,
+		Status: acme.StatusValid,
+	}, nil
+}
+
+func (m *mockACMEClient) WaitOrder(ctx context.Context, url string) (*acme.Order, error) {
+	if m.waitOrderFunc != nil {
+		return m.waitOrderFunc(ctx, url)
+	}
+	return &acme.Order{
+		URI:         url,
+		Status:      acme.StatusReady,
+		FinalizeURL: "https://acme.test/finalize/1",
+	}, nil
+}
+
+func (m *mockACMEClient) CreateOrderCert(ctx context.Context, url string, csr []byte, fetchAlternateChain bool) ([][]byte, string, error) {
+	if m.createOrderCertFunc != nil {
+		return m.createOrderCertFunc(ctx, url, csr, fetchAlternateChain)
+	}
+	// Generate a simple test certificate
+	cert := generateTestCertForDomain("test.example.com")
+	return [][]byte{cert}, "", nil
+}
+
+// Helper to create provider with mock client
+func newTestACMEProviderWithMock(cfg *config.Config, raftNode RaftNode, mockClient ACMEClient) (*ACMEProvider, error) {
+	provider, err := NewACMEProvider(cfg, raftNode)
+	if err != nil {
+		return nil, err
+	}
+	// Replace the client with mock
+	provider.client = mockClient
+	return provider, nil
+}
+
+// Helper to generate test certificate bytes for mock
+func generateTestCertForDomain(domain string) []byte {
+	// Generate a minimal test certificate
+	cert := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		DNSNames:     []string{domain},
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(90 * 24 * time.Hour),
+	}
+
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	certDER, _ := x509.CreateCertificate(rand.Reader, cert, cert, &key.PublicKey, key)
+	return certDER
+}
 
 func TestACMEProvider_ObtainCertificate_NotLeader(t *testing.T) {
 	raftNode := &mockRaftNode{
@@ -4789,5 +4898,651 @@ func TestACMEProvider_ObtainCertificate_NeedsRenewal(t *testing.T) {
 func TestACMEProvider_completeChallenge_NilClientExtended(t *testing.T) {
 	// This causes a panic because the ACME client doesn't handle nil gracefully
 	t.Skip("Nil client causes panic - expected behavior")
+}
+
+// Test storeChallengeResponse - currently a no-op but should not panic
+func TestACMEProvider_StoreChallengeResponse_Additional(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// This is currently a no-op, but verify it doesn't panic
+	provider.storeChallengeResponse("test-token", "test-response")
+	provider.storeChallengeResponse("", "")
+	provider.storeChallengeResponse("token-with-special-chars-123!@#", "response-with-special-chars")
+}
+
+// Test ObtainCertificate with very short timeout
+func TestACMEProvider_ObtainCertificate_ShortTimeout(t *testing.T) {
+	raftNode := &mockRaftNode{
+		isLeader: true,
+		acquireLockFunc: func(domain string, timeout time.Duration) (bool, error) {
+			return true, nil
+		},
+	}
+
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+		Cluster: config.ClusterConfig{
+			CertificateSync: config.CertificateSyncConfig{
+				Enabled:         true,
+				RaftReplication: true,
+			},
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, raftNode)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// Very short timeout to ensure it fails quickly
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel()
+
+	// Should fail due to timeout
+	_, err = provider.ObtainCertificate(ctx, "test.example.com")
+	if err == nil {
+		t.Error("ObtainCertificate should return error with short timeout")
+	}
+}
+
+// Test ObtainCertificate with domain variations
+func TestACMEProvider_ObtainCertificate_DomainVariations(t *testing.T) {
+	raftNode := &mockRaftNode{
+		isLeader: true,
+		acquireLockFunc: func(domain string, timeout time.Duration) (bool, error) {
+			return true, nil
+		},
+	}
+
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+		Cluster: config.ClusterConfig{
+			CertificateSync: config.CertificateSyncConfig{
+				Enabled:         true,
+				RaftReplication: true,
+			},
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, raftNode)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// Test with empty domain
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// Should fail because empty domain is invalid for CSR
+	_, err = provider.ObtainCertificate(ctx, "")
+	if err == nil {
+		t.Error("ObtainCertificate should return error for empty domain")
+	}
+}
+
+// Test ObtainCertificate with Raft disabled
+func TestACMEProvider_ObtainCertificate_NoRaft(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+		// No Raft config - useRaftSync will be false
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// With no Raft, should skip lock acquisition and go directly to CSR generation
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	_, err = provider.ObtainCertificate(ctx, "test.example.com")
+	// Will fail on ACME calls but tests the no-Raft path
+	if err == nil {
+		t.Error("ObtainCertificate should return error")
+	}
+}
+
+// Test completeChallenge error handling
+func TestACMEProvider_completeChallenge_MoreErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// Test with invalid URL
+	ctx := context.Background()
+	err = provider.completeChallenge(ctx, "https://invalid-url/test")
+	if err == nil {
+		t.Error("completeChallenge should return error for invalid authzURL")
+	}
+}
+
+// Test ObtainCertificate with mock ACME client - success path
+func TestACMEProvider_ObtainCertificate_WithMock_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// Replace with mock client
+	mockClient := &mockACMEClient{}
+	provider.client = mockClient
+
+	ctx := context.Background()
+	cert, err := provider.ObtainCertificate(ctx, "test.example.com")
+	if err != nil {
+		t.Errorf("ObtainCertificate() error = %v", err)
+	}
+	if cert == nil {
+		t.Error("ObtainCertificate() returned nil certificate")
+	}
+	if cert != nil && cert.Domain != "test.example.com" {
+		t.Errorf("Domain = %v, want test.example.com", cert.Domain)
+	}
+}
+
+// Test ObtainCertificate with mock - already authorized (skip challenge)
+func TestACMEProvider_ObtainCertificate_WithMock_AlreadyAuthorized(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// Mock returns already valid authorization
+	mockClient := &mockACMEClient{
+		getAuthorizationFunc: func(ctx context.Context, url string) (*acme.Authorization, error) {
+			return &acme.Authorization{
+				URI:    url,
+				Status: acme.StatusValid, // Already valid
+			}, nil
+		},
+	}
+	provider.client = mockClient
+
+	ctx := context.Background()
+	cert, err := provider.ObtainCertificate(ctx, "test.example.com")
+	if err != nil {
+		t.Errorf("ObtainCertificate() error = %v", err)
+	}
+	if cert == nil {
+		t.Error("ObtainCertificate() returned nil certificate")
+	}
+}
+
+// Test ObtainCertificate with mock - no supported challenge
+func TestACMEProvider_ObtainCertificate_WithMock_NoChallenge(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// Mock returns authorization with no http-01 challenge
+	mockClient := &mockACMEClient{
+		getAuthorizationFunc: func(ctx context.Context, url string) (*acme.Authorization, error) {
+			return &acme.Authorization{
+				URI:    url,
+				Status: acme.StatusPending,
+				Challenges: []*acme.Challenge{
+					{Type: "dns-01", Token: "dns-token"}, // No http-01
+				},
+			}, nil
+		},
+	}
+	provider.client = mockClient
+
+	ctx := context.Background()
+	_, err = provider.ObtainCertificate(ctx, "test.example.com")
+	if err == nil {
+		t.Error("ObtainCertificate should return error when no supported challenge found")
+	}
+}
+
+// Test ObtainCertificate with mock - AuthorizeOrder error
+func TestACMEProvider_ObtainCertificate_WithMock_AuthorizeError(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	mockClient := &mockACMEClient{
+		authorizeOrderFunc: func(ctx context.Context, id []acme.AuthzID, opt ...acme.OrderOption) (*acme.Order, error) {
+			return nil, fmt.Errorf("mock authorize order error")
+		},
+	}
+	provider.client = mockClient
+
+	ctx := context.Background()
+	_, err = provider.ObtainCertificate(ctx, "test.example.com")
+	if err == nil {
+		t.Error("ObtainCertificate should return error when AuthorizeOrder fails")
+	}
+}
+
+// Test ObtainCertificate with mock - GetAuthorization error
+func TestACMEProvider_ObtainCertificate_WithMock_GetAuthError(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	mockClient := &mockACMEClient{
+		getAuthorizationFunc: func(ctx context.Context, url string) (*acme.Authorization, error) {
+			return nil, fmt.Errorf("mock get authorization error")
+		},
+	}
+	provider.client = mockClient
+
+	ctx := context.Background()
+	_, err = provider.ObtainCertificate(ctx, "test.example.com")
+	if err == nil {
+		t.Error("ObtainCertificate should return error when GetAuthorization fails")
+	}
+}
+
+// Test ObtainCertificate with mock - Accept challenge error
+func TestACMEProvider_ObtainCertificate_WithMock_AcceptError(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	mockClient := &mockACMEClient{
+		acceptFunc: func(ctx context.Context, chal *acme.Challenge) (*acme.Challenge, error) {
+			return nil, fmt.Errorf("mock accept error")
+		},
+	}
+	provider.client = mockClient
+
+	ctx := context.Background()
+	_, err = provider.ObtainCertificate(ctx, "test.example.com")
+	if err == nil {
+		t.Error("ObtainCertificate should return error when Accept fails")
+	}
+}
+
+// Test ObtainCertificate with mock - WaitAuthorization error
+func TestACMEProvider_ObtainCertificate_WithMock_WaitAuthError(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	mockClient := &mockACMEClient{
+		waitAuthorizationFunc: func(ctx context.Context, url string) (*acme.Authorization, error) {
+			return nil, fmt.Errorf("mock wait authorization error")
+		},
+	}
+	provider.client = mockClient
+
+	ctx := context.Background()
+	_, err = provider.ObtainCertificate(ctx, "test.example.com")
+	if err == nil {
+		t.Error("ObtainCertificate should return error when WaitAuthorization fails")
+	}
+}
+
+// Test ObtainCertificate with mock - WaitOrder error
+func TestACMEProvider_ObtainCertificate_WithMock_WaitOrderError(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	mockClient := &mockACMEClient{
+		waitOrderFunc: func(ctx context.Context, url string) (*acme.Order, error) {
+			return nil, fmt.Errorf("mock wait order error")
+		},
+	}
+	provider.client = mockClient
+
+	ctx := context.Background()
+	_, err = provider.ObtainCertificate(ctx, "test.example.com")
+	if err == nil {
+		t.Error("ObtainCertificate should return error when WaitOrder fails")
+	}
+}
+
+// Test ObtainCertificate with mock - CreateOrderCert error
+func TestACMEProvider_ObtainCertificate_WithMock_CreateCertError(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	mockClient := &mockACMEClient{
+		createOrderCertFunc: func(ctx context.Context, url string, csr []byte, fetchAlternateChain bool) ([][]byte, string, error) {
+			return nil, "", fmt.Errorf("mock create cert error")
+		},
+	}
+	provider.client = mockClient
+
+	ctx := context.Background()
+	_, err = provider.ObtainCertificate(ctx, "test.example.com")
+	if err == nil {
+		t.Error("ObtainCertificate should return error when CreateOrderCert fails")
+	}
+}
+
+// Test ObtainCertificate with mock - empty cert chains
+func TestACMEProvider_ObtainCertificate_WithMock_EmptyCertChains(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	mockClient := &mockACMEClient{
+		createOrderCertFunc: func(ctx context.Context, url string, csr []byte, fetchAlternateChain bool) ([][]byte, string, error) {
+			return [][]byte{}, "", nil // Empty chains
+		},
+	}
+	provider.client = mockClient
+
+	ctx := context.Background()
+	_, err = provider.ObtainCertificate(ctx, "test.example.com")
+	if err == nil {
+		t.Error("ObtainCertificate should return error when cert chains are empty")
+	}
+}
+
+// Test completeChallenge with mock client - success
+func TestACMEProvider_completeChallenge_WithMock_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	mockClient := &mockACMEClient{}
+	provider.client = mockClient
+
+	ctx := context.Background()
+	err = provider.completeChallenge(ctx, "https://acme.test/authz/1")
+	if err != nil {
+		t.Errorf("completeChallenge() error = %v", err)
+	}
+}
+
+// Test completeChallenge - already valid (no challenge needed)
+func TestACMEProvider_completeChallenge_WithMock_AlreadyValid(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	mockClient := &mockACMEClient{
+		getAuthorizationFunc: func(ctx context.Context, url string) (*acme.Authorization, error) {
+			return &acme.Authorization{
+				URI:    url,
+				Status: acme.StatusValid, // Already valid
+			}, nil
+		},
+	}
+	provider.client = mockClient
+
+	ctx := context.Background()
+	err = provider.completeChallenge(ctx, "https://acme.test/authz/1")
+	if err != nil {
+		t.Errorf("completeChallenge() error = %v", err)
+	}
+}
+
+// Test completeChallenge - GetAuthorization error
+func TestACMEProvider_completeChallenge_WithMock_GetAuthError(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	mockClient := &mockACMEClient{
+		getAuthorizationFunc: func(ctx context.Context, url string) (*acme.Authorization, error) {
+			return nil, fmt.Errorf("mock get auth error")
+		},
+	}
+	provider.client = mockClient
+
+	ctx := context.Background()
+	err = provider.completeChallenge(ctx, "https://acme.test/authz/1")
+	if err == nil {
+		t.Error("completeChallenge should return error when GetAuthorization fails")
+	}
+}
+
+// Test completeChallenge - no supported challenge
+func TestACMEProvider_completeChallenge_WithMock_NoChallenge(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	mockClient := &mockACMEClient{
+		getAuthorizationFunc: func(ctx context.Context, url string) (*acme.Authorization, error) {
+			return &acme.Authorization{
+				URI:    url,
+				Status: acme.StatusPending,
+				Challenges: []*acme.Challenge{
+					{Type: "dns-01", Token: "token"}, // No http-01
+				},
+			}, nil
+		},
+	}
+	provider.client = mockClient
+
+	ctx := context.Background()
+	err = provider.completeChallenge(ctx, "https://acme.test/authz/1")
+	if err == nil {
+		t.Error("completeChallenge should return error when no supported challenge")
+	}
+}
+
+// Test completeChallenge - HTTP01ChallengeResponse error
+func TestACMEProvider_completeChallenge_WithMock_HTTP01Error(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	mockClient := &mockACMEClient{
+		http01ChallengeResponse: func(token string) (string, error) {
+			return "", fmt.Errorf("mock http01 error")
+		},
+	}
+	provider.client = mockClient
+
+	ctx := context.Background()
+	err = provider.completeChallenge(ctx, "https://acme.test/authz/1")
+	if err == nil {
+		t.Error("completeChallenge should return error when HTTP01ChallengeResponse fails")
+	}
 }
 

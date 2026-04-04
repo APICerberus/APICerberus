@@ -21,10 +21,21 @@ import (
 	"golang.org/x/crypto/acme"
 )
 
+// ACMEClient interface for ACME operations (allows mocking in tests)
+type ACMEClient interface {
+	AuthorizeOrder(ctx context.Context, id []acme.AuthzID, opt ...acme.OrderOption) (*acme.Order, error)
+	GetAuthorization(ctx context.Context, url string) (*acme.Authorization, error)
+	HTTP01ChallengeResponse(token string) (string, error)
+	Accept(ctx context.Context, chal *acme.Challenge) (*acme.Challenge, error)
+	WaitAuthorization(ctx context.Context, url string) (*acme.Authorization, error)
+	WaitOrder(ctx context.Context, url string) (*acme.Order, error)
+	CreateOrderCert(ctx context.Context, url string, csr []byte, fetchAlternateChain bool) ([][]byte, string, error)
+}
+
 // ACMEProvider implements automatic certificate management using ACME/Let's Encrypt
 type ACMEProvider struct {
 	mu          sync.RWMutex
-	client      *acme.Client
+	client      ACMEClient
 	accountKey  crypto.Signer
 	account     *acme.Account
 	directoryURL string

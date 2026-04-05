@@ -198,6 +198,73 @@ func (h *Histogram) Observe(v float64) {
 	h.count++
 }
 
+// LabeledCounter is a counter with label values.
+type LabeledCounter struct {
+	counter *Counter
+	labels  map[string]string
+}
+
+// Inc increments the labeled counter.
+func (lc *LabeledCounter) Inc() {
+	lc.counter.Inc()
+}
+
+// LabeledGauge is a gauge with label values.
+type LabeledGauge struct {
+	gauge  *Gauge
+	labels map[string]string
+}
+
+// Set sets the labeled gauge value.
+func (lg *LabeledGauge) Set(v float64) {
+	lg.gauge.Set(v)
+}
+
+// Inc increments the labeled gauge.
+func (lg *LabeledGauge) Inc() {
+	lg.gauge.Inc()
+}
+
+// Dec decrements the labeled gauge.
+func (lg *LabeledGauge) Dec() {
+	lg.gauge.Dec()
+}
+
+// LabeledHistogram is a histogram with label values.
+type LabeledHistogram struct {
+	histogram *Histogram
+	labels    map[string]string
+}
+
+// Observe adds a value to the labeled histogram.
+func (lh *LabeledHistogram) Observe(v float64) {
+	lh.histogram.Observe(v)
+}
+
+// WithLabels creates a labeled counter instance.
+func (c *Counter) WithLabels(labels map[string]string) *LabeledCounter {
+	return &LabeledCounter{
+		counter: c,
+		labels:  labels,
+	}
+}
+
+// WithLabels creates a labeled gauge instance.
+func (g *Gauge) WithLabels(labels map[string]string) *LabeledGauge {
+	return &LabeledGauge{
+		gauge:  g,
+		labels: labels,
+	}
+}
+
+// WithLabels creates a labeled histogram instance.
+func (h *Histogram) WithLabels(labels map[string]string) *LabeledHistogram {
+	return &LabeledHistogram{
+		histogram: h,
+		labels:    labels,
+	}
+}
+
 // PrometheusHandler returns an HTTP handler for Prometheus metrics export.
 func (r *Registry) PrometheusHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -242,6 +309,132 @@ func (r *Registry) PrometheusHandler() http.Handler {
 			h.mu.RUnlock()
 		}
 	})
+}
+
+// GetCounter returns a counter by name.
+func (r *Registry) GetCounter(name string) *Counter {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.counters[name]
+}
+
+// GetGauge returns a gauge by name.
+func (r *Registry) GetGauge(name string) *Gauge {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.gauges[name]
+}
+
+// GetHistogram returns a histogram by name.
+func (r *Registry) GetHistogram(name string) *Histogram {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.histograms[name]
+}
+
+// Reset clears all metrics (useful for testing).
+func (r *Registry) Reset() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.counters = make(map[string]*Counter)
+	r.gauges = make(map[string]*Gauge)
+	r.histograms = make(map[string]*Histogram)
+}
+
+// CounterSnapshot represents a point-in-time counter value.
+type CounterSnapshot struct {
+	Name  string
+	Help  string
+	Value float64
+}
+
+// GaugeSnapshot represents a point-in-time gauge value.
+type GaugeSnapshot struct {
+	Name  string
+	Help  string
+	Value float64
+}
+
+// HistogramSnapshot represents a point-in-time histogram value.
+type HistogramSnapshot struct {
+	Name   string
+	Help   string
+	Count  uint64
+	Sum    float64
+	Counts map[float64]uint64
+}
+
+// Snapshot returns a snapshot of all current metrics values.
+func (r *Registry) Snapshot() (counters []CounterSnapshot, gauges []GaugeSnapshot, histograms []HistogramSnapshot) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	counters = make([]CounterSnapshot, 0, len(r.counters))
+	for _, c := range r.counters {
+		counters = append(counters, CounterSnapshot{
+			Name:  c.Name,
+			Help:  c.Help,
+			Value: c.Value(),
+		})
+	}
+
+	gauges = make([]GaugeSnapshot, 0, len(r.gauges))
+	for _, g := range r.gauges {
+		gauges = append(gauges, GaugeSnapshot{
+			Name:  g.Name,
+			Help:  g.Help,
+			Value: g.Value(),
+		})
+	}
+
+	histograms = make([]HistogramSnapshot, 0, len(r.histograms))
+	for _, h := range r.histograms {
+		h.mu.RLock()
+		counts := make(map[float64]uint64)
+		for k, v := range h.counts {
+			counts[k] = v
+		}
+		histograms = append(histograms, HistogramSnapshot{
+			Name:   h.Name,
+			Help:   h.Help,
+			Count:  h.count,
+			Sum:    h.sum,
+			Counts: counts,
+		})
+		h.mu.RUnlock()
+	}
+
+	return counters, gauges, histograms
+}
+
+// AggregateCounters sums all counter values.
+func AggregateCounters(counters []CounterSnapshot) float64 {
+	var sum float64
+	for _, c := range counters {
+		sum += c.Value
+	}
+	return sum
+}
+
+// AggregateGauges calculates average of all gauge values.
+func AggregateGauges(gauges []GaugeSnapshot) (avg float64, min float64, max float64) {
+	if len(gauges) == 0 {
+		return 0, 0, 0
+	}
+	var sum float64
+	min = gauges[0].Value
+	max = gauges[0].Value
+	for _, g := range gauges {
+		sum += g.Value
+		if g.Value < min {
+			min = g.Value
+		}
+		if g.Value > max {
+			max = g.Value
+		}
+	}
+	return sum / float64(len(gauges)), min, max
 }
 
 // DefaultRegistry is the default global registry.

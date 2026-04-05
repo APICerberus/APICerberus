@@ -7,9 +7,12 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/cli"
 )
 
+// osExit allows mocking os.Exit for testing
+var osExit = os.Exit
+
 func main() {
 	if err := cli.Run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		osExit(1)
 	}
 }

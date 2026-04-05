@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import {
@@ -208,17 +208,19 @@ describe('useClusterRealtime', () => {
     });
 
     // Simulate WebSocket message through the captured instance
-    if (wsInstance && wsInstance.onmessage) {
-      wsInstance.onmessage({
-        data: JSON.stringify({
-          type: 'cluster',
-          payload: {
-            leaderId: 'node-2',
-            commitIndex: 50,
-          },
-        }),
-      });
-    }
+    await act(async () => {
+      if (wsInstance && wsInstance.onmessage) {
+        wsInstance.onmessage({
+          data: JSON.stringify({
+            type: 'cluster',
+            payload: {
+              leaderId: 'node-2',
+              commitIndex: 50,
+            },
+          }),
+        });
+      }
+    });
 
     await waitFor(() => {
       expect(result.current.status.leaderId).toBe('node-2');

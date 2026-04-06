@@ -366,6 +366,9 @@ func (c *rawCodec) Marshal(v any) ([]byte, error) {
 	if b, ok := v.([]byte); ok {
 		return b, nil
 	}
+	if b, ok := v.(*[]byte); ok {
+		return *b, nil
+	}
 	return nil, fmt.Errorf("rawCodec: unsupported type %T", v)
 }
 

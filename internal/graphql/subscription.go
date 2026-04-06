@@ -246,12 +246,22 @@ func (sp *SubscriptionProxy) relayMessages(src *bufio.Reader, dstConn net.Conn, 
 }
 
 // closeDone safely closes the done channel if not already closed.
+// Uses a sync.Map for tracking closed channels to handle concurrent calls.
+var closedChans sync.Map
+
 func closeDone(done chan struct{}) {
-	select {
-	case <-done:
-	default:
+	if done == nil {
+		return
+	}
+	// Use sync.Map to atomically check and mark channel as closed
+	if _, loaded := closedChans.LoadOrStore(done, true); !loaded {
 		close(done)
 	}
+}
+
+// resetClosedChans clears the closed channel tracking (for testing only)
+func resetClosedChans() {
+	closedChans = sync.Map{}
 }
 
 // EncodeWSMessage marshals a wsMessage into a graphql-ws JSON frame.

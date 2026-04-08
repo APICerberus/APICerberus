@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"math"
+	"math/rand"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -13,6 +14,7 @@ const (
 	defaultBucketRetention  = 24 * time.Hour
 	minimumBucketRetention  = time.Minute
 	cleanupIntervalPerWrite = time.Minute
+	maxLatencySamples       = 10_000
 )
 
 type RequestMetric struct {
@@ -283,7 +285,14 @@ func (s *TimeSeriesStore) Record(metric RequestMetric) {
 		b.errors++
 	}
 	b.latencySum += metric.LatencyMS
-	b.latencies = append(b.latencies, metric.LatencyMS)
+	if int64(len(b.latencies)) < maxLatencySamples {
+		b.latencies = append(b.latencies, metric.LatencyMS)
+	} else {
+		idx := rand.Int63n(b.requests)
+		if idx < maxLatencySamples {
+			b.latencies[idx] = metric.LatencyMS
+		}
+	}
 	if metric.StatusCode > 0 {
 		b.statusCodes[metric.StatusCode]++
 	}

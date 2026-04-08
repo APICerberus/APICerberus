@@ -1,6 +1,7 @@
 package analytics
 
 import (
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -481,9 +482,19 @@ func (s *OptimizedTimeSeriesStore) recordToBucket(minute int64, metrics []Reques
 	b.latencySum.Add(latencySum)
 	b.errors.Add(errors)
 
-	// Store latencies for percentile calculation
+	// Store latencies for percentile calculation with reservoir sampling cap
 	b.latenciesMu.Lock()
-	b.latencies = append(b.latencies, latencies...)
+	for _, lat := range latencies {
+		if int64(len(b.latencies)) < maxLatencySamples {
+			b.latencies = append(b.latencies, lat)
+		} else {
+			total := b.requests.Load()
+			idx := rand.Int63n(total)
+			if idx < maxLatencySamples {
+				b.latencies[idx] = lat
+			}
+		}
+	}
 	b.latenciesMu.Unlock()
 }
 

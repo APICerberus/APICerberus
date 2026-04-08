@@ -191,6 +191,9 @@ func (s *Server) registerRoutes() {
 	// Register GraphQL routes
 	s.RegisterGraphQLRoutes()
 
+	// Register webhook routes
+	s.RegisterWebhookRoutes()
+
 	if s.dashboardFS != nil {
 		s.mux.Handle("/", s.newDashboardHandler())
 	}

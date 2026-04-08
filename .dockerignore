@@ -1,0 +1,81 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+LICENSE
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+bin/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+coverage/
+coverage.out
+*.test
+*.prof
+*.pprof
+
+# Dependencies (will be downloaded)
+vendor/
+
+# Web dashboard build artifacts (will be rebuilt)
+web/node_modules/
+web/dist/
+web/.cache/
+
+# Local development
+docker-compose*.yml
+Dockerfile*
+.env
+.env.*
+!.env.example
+
+# Data directories
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Secrets
+secrets/
+*.pem
+*.key
+certs/
+
+# Debug
+debug/
+__debug_bin

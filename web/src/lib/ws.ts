@@ -32,14 +32,14 @@ function resolveWebSocketUrl(overrideUrl?: string) {
     return resolvedUrl;
   }
 
-  const adminKey = window.localStorage.getItem(API_CONFIG.adminApiKeyStorageKey)?.trim();
-  if (!adminKey) {
+  const token = window.sessionStorage.getItem(API_CONFIG.adminBearerTokenStorageKey)?.trim();
+  if (!token) {
     return resolvedUrl;
   }
 
   try {
     const url = new URL(resolvedUrl, window.location.origin);
-    url.searchParams.set("api_key", adminKey);
+    url.searchParams.set("token", token);
     return url.toString();
   } catch {
     return resolvedUrl;

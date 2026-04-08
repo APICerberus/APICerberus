@@ -12,14 +12,14 @@ import {
 // Mock fetch
 global.fetch = vi.fn();
 
-// Mock localStorage
-const localStorageMock = {
+// Mock sessionStorage
+const sessionStorageMock = {
   getItem: vi.fn(),
   setItem: vi.fn(),
   removeItem: vi.fn(),
 };
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock,
+Object.defineProperty(window, 'sessionStorage', {
+  value: sessionStorageMock,
 });
 
 // Mock WebSocket
@@ -59,7 +59,7 @@ function createWrapper() {
 describe('useClusterStatus', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    localStorageMock.getItem.mockReturnValue('test-api-key');
+    sessionStorageMock.getItem.mockReturnValue('test-bearer-token');
   });
 
   afterEach(() => {
@@ -159,7 +159,7 @@ describe('useClusterStatus', () => {
         '/admin/api/v1/cluster/status',
         {
           headers: {
-            'X-Admin-Key': 'test-api-key',
+            'Authorization': 'Bearer test-bearer-token',
           },
         }
       );
@@ -171,7 +171,7 @@ describe('useClusterRealtime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    localStorageMock.getItem.mockReturnValue('test-api-key');
+    sessionStorageMock.getItem.mockReturnValue('test-bearer-token');
   });
 
   afterEach(() => {

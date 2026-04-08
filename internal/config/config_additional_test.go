@@ -48,6 +48,9 @@ func TestWatch_Success(t *testing.T) {
 	initialContent := `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-test"
     upstream: "up-test"
@@ -112,6 +115,9 @@ func TestWatch_StatError(t *testing.T) {
 	content := `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-test"
     upstream: "up-test"
@@ -193,6 +199,9 @@ func TestLoad_EnvOverrideError(t *testing.T) {
 	content := `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-test"
     upstream: "up-test"
@@ -2081,6 +2090,9 @@ func TestConfigReloader_Start(t *testing.T) {
 	configContent := `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
@@ -2107,6 +2119,9 @@ func TestConfigReloader_WatchEvents(t *testing.T) {
 	configContent := `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
@@ -2152,6 +2167,9 @@ func TestConfigReloader_HandleChangeValidationError(t *testing.T) {
 gateway:
   http_addr: ""
   https_addr: ""
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
@@ -2178,6 +2196,9 @@ func TestConfigReloader_HandleChangeReloaderError(t *testing.T) {
 	configContent := `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
@@ -2233,6 +2254,9 @@ func TestConfigReloader_ReloaderError(t *testing.T) {
 	configContent := `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to create test config: %v", err)

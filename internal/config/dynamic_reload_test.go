@@ -16,6 +16,9 @@ func TestNewConfigReloader(t *testing.T) {
 	configContent := `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 routes:
   - id: test-route
     paths:
@@ -61,7 +64,7 @@ func TestNewConfigReloader_InvalidPath(t *testing.T) {
 func TestConfigReloader_SetDebounceTime(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test.yaml")
-	os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\""), 0644)
+	os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\"\nadmin:\n  api_key: \"test-admin-key\"\n  token_secret: \"test-admin-token-secret-at-least-32-chars-long\""), 0644)
 
 	reloader := func(cfg *Config) error { return nil }
 	cr, _ := NewConfigReloader(configPath, reloader)
@@ -76,7 +79,7 @@ func TestConfigReloader_SetDebounceTime(t *testing.T) {
 func TestConfigReloader_SetOnChange(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test.yaml")
-	os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\""), 0644)
+	os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\"\nadmin:\n  api_key: \"test-admin-key\"\n  token_secret: \"test-admin-token-secret-at-least-32-chars-long\""), 0644)
 
 	reloader := func(cfg *Config) error { return nil }
 	cr, _ := NewConfigReloader(configPath, reloader)
@@ -95,7 +98,7 @@ func TestConfigReloader_SetOnChange(t *testing.T) {
 func TestConfigReloader_GetCurrent(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test.yaml")
-	os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\""), 0644)
+	os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\"\nadmin:\n  api_key: \"test-admin-key\"\n  token_secret: \"test-admin-token-secret-at-least-32-chars-long\""), 0644)
 
 	reloader := func(cfg *Config) error { return nil }
 	cr, _ := NewConfigReloader(configPath, reloader)
@@ -113,6 +116,9 @@ func TestConfigReloader_TriggerManualReload(t *testing.T) {
 	configContent := `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 `
 	os.WriteFile(configPath, []byte(configContent), 0644)
 
@@ -141,7 +147,7 @@ gateway:
 func TestConfigReloader_Stop(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test.yaml")
-	os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\""), 0644)
+	os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\"\nadmin:\n  api_key: \"test-admin-key\"\n  token_secret: \"test-admin-token-secret-at-least-32-chars-long\""), 0644)
 
 	reloader := func(cfg *Config) error { return nil }
 	cr, _ := NewConfigReloader(configPath, reloader)

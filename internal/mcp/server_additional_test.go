@@ -566,6 +566,8 @@ gateway:
   http_addr: ":8080"
 admin:
   addr: ":9876"
+  api_key: "test-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 store:
   path: "test.db"
 `,
@@ -896,12 +898,9 @@ func TestHandleRequest_ResourcesRead_UnknownURI(t *testing.T) {
 
 // Test loadConfigFromYAML with empty YAML
 func TestLoadConfigFromYAML_Empty(t *testing.T) {
-	cfg, err := loadConfigFromYAML("")
-	if err != nil {
-		t.Errorf("Unexpected error for empty YAML: %v", err)
-	}
-	if cfg == nil {
-		t.Error("Expected non-nil config for empty YAML")
+	_, err := loadConfigFromYAML("")
+	if err == nil {
+		t.Error("Expected error for empty YAML due to missing required fields")
 	}
 }
 
@@ -2216,6 +2215,8 @@ gateway:
   http_addr: ":8080"
 admin:
   addr: ":9876"
+  api_key: "test-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 store:
   path: "test.db"
 `,
@@ -2224,12 +2225,12 @@ store:
 		{
 			name:    "empty yaml",
 			yaml:    "",
-			wantErr: false, // Empty YAML is valid
+			wantErr: true, // Empty YAML now fails validation
 		},
 		{
 			name:    "whitespace only yaml",
 			yaml:    "   \n   \n",
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name:    "invalid yaml syntax",
@@ -2268,6 +2269,8 @@ gateway:
   http_addr: ":8080"
 admin:
   addr: ":9876"
+  api_key: "test-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 store:
   path: "test.db"
 `

@@ -291,7 +291,7 @@ func TestHandleConfigImport_Advanced(t *testing.T) {
 			name:           "invalid content type",
 			body:           `{"key": "value"}`,
 			contentType:    "text/plain",
-			expectedStatus: http.StatusOK, // Server accepts any content type
+			expectedStatus: http.StatusBadRequest, // Missing required admin fields
 		},
 		{
 			name:           "empty body",
@@ -309,7 +309,7 @@ func TestHandleConfigImport_Advanced(t *testing.T) {
 			name:           "valid empty config",
 			body:           `{}`,
 			contentType:    "application/json",
-			expectedStatus: http.StatusOK,
+			expectedStatus: http.StatusBadRequest,
 		},
 	}
 

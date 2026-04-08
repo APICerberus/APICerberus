@@ -14,6 +14,9 @@ func TestLoadAppliesDefaultsAndGeneratesIDs(t *testing.T) {
 	path := writeTempConfig(t, `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-users"
     upstream: "up-users"
@@ -93,6 +96,9 @@ func TestLoadValidation(t *testing.T) {
 	path := writeTempConfig(t, `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-users"
     upstream: "missing-upstream"
@@ -125,6 +131,9 @@ func TestLoadValidationHTTPSRequiresTLS(t *testing.T) {
 gateway:
   http_addr: ""
   https_addr: ":8443"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-users"
     upstream: "up-users"
@@ -159,6 +168,9 @@ gateway:
     auto: true
     acme_email: "admin@example.com"
     acme_dir: "acme-certs"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-users"
     upstream: "up-users"
@@ -189,6 +201,9 @@ func TestEnvOverrides(t *testing.T) {
 	path := writeTempConfig(t, `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-users"
     protocol: "http"
@@ -242,6 +257,9 @@ func TestLoadConsumersSection(t *testing.T) {
 	path := writeTempConfig(t, `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-users"
     upstream: "up-users"
@@ -305,6 +323,9 @@ func TestLoadConsumerValidationDuplicateKey(t *testing.T) {
 	path := writeTempConfig(t, `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-users"
     upstream: "up-users"
@@ -341,6 +362,9 @@ func TestLoadAuthAPIKeyNames(t *testing.T) {
 	path := writeTempConfig(t, `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-users"
     upstream: "up-users"
@@ -386,6 +410,9 @@ func TestLoadPluginConfigs(t *testing.T) {
 	path := writeTempConfig(t, `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-users"
     upstream: "up-users"
@@ -433,6 +460,9 @@ func TestLoadBillingConfig(t *testing.T) {
 	path := writeTempConfig(t, `
 gateway:
   http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-users"
     upstream: "up-users"

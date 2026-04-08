@@ -112,6 +112,7 @@ gateway:
 admin:
   addr: "%s"
   api_key: "secret-admin"
+  token_secret: "secret-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-smoke"
     upstream: "up-smoke"

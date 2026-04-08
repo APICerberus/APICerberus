@@ -318,11 +318,30 @@ func validate(cfg *Config) error {
 		addErr("gateway.max_body_bytes must be greater than zero")
 	}
 
+	if strings.TrimSpace(cfg.Admin.APIKey) == "" {
+		addErr("admin.api_key is required")
+	}
+	if len(strings.TrimSpace(cfg.Admin.TokenSecret)) < 32 {
+		addErr("admin.token_secret must be at least 32 characters")
+	}
 	if !strings.HasPrefix(cfg.Admin.UIPath, "/") {
 		addErr("admin.ui_path must start with '/'")
 	}
 	if !strings.HasPrefix(cfg.Portal.PathPrefix, "/") {
 		addErr("portal.path_prefix must start with '/'")
+	}
+	secret := strings.TrimSpace(cfg.Portal.Session.Secret)
+	if cfg.Portal.Enabled {
+		if len(secret) < 32 {
+			addErr("portal.session.secret must be at least 32 characters when portal is enabled")
+		}
+		lowerSecret := strings.ToLower(secret)
+		if strings.Contains(lowerSecret, "change") || strings.Contains(lowerSecret, "secret") || strings.Contains(lowerSecret, "password") {
+			addErr("portal.session.secret appears to be a placeholder value")
+		}
+		if cfg.Gateway.HTTPSAddr != "" && !cfg.Portal.Session.Secure {
+			addErr("portal.session.secure must be true when gateway.https_addr is configured")
+		}
 	}
 	if strings.TrimSpace(cfg.Portal.Session.CookieName) == "" {
 		addErr("portal.session.cookie_name is required")

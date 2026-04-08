@@ -22,7 +22,8 @@ gateway:
 
 admin:
   addr: ":9876"
-  api_key: "change-me"
+  api_key: ""                      # Required: must be a strong, unique secret
+  token_secret: ""                 # Required: JWT signing secret (min 32 chars)
   ui_enabled: true
   ui_path: "/dashboard"
 
@@ -31,10 +32,10 @@ portal:
   addr: ":9877"
   path_prefix: "/portal"
   session:
-    secret: "change-me-in-production"
+    secret: ""                     # Required when portal is enabled (min 32 chars)
     cookie_name: "apicerberus_session"
     max_age: "24h"
-    secure: false
+    secure: true                   # Must be true when HTTPS is configured
 
 logging:
   level: "info"
@@ -181,8 +182,7 @@ auth:
 global_plugins:
   - name: "cors"
     config:
-      allowed_origins:
-        - "*"
+      allowed_origins: []            # Configure explicit origins; wildcard (*) is unsafe
       allowed_methods:
         - "GET"
         - "POST"

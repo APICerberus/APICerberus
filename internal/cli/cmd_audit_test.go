@@ -425,6 +425,9 @@ func TestRunAuditRetentionShow(t *testing.T) {
 	configContent := `
 server:
   port: 8080
+admin:
+  api_key: test-key
+  token_secret: test-admin-token-secret-at-least-32-chars-long
 audit:
   retention_days: 90
   route_retention_days:
@@ -445,6 +448,9 @@ func TestRunAuditRetentionShow_NoRouteOverrides(t *testing.T) {
 	configContent := `
 server:
   port: 8080
+admin:
+  api_key: test-key
+  token_secret: test-admin-token-secret-at-least-32-chars-long
 audit:
   retention_days: 30
 `
@@ -462,6 +468,9 @@ func TestRunAuditRetentionSet(t *testing.T) {
 	configContent := `
 server:
   port: 8080
+admin:
+  api_key: test-key
+  token_secret: test-admin-token-secret-at-least-32-chars-long
 audit:
   retention_days: 30
   route_retention_days:
@@ -487,6 +496,9 @@ func TestRunAuditRetentionSet_RouteOverride(t *testing.T) {
 	configContent := `
 server:
   port: 8080
+admin:
+  api_key: test-key
+  token_secret: test-admin-token-secret-at-least-32-chars-long
 audit:
   retention_days: 30
 `
@@ -508,6 +520,9 @@ func TestRunAuditRetentionSet_NoChanges(t *testing.T) {
 	configContent := `
 server:
   port: 8080
+admin:
+  api_key: test-key
+  token_secret: test-admin-token-secret-at-least-32-chars-long
 `
 	os.WriteFile(configPath, []byte(configContent), 0644)
 
@@ -523,6 +538,9 @@ func TestRunAuditRetentionSet_RouteWithoutDays(t *testing.T) {
 	configContent := `
 server:
   port: 8080
+admin:
+  api_key: test-key
+  token_secret: test-admin-token-secret-at-least-32-chars-long
 `
 	os.WriteFile(configPath, []byte(configContent), 0644)
 
@@ -541,6 +559,9 @@ func TestRunAuditRetention(t *testing.T) {
 	configContent := `
 server:
   port: 8080
+admin:
+  api_key: test-key
+  token_secret: test-admin-token-secret-at-least-32-chars-long
 audit:
   retention_days: 30
 `
@@ -571,6 +592,9 @@ func TestRunAuditRetention_NoArgs(t *testing.T) {
 	configContent := `
 server:
   port: 8080
+admin:
+  api_key: test-key
+  token_secret: test-admin-token-secret-at-least-32-chars-long
 audit:
   retention_days: 30
 `

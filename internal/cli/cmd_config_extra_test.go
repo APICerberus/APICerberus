@@ -20,6 +20,7 @@ gateway:
 admin:
   addr: :9876
   api_key: test-key
+  token_secret: test-admin-token-secret-at-least-32-chars-long
 `
 	os.WriteFile(configPath, []byte(configContent), 0644)
 
@@ -41,6 +42,8 @@ gateway:
   http_addr: :8080
 admin:
   addr: :9876
+  api_key: test-key
+  token_secret: test-admin-token-secret-at-least-32-chars-long
 `
 	os.WriteFile(configPath, []byte(configContent), 0644)
 
@@ -75,6 +78,7 @@ gateway:
 admin:
   addr: :9876
   api_key: imported-key
+  token_secret: test-admin-token-secret-at-least-32-chars-long
 `
 	os.WriteFile(sourcePath, []byte(configContent), 0644)
 

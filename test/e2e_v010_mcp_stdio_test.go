@@ -108,6 +108,7 @@ gateway:
   http_addr: "127.0.0.1:0"
 admin:
   api_key: "secret-admin"
+  token_secret: "secret-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-mcp"
     upstream: "up-mcp"

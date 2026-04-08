@@ -34,12 +34,13 @@ var (
 )
 
 type Server struct {
-	mu          sync.RWMutex
-	cfg         *config.Config
-	gateway     *gateway.Gateway
-	alertEngine *analytics.AlertEngine
-	mux         *http.ServeMux
-	dashboardFS fs.FS
+	mu             sync.RWMutex
+	cfg            *config.Config
+	gateway        *gateway.Gateway
+	alertEngine    *analytics.AlertEngine
+	webhookManager *WebhookManager
+	mux            *http.ServeMux
+	dashboardFS    fs.FS
 
 	startedAt time.Time
 
@@ -82,6 +83,12 @@ func NewServer(cfg *config.Config, gw *gateway.Gateway) (*Server, error) {
 	}
 	s.startRateLimitCleanup()
 	SetTrustedProxies(cfg.Gateway.TrustedProxies)
+
+	if gw.Store() != nil {
+		s.webhookManager = NewWebhookManager(gw.Store())
+		s.webhookManager.Start()
+	}
+
 	if cfg.Admin.UIEnabled {
 		dashboardFS, err := embeddedDashboardFS()
 		if err != nil {
@@ -103,6 +110,9 @@ func (s *Server) Close() error {
 		s.closed = true
 		if s.rlCleanupTicker != nil {
 			s.rlCleanupTicker.Stop()
+		}
+		if s.webhookManager != nil {
+			s.webhookManager.Stop()
 		}
 		close(s.rlStopCh)
 	})

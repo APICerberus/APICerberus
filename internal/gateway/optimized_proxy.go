@@ -307,6 +307,13 @@ func (p *OptimizedProxy) Forward(ctx *RequestContext, target *config.UpstreamTar
 		return err
 	}
 
+	// Apply per-request upstream timeout
+	if p.config.ProxyTimeout > 0 {
+		reqCtx, cancel := context.WithTimeout(proxyReq.Context(), p.config.ProxyTimeout)
+		defer cancel()
+		proxyReq = proxyReq.WithContext(reqCtx)
+	}
+
 	// Request coalescing for cacheable requests
 	if p.coalescingPool != nil && p.isCacheableRequest(ctx.Request) {
 		coalesceKey := p.coalesceKey(ctx.Request, upstreamURL)
@@ -361,6 +368,12 @@ func (p *OptimizedProxy) Do(ctx *RequestContext, target *config.UpstreamTarget) 
 	proxyReq, err := p.createProxyRequest(ctx.Request, upstreamURL)
 	if err != nil {
 		return nil, err
+	}
+
+	if p.config.ProxyTimeout > 0 {
+		reqCtx, cancel := context.WithTimeout(proxyReq.Context(), p.config.ProxyTimeout)
+		defer cancel()
+		proxyReq = proxyReq.WithContext(reqCtx)
 	}
 
 	return p.executeRequest(proxyReq)

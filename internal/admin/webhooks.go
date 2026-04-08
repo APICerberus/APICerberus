@@ -2,6 +2,7 @@ package admin
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"database/sql"
@@ -163,15 +164,17 @@ func (m *WebhookManager) processDelivery(delivery *store.WebhookDelivery) {
 		req.Header.Set("X-Webhook-Signature", "sha256="+signature)
 	}
 
-	// Set timeout
+	// Set per-request timeout via context, reusing the shared client
 	timeout := time.Duration(webhook.Timeout) * time.Second
 	if timeout == 0 {
 		timeout = 30 * time.Second
 	}
-	client := &http.Client{Timeout: timeout}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	req = req.WithContext(ctx)
 
-	// Execute request
-	resp, err := client.Do(req)
+	// Execute request using shared client
+	resp, err := m.client.Do(req)
 	if err != nil {
 		delivery.Error = fmt.Sprintf("request failed: %v", err)
 		m.retryOrFail(delivery, webhook)
@@ -584,7 +587,14 @@ func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 	if timeout == 0 {
 		timeout = 30 * time.Second
 	}
-	client := &http.Client{Timeout: timeout}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	req = req.WithContext(ctx)
+
+	client := http.DefaultClient
+	if s.webhookManager != nil && s.webhookManager.client != nil {
+		client = s.webhookManager.client
+	}
 
 	// #nosec G704 -- webhook URL is intentionally administrator-configured.
 	resp, err := client.Do(req)

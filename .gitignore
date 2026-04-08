@@ -8,3 +8,5 @@ web/dist/
 *.log
 *.exe
 *.out
+*.gz
+internal/audit/audit-archive/

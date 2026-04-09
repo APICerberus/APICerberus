@@ -121,13 +121,13 @@ func (p *HTTPClientPool) Put(client *http.Client) {
 
 // GetStats returns a snapshot of pool statistics.
 func (p *HTTPClientPool) GetStats() PoolStats {
-	return PoolStats{
-		Gets:      atomic.Uint64{},
-		Puts:      atomic.Uint64{},
-		Misses:    atomic.Uint64{},
-		Active:    atomic.Int64{},
-		TotalIdle: atomic.Int64{},
-	}
+	var stats PoolStats
+	stats.Gets.Store(p.stats.Gets.Load())
+	stats.Puts.Store(p.stats.Puts.Load())
+	stats.Misses.Store(p.stats.Misses.Load())
+	stats.Active.Store(p.stats.Active.Load())
+	stats.TotalIdle.Store(p.stats.TotalIdle.Load())
+	return stats
 }
 
 // StatsSnapshot returns current stats as plain values.

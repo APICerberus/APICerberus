@@ -79,10 +79,21 @@ var WebhookEvents = []WebhookEvent{
 
 // NewWebhookManager creates a new webhook manager
 func NewWebhookManager(webhookStore WebhookStore) *WebhookManager {
+	// Use a tuned transport with connection pooling for efficient webhook delivery.
+	// This avoids creating new connections for every delivery and prevents GC churn.
+	transport := &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		MaxConnsPerHost:     100,
+		IdleConnTimeout:     90 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+		ForceAttemptHTTP2:   true,
+	}
+
 	return &WebhookManager{
 		webhooks:   make(map[string]*store.Webhook),
 		deliveryCh: make(chan *store.WebhookDelivery, 1000),
-		client:     &http.Client{Timeout: 30 * time.Second},
+		client:     &http.Client{Transport: transport, Timeout: 30 * time.Second},
 		store:      webhookStore,
 	}
 }

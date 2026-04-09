@@ -33,14 +33,14 @@
   - Fallback to `X-Real-Ip` only if the source is a trusted proxy.
 - **Files**: `internal/logging/structured.go`, `internal/gateway/balancer_extra.go`, `internal/gateway/server.go`, `internal/config/`
 
-### 1.4 WebSocket Origin Security (P1)
-- **Task**: Replace custom `isValidWebSocketOrigin` with `gorilla/websocket.Upgrader.CheckOrigin` or an explicit allow-list.
-- **Files**: `internal/admin/ws.go`
+### 1.4 WebSocket Origin Security (P1) ✅ DONE
+- **Status**: Strengthened `isValidWebSocketOrigin` — removed Referer fallback, enforced http/https schemes, proper port matching, host boundary checking for wildcards, 25 unit tests added.
+- **Files**: `internal/admin/ws.go`, `internal/admin/ws_origin_test.go`
 
-### 1.5 Add TLS Minimum Version / Cipher Suite Config (P1)
-- **Task**: Expose `gateway.tls.min_version` and `gateway.tls.cipher_suites` in config.
-- **Default**: TLS 1.2 minimum, modern safe cipher suites only.
-- **Files**: `internal/gateway/tls.go`, `internal/config/`, `apicerberus.example.yaml`
+### 1.5 Add TLS Minimum Version / Cipher Suite Config (P1) ✅ DONE
+- **Status**: Already implemented. `TLSConfig` struct has `MinVersion` and `CipherSuites` fields.
+  `TLSManager.TLSConfig()` parses them and builds `*tls.Config` with proper defaults (TLS 1.2 min, modern ciphers).
+- **Files**: `internal/gateway/tls.go` (`parseTLSMinVersion`, `parseTLSCipherSuites`, `TLSConfig()` method)
 
 ---
 

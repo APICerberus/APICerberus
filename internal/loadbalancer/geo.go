@@ -1,3 +1,8 @@
+// Package loadbalancer provides load balancing algorithms.
+//
+// NOTE: The "geo" implementation in this file is NOT real GeoIP.
+// It only provides subnet-based routing (grouping IPs by first 2 octets).
+// For production GeoIP routing, integrate MaxMind GeoIP2 or similar.
 package loadbalancer
 
 import (
@@ -6,9 +11,12 @@ import (
 )
 
 // GeoIPResolver resolves IP addresses to geographical locations.
+// NOTE: This is NOT a real GeoIP implementation. It only groups IPs by
+// their first two octets (subnet) for basic regional routing. For production
+// GeoIP routing, integrate MaxMind GeoIP2 or similar database.
 type GeoIPResolver struct {
-	// In a production implementation, this would use a GeoIP database
-	// like MaxMind GeoIP2 or similar
+	// For a production implementation, this would use a GeoIP database.
+	// Currently uses simplified subnet-to-region mapping.
 	countries map[string]string // IP prefix -> country code
 }
 
@@ -40,6 +48,7 @@ func (g *GeoIPResolver) Resolve(ip string) string {
 }
 
 // GeoAwareSelector selects targets based on geographic proximity.
+// NOTE: This uses subnet-based routing, not real GeoIP data.
 type GeoAwareSelector struct {
 	resolver *GeoIPResolver
 	// Target locations: target ID -> country code
@@ -79,8 +88,10 @@ func (g *GeoAwareSelector) Select(clientIP string, targetIDs []string) string {
 }
 
 // loadDefaultGeoData loads bundled GeoIP prefix-to-country mappings.
+// NOTE: This is simplified demo data using subnet prefixes, NOT real GeoIP.
 func loadDefaultGeoData() map[string]string {
 	// Simplified mapping of some IP ranges to countries
+	// NOTE: This is NOT real GeoIP data - it only provides basic subnet grouping
 	return map[string]string{
 		"192.168": "US",
 		"10.0":    "US",

@@ -570,10 +570,11 @@ func (a *Adaptive) mode() string {
 	return "round_robin"
 }
 
-// GeoAware selects targets based on the client's geographic location.
-// It resolves the client IP to a country using the GeoIPResolver, then
-// picks a target in the same country via the GeoAwareSelector. When no
-// geo match is found it falls back to round-robin selection.
+// GeoAware selects targets based on the client's subnet.
+// NOTE: This is NOT real geographic routing - it only groups IPs by their
+// first two octets (subnet) for basic regional routing. For true GeoIP
+// routing, integrate a real GeoIP database like MaxMind GeoIP2.
+// When no subnet match is found it falls back to round-robin selection.
 type GeoAware struct {
 	mu       sync.RWMutex
 	targets  []config.UpstreamTarget

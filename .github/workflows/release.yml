@@ -10,7 +10,7 @@ permissions:
   packages: write
 
 env:
-  GO_VERSION: '1.26'
+  GO_VERSION: '1.25'
   NODE_VERSION: '20'
 
 jobs:
@@ -106,7 +106,7 @@ jobs:
         if [ "${{ matrix.os }}" = "windows" ]; then
           OUTPUT="${OUTPUT}.exe"
         fi
-        go build -ldflags="-s -w -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o "${OUTPUT}" ./cmd/apicerberus
+        go build -ldflags="-s -w -X github.com/APICerberus/APICerebrus/internal/version.Version=${{ github.ref_name }} -X github.com/APICerberus/APICerebrus/internal/version.Commit=${{ github.sha }} -X github.com/APICerberus/APICerebrus/internal/version.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o "${OUTPUT}" ./cmd/apicerberus
 
     - name: Create archive
       run: |

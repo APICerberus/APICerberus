@@ -1,9 +1,7 @@
 package jwt
 
 import (
-	"crypto"
 	"crypto/rsa"
-	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -28,15 +26,6 @@ type JWK struct {
 // JWKS is a JSON Web Key Set document.
 type JWKS struct {
 	Keys []JWK `json:"keys"`
-}
-
-// VerifyRS256 validates JWT signature using RSA-SHA256.
-func VerifyRS256(signingInput string, signature []byte, publicKey *rsa.PublicKey) bool {
-	if publicKey == nil {
-		return false
-	}
-	digest := sha256.Sum256([]byte(signingInput))
-	return rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, digest[:], signature) == nil
 }
 
 // ParseRSAPublicKeyFromJWK builds RSA public key from JWK n/e fields.

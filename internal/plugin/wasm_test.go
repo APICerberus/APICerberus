@@ -206,10 +206,14 @@ func TestWASMPluginManager_LoadUnload(t *testing.T) {
 	cfg := DefaultWASMConfig()
 	cfg.Enabled = true
 
-	manager, _ := NewWASMPluginManager(cfg)
-	defer manager.Close()
-
 	tmpDir := t.TempDir()
+	cfg.ModuleDir = tmpDir
+
+	manager, err := NewWASMPluginManager(cfg)
+	if err != nil {
+		t.Fatalf("NewWASMPluginManager() error = %v", err)
+	}
+	defer manager.Close()
 	wasmPath := filepath.Join(tmpDir, "test.wasm")
 	wasmMagic := []byte{0x00, 0x61, 0x73, 0x6d}
 	if err := os.WriteFile(wasmPath, wasmMagic, 0644); err != nil {
@@ -223,7 +227,7 @@ func TestWASMPluginManager_LoadUnload(t *testing.T) {
 		"priority": 50,
 	}
 
-	err := manager.LoadModule("test", wasmPath, pluginConfig)
+	err = manager.LoadModule("test", wasmPath, pluginConfig)
 	if err != nil {
 		t.Errorf("LoadModule() error = %v", err)
 	}
@@ -249,9 +253,19 @@ func TestWASMPluginManager_LoadUnload(t *testing.T) {
 }
 
 func TestWASMHostFunctions(t *testing.T) {
-	host := NewWASMHostFunctions()
+	host := NewWASMHostFunctions(nil)
 	if host == nil {
 		t.Fatal("Expected non-nil host functions")
+	}
+
+	if !host.HasCapability("log") {
+		t.Error("Expected log capability to be granted by default")
+	}
+	if !host.HasCapability("get_metadata") {
+		t.Error("Expected get_metadata capability to be granted by default")
+	}
+	if host.HasCapability("get_header") {
+		t.Error("Expected get_header capability to NOT be granted by default")
 	}
 
 	host.Log("info", "test message")

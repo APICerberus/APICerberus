@@ -1,12 +1,17 @@
 package jwt
 
 import (
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var (
@@ -89,27 +94,7 @@ func (t *Token) HeaderString(name string) (string, bool) {
 	return value, true
 }
 
-// ClaimString returns a string-typed payload claim.
-func (t *Token) ClaimString(name string) (string, bool) {
-	if t == nil {
-		return "", false
-	}
-	raw, ok := t.Payload[name]
-	if !ok {
-		return "", false
-	}
-	value, ok := raw.(string)
-	if !ok {
-		return "", false
-	}
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "", false
-	}
-	return value, true
-}
-
-// ClaimStrings returns audience-like claim values as string slice.
+// ClaimString returns audience-like claim values as string slice.
 func (t *Token) ClaimStrings(name string) ([]string, bool) {
 	if t == nil {
 		return nil, false
@@ -148,6 +133,26 @@ func (t *Token) ClaimStrings(name string) ([]string, bool) {
 	}
 }
 
+// ClaimString returns a string-typed payload claim.
+func (t *Token) ClaimString(name string) (string, bool) {
+	if t == nil {
+		return "", false
+	}
+	raw, ok := t.Payload[name]
+	if !ok {
+		return "", false
+	}
+	value, ok := raw.(string)
+	if !ok {
+		return "", false
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", false
+	}
+	return value, true
+}
+
 // ClaimUnix returns unix timestamp claim (exp/iat/nbf).
 func (t *Token) ClaimUnix(name string) (int64, bool) {
 	if t == nil {
@@ -173,7 +178,7 @@ func claimUnix(raw any) (int64, bool) {
 	case int32:
 		return int64(v), true
 	case uint64:
-		return int64(v), true // #nosec G115 -- JWT timestamps (exp/iat/nbf) always fit within int64.
+		return int64(v), true
 	case json.Number:
 		i, err := v.Int64()
 		if err == nil {
@@ -197,4 +202,72 @@ func claimUnix(raw any) (int64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// EncodeSegment encodes data using base64url without padding.
+func EncodeSegment(data []byte) string {
+	return base64.RawURLEncoding.EncodeToString(data)
+}
+
+// SignHS256 signs the input with HMAC-SHA256 using golang-jwt/jwt/v5.
+func SignHS256(signingInput string, secret []byte) ([]byte, error) {
+	if len(secret) < minHS256SecretLength {
+		return nil, fmt.Errorf("%w: secret length %d is below minimum %d bytes", ErrWeakHS256Secret, len(secret), minHS256SecretLength)
+	}
+	method := jwt.SigningMethodHS256
+	sig, err := method.Sign(signingInput, secret)
+	if err != nil {
+		return nil, fmt.Errorf("sign HS256: %w", err)
+	}
+	return sig, nil
+}
+
+// VerifyHS256 verifies the HMAC-SHA256 signature using golang-jwt/jwt/v5.
+func VerifyHS256(signingInput string, signature []byte, secret []byte) bool {
+	if len(secret) < minHS256SecretLength {
+		return false
+	}
+	method := jwt.SigningMethodHS256
+	return method.Verify(signingInput, signature, secret) == nil
+}
+
+// VerifyRS256 verifies the RSA-SHA256 signature using golang-jwt/jwt/v5.
+func VerifyRS256(signingInput string, signature []byte, publicKey *rsa.PublicKey) bool {
+	if publicKey == nil {
+		return false
+	}
+	method := jwt.SigningMethodRS256
+	return method.Verify(signingInput, signature, publicKey) == nil
+}
+
+// SignES256 signs the input with ECDSA P-256 using golang-jwt/jwt/v5.
+func SignES256(signingInput string, privateKey *ecdsa.PrivateKey) ([]byte, error) {
+	if privateKey == nil {
+		return nil, errors.New("private key is nil")
+	}
+	method := jwt.SigningMethodES256
+	sig, err := method.Sign(signingInput, privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("sign ES256: %w", err)
+	}
+	return sig, nil
+}
+
+// VerifyES256 verifies the ECDSA P-256 signature using golang-jwt/jwt/v5.
+func VerifyES256(signingInput string, signature []byte, publicKey *ecdsa.PublicKey) bool {
+	if publicKey == nil {
+		return false
+	}
+	method := jwt.SigningMethodES256
+	return method.Verify(signingInput, signature, publicKey) == nil
+}
+
+// VerifyEdDSA verifies the Ed25519 signature using golang-jwt/jwt/v5.
+func VerifyEdDSA(signingInput string, signature []byte, publicKey any) bool {
+	edKey, ok := publicKey.(ed25519.PublicKey)
+	if !ok {
+		return false
+	}
+	method := jwt.SigningMethodEdDSA
+	return method.Verify(signingInput, signature, edKey) == nil
 }

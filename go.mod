@@ -1,9 +1,10 @@
 module github.com/APICerberus/APICerebrus
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/fsnotify/fsnotify v1.9.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/graphql-go/graphql v0.8.1
 	github.com/redis/go-redis/v9 v9.7.0
 	go.opentelemetry.io/otel v1.42.0
@@ -17,6 +18,7 @@ require (
 	golang.org/x/net v0.52.0
 	google.golang.org/grpc v1.79.2
 	google.golang.org/protobuf v1.36.11
+	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.48.0
 	nhooyr.io/websocket v1.8.17
 )

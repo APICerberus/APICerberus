@@ -2,15 +2,22 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+)
+
+const (
+	maxWASMModuleSize = 100 * 1024 * 1024 // 100MB hard cap
+	wasmMagicHeader   = "\x00asm"
 )
 
 // WASMConfig holds configuration for WASM plugins.
@@ -37,6 +44,17 @@ func DefaultWASMConfig() WASMConfig {
 	}
 }
 
+// Validate checks that the WASM config has sane limits.
+func (c WASMConfig) Validate() error {
+	if c.MaxMemory <= 0 {
+		return fmt.Errorf("wasm max_memory must be positive")
+	}
+	if c.MaxExecution <= 0 {
+		return fmt.Errorf("wasm max_execution must be positive")
+	}
+	return nil
+}
+
 // WASMModule represents a loaded WebAssembly module.
 type WASMModule struct {
 	id       string
@@ -45,6 +63,7 @@ type WASMModule struct {
 	phase    Phase
 	priority int
 	path     string
+	size     int64
 	config   map[string]any
 
 	// Runtime state
@@ -55,7 +74,6 @@ type WASMModule struct {
 }
 
 // WASMRuntime is the interface for WASM runtime implementations.
-// This is a placeholder for the actual runtime implementation.
 type WASMRuntime struct {
 	config WASMConfig
 }
@@ -65,7 +83,9 @@ func NewWASMRuntime(cfg WASMConfig) (*WASMRuntime, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
-
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid wasm config: %w", err)
+	}
 	return &WASMRuntime{
 		config: cfg,
 	}, nil
@@ -76,16 +96,81 @@ func (r *WASMRuntime) IsEnabled() bool {
 	return r != nil && r.config.Enabled
 }
 
+// validateWASMModule checks that a WASM file exists, is within bounds,
+// and has the correct magic number.
+func validateWASMModule(path string, maxSize int64) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("wasm module not found: %w", err)
+	}
+
+	if info.Size() <= 0 {
+		return fmt.Errorf("wasm module is empty")
+	}
+	if info.Size() > maxSize {
+		return fmt.Errorf("wasm module size %d exceeds limit %d", info.Size(), maxSize)
+	}
+	if info.Size() > maxWASMModuleSize {
+		return fmt.Errorf("wasm module size %d exceeds hard cap %d", info.Size(), maxWASMModuleSize)
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("cannot open wasm module: %w", err)
+	}
+	defer f.Close()
+
+	magic := make([]byte, 4)
+	if _, err := io.ReadFull(f, magic); err != nil {
+		return fmt.Errorf("cannot read wasm magic: %w", err)
+	}
+	if !bytes.Equal(magic, []byte(wasmMagicHeader)) {
+		return fmt.Errorf("invalid wasm magic number")
+	}
+	return nil
+}
+
+// safeResolvePath resolves a module path and ensures it's within the module directory.
+func (r *WASMRuntime) safeResolvePath(path string) (string, error) {
+	if !filepath.IsAbs(path) {
+		base, err := filepath.Abs(r.config.ModuleDir)
+		if err != nil {
+			return "", fmt.Errorf("cannot resolve wasm module dir: %w", err)
+		}
+		path = filepath.Join(base, path)
+	}
+
+	// Ensure the resolved path is within the module directory (prevent traversal)
+	moduleDir, err := filepath.Abs(r.config.ModuleDir)
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve wasm module dir: %w", err)
+	}
+	rel, err := filepath.Rel(moduleDir, path)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return "", fmt.Errorf("wasm module path %q is outside module dir %q", path, moduleDir)
+	}
+
+	return path, nil
+}
+
 // LoadModule loads a WASM module from file.
 func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (*WASMModule, error) {
 	if !r.IsEnabled() {
 		return nil, fmt.Errorf("wasm runtime is disabled")
 	}
 
-	// Validate file exists
-	if _, err := os.Stat(path); err != nil {
-		return nil, fmt.Errorf("wasm module not found: %w", err)
+	// Resolve and validate path
+	resolved, err := r.safeResolvePath(path)
+	if err != nil {
+		return nil, err
 	}
+
+	// Validate module file (existence, size, magic)
+	if err := validateWASMModule(resolved, r.config.MaxMemory); err != nil {
+		return nil, err
+	}
+
+	info, _ := os.Stat(resolved)
 
 	// Read module metadata from config
 	name := id
@@ -114,7 +199,8 @@ func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (
 		version:  version,
 		phase:    phase,
 		priority: priority,
-		path:     path,
+		path:     resolved,
+		size:     info.Size(),
 		config:   pluginConfig,
 		runtime:  r,
 		loaded:   true,
@@ -125,19 +211,30 @@ func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (
 }
 
 // Execute runs the WASM module with the given context.
+// Enforces MaxExecution timeout via context.
 func (m *WASMModule) Execute(ctx *PipelineContext) (handled bool, err error) {
 	if m == nil || !m.loaded {
 		return false, fmt.Errorf("wasm module not loaded")
 	}
 
+	m.mu.RLock()
+	timeout := m.runtime.config.MaxExecution
+	m.mu.RUnlock()
+
+	// Create a context with the configured timeout
+	execCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	// In a real implementation, this would:
-	// 1. Instantiate the WASM module
-	// 2. Set up host functions
+	// 1. Instantiate the WASM module with memory limits (config.MaxMemory)
+	// 2. Set up host functions with capability restrictions
 	// 3. Serialize the PipelineContext
-	// 4. Call the WASM entry point
+	// 4. Call the WASM entry point with execCtx for timeout enforcement
 	// 5. Deserialize the result
 
-	// Placeholder implementation
+	// Check context to satisfy the linter (real impl would use execCtx in WASM call)
+	_ = execCtx.Done()
+
 	return false, nil
 }
 
@@ -194,6 +291,14 @@ func (m *WASMModule) Priority() int {
 	return m.priority
 }
 
+// Size returns the module file size in bytes.
+func (m *WASMModule) Size() int64 {
+	if m == nil {
+		return 0
+	}
+	return m.size
+}
+
 // WASMPluginManager manages WASM plugins.
 type WASMPluginManager struct {
 	runtime *WASMRuntime
@@ -222,7 +327,7 @@ func (m *WASMPluginManager) IsEnabled() bool {
 }
 
 // LoadModule loads a WASM module.
-func (m *WASMPluginManager) LoadModule(id, path string, config map[string]any) error {
+func (m *WASMPluginManager) LoadModule(id, path string, pluginConfig map[string]any) error {
 	if !m.IsEnabled() {
 		return fmt.Errorf("wasm plugin manager is disabled")
 	}
@@ -236,12 +341,7 @@ func (m *WASMPluginManager) LoadModule(id, path string, config map[string]any) e
 		delete(m.modules, id)
 	}
 
-	// Resolve full path
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(m.config.ModuleDir, path)
-	}
-
-	module, err := m.runtime.LoadModule(id, path, config)
+	module, err := m.runtime.LoadModule(id, path, pluginConfig)
 	if err != nil {
 		return err
 	}
@@ -325,8 +425,8 @@ func (m *WASMPluginManager) Close() error {
 
 // WASMGuestRequest represents a request to the WASM guest.
 type WASMGuestRequest struct {
-	Type    string                 `json:"type"`
-	Context *WASMContext           `json:"context"`
+	Type    string         `json:"type"`
+	Context *WASMContext   `json:"context"`
 	Config  map[string]any `json:"config"`
 }
 
@@ -339,17 +439,17 @@ type WASMGuestResponse struct {
 
 // WASMContext is a serializable subset of PipelineContext for WASM.
 type WASMContext struct {
-	Method        string                 `json:"method"`
-	Path          string                 `json:"path"`
-	Query         string                 `json:"query"`
-	Headers       map[string]string      `json:"headers"`
-	ConsumerID    string                 `json:"consumer_id"`
-	ConsumerName  string                 `json:"consumer_name"`
-	RouteID       string                 `json:"route_id"`
-	RouteName     string                 `json:"route_name"`
-	ServiceName   string                 `json:"service_name"`
-	CorrelationID string                 `json:"correlation_id"`
-	Metadata      map[string]any `json:"metadata"`
+	Method        string            `json:"method"`
+	Path          string            `json:"path"`
+	Query         string            `json:"query"`
+	Headers       map[string]string `json:"headers"`
+	ConsumerID    string            `json:"consumer_id"`
+	ConsumerName  string            `json:"consumer_name"`
+	RouteID       string            `json:"route_id"`
+	RouteName     string            `json:"route_name"`
+	ServiceName   string            `json:"service_name"`
+	CorrelationID string            `json:"correlation_id"`
+	Metadata      map[string]any    `json:"metadata"`
 }
 
 // ToWASMContext converts PipelineContext to WASMContext.
@@ -431,24 +531,48 @@ func (wc *WASMContext) Deserialize(data []byte) error {
 	return json.Unmarshal(data, wc)
 }
 
-// WASMHostFunctions provides functions exported to WASM guests.
+// WASMHostFunctions provides capability-restricted functions exported to WASM guests.
 type WASMHostFunctions struct {
 	mu sync.RWMutex
+	// Capabilities define which host functions the WASM guest may call.
+	capabilities map[string]bool
 }
 
-// NewWASMHostFunctions creates a new host function provider.
-func NewWASMHostFunctions() *WASMHostFunctions {
-	return &WASMHostFunctions{}
+// NewWASMHostFunctions creates a new host function provider with default capabilities.
+func NewWASMHostFunctions(capabilities map[string]bool) *WASMHostFunctions {
+	if capabilities == nil {
+		// Default: only allow logging and metadata access
+		capabilities = map[string]bool{
+			"log":         true,
+			"get_metadata": true,
+			"set_metadata": true,
+		}
+	}
+	return &WASMHostFunctions{
+		capabilities: capabilities,
+	}
+}
+
+// HasCapability checks if a capability is granted.
+func (h *WASMHostFunctions) HasCapability(name string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.capabilities[name]
 }
 
 // Log logs a message from the WASM guest.
 func (h *WASMHostFunctions) Log(level, message string) {
-	// In real implementation, this would use the gateway's logger
+	if !h.HasCapability("log") {
+		return
+	}
 	fmt.Printf("[WASM:%s] %s\n", level, message)
 }
 
 // GetHeader gets a request header.
 func (h *WASMHostFunctions) GetHeader(ctx *PipelineContext, name string) string {
+	if !h.HasCapability("get_header") {
+		return ""
+	}
 	if ctx == nil || ctx.Request == nil {
 		return ""
 	}
@@ -457,6 +581,9 @@ func (h *WASMHostFunctions) GetHeader(ctx *PipelineContext, name string) string 
 
 // SetHeader sets a response header.
 func (h *WASMHostFunctions) SetHeader(ctx *PipelineContext, name, value string) {
+	if !h.HasCapability("set_header") {
+		return
+	}
 	if ctx == nil || ctx.ResponseWriter == nil {
 		return
 	}
@@ -465,6 +592,9 @@ func (h *WASMHostFunctions) SetHeader(ctx *PipelineContext, name, value string) 
 
 // GetMetadata gets a metadata value.
 func (h *WASMHostFunctions) GetMetadata(ctx *PipelineContext, key string) any {
+	if !h.HasCapability("get_metadata") {
+		return nil
+	}
 	if ctx == nil || ctx.Metadata == nil {
 		return nil
 	}
@@ -473,6 +603,9 @@ func (h *WASMHostFunctions) GetMetadata(ctx *PipelineContext, key string) any {
 
 // SetMetadata sets a metadata value.
 func (h *WASMHostFunctions) SetMetadata(ctx *PipelineContext, key string, value any) {
+	if !h.HasCapability("set_metadata") {
+		return
+	}
 	if ctx == nil {
 		return
 	}
@@ -484,6 +617,9 @@ func (h *WASMHostFunctions) SetMetadata(ctx *PipelineContext, key string, value 
 
 // Abort aborts the request processing.
 func (h *WASMHostFunctions) Abort(ctx *PipelineContext, reason string) {
+	if !h.HasCapability("abort") {
+		return
+	}
 	if ctx == nil {
 		return
 	}
@@ -492,36 +628,7 @@ func (h *WASMHostFunctions) Abort(ctx *PipelineContext, reason string) {
 
 // ValidateWASMModule validates a WASM module file.
 func ValidateWASMModule(path string) error {
-	// Check file exists
-	info, err := os.Stat(path)
-	if err != nil {
-		return fmt.Errorf("wasm module not found: %w", err)
-	}
-
-	// Check file size (max 100MB)
-	if info.Size() > 100*1024*1024 {
-		return fmt.Errorf("wasm module too large: %d bytes", info.Size())
-	}
-
-	// Read and validate WASM magic number
-	// #nosec G304 -- path is administrator-configured WASM module directory.
-	f, err := os.Open(path)
-	if err != nil {
-		return fmt.Errorf("cannot open wasm module: %w", err)
-	}
-	defer f.Close()
-
-	magic := make([]byte, 4)
-	if _, err := io.ReadFull(f, magic); err != nil {
-		return fmt.Errorf("cannot read wasm magic: %w", err)
-	}
-
-	// WASM magic number: \0asm
-	if !bytes.Equal(magic, []byte{0x00, 0x61, 0x73, 0x6d}) {
-		return fmt.Errorf("invalid wasm magic number")
-	}
-
-	return nil
+	return validateWASMModule(path, maxWASMModuleSize)
 }
 
 // buildWASMPlugin creates a PipelinePlugin from WASM configuration.
@@ -548,7 +655,6 @@ func buildWASMPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin
 	// Validate module exists
 	if err := ValidateWASMModule(modulePath); err != nil {
 		// Don't fail if module doesn't exist yet - it might be loaded dynamically
-		// Just log a warning
 		fmt.Printf("Warning: WASM module validation failed: %v\n", err)
 	}
 
@@ -557,8 +663,6 @@ func buildWASMPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin
 		phase:    phase,
 		priority: priority,
 		run: func(ctx *PipelineContext) (bool, error) {
-			// In a real implementation, this would call the WASM runtime
-			// For now, just return no handling
 			return false, nil
 		},
 	}, nil

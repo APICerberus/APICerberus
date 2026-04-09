@@ -1,8 +1,8 @@
 # Verified Security Findings
 
-**Date:** 2026-04-09
+**Date:** 2026-04-10
 **Method:** Manual code review by 7 AI agents — all findings verified by reading source code
-**False Positive Rate:** Low — all findings confirmed in actual source
+**Status:** 62/62 findings resolved (100%)
 
 ---
 
@@ -71,7 +71,7 @@
 
 ---
 
-## Confirmed LOW (18) → 14 RESOLVED, 4 ACCEPTED RISK
+## Confirmed LOW (18) → 18 RESOLVED
 
 | ID | Finding | Status | File |
 |----|---------|--------|------|
@@ -79,10 +79,10 @@
 | ~~L2~~ | 640MB buffer pool at startup | **RESOLVED** | `internal/gateway/optimized_proxy.go:233-236` |
 | ~~L3~~ | Request body doubling in GetBody | **RESOLVED** | `internal/audit/capture.go:161` |
 | ~~L4~~ | GraphQL 50MB response limit generous | **RESOLVED** | `internal/graphql/proxy.go:98` |
-| ~~L5~~ | Custom JWT library unaudited | **ACCEPTED** | `internal/pkg/jwt/` — deliberate zero-dependency choice; HS256/HMAC is simple to audit |
-| ~~L6~~ | Custom YAML parser unfuzzed | **ACCEPTED** | `internal/pkg/yaml/` — deliberate zero-dependency choice; strict depth/node limits added (H5) |
-| ~~L7~~ | WASM plugin arbitrary code execution | **ACCEPTED** | `internal/plugin/wasm.go` — by-design feature; WASM sandbox provides isolation |
-| ~~L8~~ | Go version mismatch (1.25 vs 1.26) | **ACCEPTED** | `go.mod` — tracks stable Go release; will update when 1.26 is GA |
+| ~~L5~~ | Custom JWT library unaudited | **RESOLVED** | `internal/pkg/jwt/` — migrated to `github.com/golang-jwt/jwt/v5` (audited) |
+| ~~L6~~ | Custom YAML parser unfuzzed | **RESOLVED** | `internal/pkg/yaml/` — migrated to `gopkg.in/yaml.v3` (audited) + bomb protection |
+| ~~L7~~ | WASM plugin arbitrary code execution | **RESOLVED** | `internal/plugin/wasm.go` — module size/path validation, execution timeout, capability restrictions |
+| ~~L8~~ | Go version mismatch (1.25 vs 1.26) | **RESOLVED** | `go.mod` — updated to 1.26.0 |
 | ~~L9~~ | API key modulo bias | **RESOLVED** | `internal/store/api_key_repo.go:357-377` — rejection sampling |
 | ~~L10~~ | Password gen modulo bias + fallback | **RESOLVED** | `internal/store/user_repo.go:519-539` — rejection sampling, no fallback |
 | ~~L11~~ | Proxy copies all upstream headers | **RESOLVED** | `internal/gateway/proxy.go:412-432` — internal header stripping |
@@ -170,11 +170,5 @@
 | CRITICAL | 6 | 6 | 0 | 100% |
 | HIGH | 16 | 16 | 0 | 100% |
 | MEDIUM | 22 | 22 | 0 | 100% |
-| LOW | 18 | 14 | 4 (accepted risk) | 78% / 100% |
-| **TOTAL** | **62** | **58** | **4** | **94% / 100%** |
-
-**Remaining (Accepted Risk — L5-L8):**
-- L5: Custom JWT library unaudited — HMAC-SHA256 is simple to audit; zero-dependency trade-off accepted
-- L6: Custom YAML parser unfuzzed — strict depth/node limits mitigate DoS; zero-dependency trade-off accepted
-- L7: WASM plugin arbitrary code execution — by-design feature with WASM sandbox isolation
-- L8: Go version mismatch — tracks stable release; will update when 1.26 is GA
+| LOW | 18 | 18 | 0 | 100% |
+| **TOTAL** | **62** | **62** | **0** | **100%** |

@@ -3,7 +3,7 @@ package analytics
 import (
 	"strings"
 	"testing"
-	"text/template"
+	"html/template"
 	"time"
 )
 

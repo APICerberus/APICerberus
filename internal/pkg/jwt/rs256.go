@@ -71,6 +71,11 @@ func ParseRSAPublicKeyFromJWK(jwk JWK) (*rsa.PublicKey, error) {
 		return nil, fmt.Errorf("%w: invalid exponent", ErrInvalidJWK)
 	}
 
+	// Enforce minimum 2048-bit RSA key size (CWE-326)
+	if modulus.BitLen() < 2048 {
+		return nil, fmt.Errorf("%w: RSA key size %d bits is below minimum 2048", ErrInvalidJWK, modulus.BitLen())
+	}
+
 	return &rsa.PublicKey{
 		N: modulus,
 		E: e,

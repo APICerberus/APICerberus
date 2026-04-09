@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -131,6 +133,9 @@ func (m *SubgraphManager) AddSubgraph(subgraph *Subgraph) error {
 	}
 	if subgraph.URL == "" {
 		return fmt.Errorf("subgraph URL is required")
+	}
+	if err := validateSubgraphURL(subgraph.URL); err != nil {
+		return err
 	}
 
 	m.mu.Lock()
@@ -383,4 +388,37 @@ func typeToString(t *TypeRef) string {
 		return ""
 	}
 	return t.Name
+}
+
+// validateSubgraphURL rejects subgraph URLs targeting loopback, link-local,
+// unspecified, or multicast addresses to prevent SSRF via subgraph registration.
+func validateSubgraphURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid subgraph URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("subgraph URL scheme must be http or https, got %q", u.Scheme)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("subgraph URL has no host")
+	}
+
+	ip := net.ParseIP(host)
+	if ip != nil {
+		if ip.IsLoopback() {
+			return fmt.Errorf("subgraph URL targets loopback address %q", host)
+		}
+		if ip.IsUnspecified() {
+			return fmt.Errorf("subgraph URL targets unspecified address %q", host)
+		}
+		if ip4 := ip.To4(); ip4 != nil && ip4[0] == 169 && ip4[1] == 254 {
+			return fmt.Errorf("subgraph URL targets link-local/metadata address %q", host)
+		}
+		if ip.IsMulticast() {
+			return fmt.Errorf("subgraph URL targets multicast address %q", host)
+		}
+	}
+	return nil
 }

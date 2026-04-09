@@ -46,7 +46,7 @@ func TestE2EAdminConfigureAndProxy(t *testing.T) {
 		Admin: config.AdminConfig{
 			Addr:        adminAddr,
 			APIKey:      "secret-e2e",
-			TokenSecret: "secret-e2e-token",
+			TokenSecret: "secret-e2e-token-abcdefghijklmnopqrstuvwxyz",
 			TokenTTL:    1 * time.Hour,
 		},
 	}

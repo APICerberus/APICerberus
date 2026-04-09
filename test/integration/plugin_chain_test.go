@@ -576,7 +576,7 @@ func buildBasePluginConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath, 
 		Admin: config.AdminConfig{
 			Addr:        adminAddr,
 			APIKey:      "secret-plugin-test",
-			TokenSecret: "secret-plugin-test-token",
+			TokenSecret: "secret-plugin-test-token-abcdefghijklmnopqrstuvwxyz",
 			TokenTTL:    1 * time.Hour,
 		},
 		Store: config.StoreConfig{

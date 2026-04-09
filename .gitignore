@@ -10,3 +10,10 @@ web/dist/
 *.out
 *.gz
 internal/audit/audit-archive/
+.apicerberus-initial-password
+*.password
+secrets/
+.env
+.env.*
+!.env.example
+certs/

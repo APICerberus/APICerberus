@@ -32,7 +32,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	hash, err := store.HashPassword(newPassword)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_password", err.Error())
+		writeError(w, http.StatusBadRequest, "invalid_password", "password does not meet requirements")
 		return
 	}
 	user.PasswordHash = hash
@@ -130,7 +130,7 @@ func (s *Server) renameMyAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.APIKeys().RenameForUser(id, user.ID, name); err != nil {
-		writeError(w, http.StatusBadRequest, "rename_api_key_failed", err.Error())
+		writeError(w, http.StatusBadRequest, "rename_api_key_failed", "failed to rename API key")
 		return
 	}
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
@@ -152,7 +152,7 @@ func (s *Server) revokeMyAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.APIKeys().RevokeForUser(id, user.ID); err != nil {
-		writeError(w, http.StatusBadRequest, "revoke_api_key_failed", err.Error())
+		writeError(w, http.StatusBadRequest, "revoke_api_key_failed", "failed to revoke API key")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

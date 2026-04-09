@@ -6,6 +6,12 @@ import (
 	"strings"
 )
 
+// Maximum YAML document complexity to prevent billion-laughs and entity expansion attacks.
+const (
+	maxYAMLDepth  = 100    // maximum nesting depth
+	maxYAMLNodes  = 100000 // total nodes in document
+)
+
 // Parse parses YAML bytes into an internal node tree.
 func Parse(data []byte) (Node, error) {
 	tokens, err := tokenize(data)
@@ -31,8 +37,19 @@ func Parse(data []byte) (Node, error) {
 }
 
 type parser struct {
-	tokens []token
-	pos    int
+	tokens    []token
+	pos       int
+	depth     int // current nesting depth
+	nodeCount int // total nodes created
+}
+
+// checkNodeLimit returns an error if document complexity limits are exceeded.
+func (p *parser) checkNodeLimit() error {
+	p.nodeCount++
+	if p.nodeCount > maxYAMLNodes {
+		return fmt.Errorf("yaml document exceeds maximum node count (%d)", maxYAMLNodes)
+	}
+	return nil
 }
 
 func (p *parser) parseDocument() (Node, error) {
@@ -66,7 +83,16 @@ func (p *parser) parseBlock(indent int) (Node, error) {
 }
 
 func (p *parser) parseMap(indent int) (Node, error) {
+	p.depth++
+	if p.depth > maxYAMLDepth {
+		return nil, fmt.Errorf("yaml document exceeds maximum depth (%d)", maxYAMLDepth)
+	}
+	defer func() { p.depth-- }()
+
 	out := newNodeMap()
+	if err := p.checkNodeLimit(); err != nil {
+		return nil, err
+	}
 
 	for {
 		p.skipSkippable()
@@ -100,13 +126,25 @@ func (p *parser) parseMap(indent int) (Node, error) {
 			return nil, fmt.Errorf("line %d: %w", t.line, err)
 		}
 		out.set(keyValue, value)
+		if err := p.checkNodeLimit(); err != nil {
+			return nil, err
+		}
 	}
 
 	return out, nil
 }
 
 func (p *parser) parseSequence(indent int) (Node, error) {
+	p.depth++
+	if p.depth > maxYAMLDepth {
+		return nil, fmt.Errorf("yaml document exceeds maximum depth (%d)", maxYAMLDepth)
+	}
+	defer func() { p.depth-- }()
+
 	out := &NodeSequence{Items: make([]Node, 0)}
+	if err := p.checkNodeLimit(); err != nil {
+		return nil, err
+	}
 
 	for {
 		p.skipSkippable()
@@ -133,6 +171,9 @@ func (p *parser) parseSequence(indent int) (Node, error) {
 			return nil, fmt.Errorf("line %d: %w", t.line, err)
 		}
 		out.Items = append(out.Items, itemNode)
+		if err := p.checkNodeLimit(); err != nil {
+			return nil, err
+		}
 	}
 
 	return out, nil

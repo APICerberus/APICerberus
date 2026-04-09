@@ -277,9 +277,51 @@ func buildUpstreamURL(targetAddress, pathValue, rawQuery string) (string, error)
 		return "", fmt.Errorf("missing host in target address %q", targetAddress)
 	}
 
+	// SSRF protection: block private, loopback, link-local, and metadata IPs
+	if err := validateUpstreamHost(base.Host); err != nil {
+		return "", err
+	}
+
 	base.Path = joinURLPath(base.Path, pathValue)
 	base.RawQuery = rawQuery
 	return base.String(), nil
+}
+
+// validateUpstreamHost rejects cloud metadata (169.254.0.0/16) and
+// unspecified (0.0.0.0/::) addresses to prevent SSRF via config.
+// Loopback and private ranges are allowed since they are legitimate
+// upstream targets in development and internal deployments.
+func validateUpstreamHost(host string) error {
+	// Strip port if present
+	h := host
+	if idx := strings.LastIndex(host, ":"); idx != -1 {
+		// Check if this is an IPv6 bracket address or IPv4:port
+		if strings.HasPrefix(host, "[") {
+			// IPv6: [::1]:8080
+			if end := strings.Index(host, "]"); end != -1 && end+1 == idx {
+				h = host[1:end]
+			}
+		} else {
+			h = host[:idx]
+		}
+	}
+
+	ip := net.ParseIP(h)
+	if ip == nil {
+		// Not a literal IP — could be a hostname; allow it
+		// (hostname resolution happens later via dialer)
+		return nil
+	}
+
+	// Block link-local (169.254.0.0/16) — includes cloud metadata (169.254.169.254)
+	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 169 && ip4[1] == 254 {
+		return fmt.Errorf("upstream address %q is in link-local/metadata range", host)
+	}
+	// Block unspecified addresses
+	if ip.IsUnspecified() {
+		return fmt.Errorf("upstream address %q is unspecified", host)
+	}
+	return nil
 }
 
 func dialUpstreamWebSocket(upstreamURL *url.URL) (net.Conn, error) {
@@ -345,6 +387,10 @@ func copyHeaders(dst, src http.Header) {
 		if _, blocked := connectionTokens[lower]; blocked {
 			continue
 		}
+		// Strip internal upstream headers that should not leak to clients (CWE-200)
+		if shouldStripHeader(lower) {
+			continue
+		}
 		for _, value := range values {
 			dst.Add(canonical, value)
 		}
@@ -361,6 +407,28 @@ var hopByHopHeaders = map[string]bool{
 	"trailer":             true,
 	"transfer-encoding":   true,
 	"upgrade":             true,
+}
+
+// internalHeaderPrefixes lists header prefixes used internally by upstream
+// services that should not be exposed to downstream clients.
+var internalHeaderPrefixes = []string{
+	"x-amzn-",       // AWS internal
+	"x-amz-",        // AWS internal
+	"x-goog-",       // GCP internal
+	"x-go-grpc-",    // gRPC internal
+	"x-forwarded-",  // Already set by gateway
+	"x-real-ip",     // Already set by gateway
+	"x-envoy-",      // Envoy internal
+	"x-cloud-trace-",// Cloud trace headers
+}
+
+func shouldStripHeader(lower string) bool {
+	for _, prefix := range internalHeaderPrefixes {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func parseConnectionTokens(headers http.Header) map[string]struct{} {

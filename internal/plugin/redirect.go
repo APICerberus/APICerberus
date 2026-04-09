@@ -56,8 +56,10 @@ func (r *Redirect) Handle(w http.ResponseWriter, req *http.Request) bool {
 		if req.URL.Path != rule.Path {
 			continue
 		}
-		target := appendQueryIfMissing(rule.TargetURL, req.URL.RawQuery)
-		http.Redirect(w, req, target, rule.StatusCode)
+		// Do not append original query parameters to redirect target.
+		// Original query may contain tokens, session IDs, or other
+		// sensitive data that should not be leaked to external domains.
+		http.Redirect(w, req, rule.TargetURL, rule.StatusCode)
 		return true
 	}
 	return false

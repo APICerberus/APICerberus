@@ -20,7 +20,7 @@ import (
 func TestParse(t *testing.T) {
 	t.Parallel()
 
-	raw := buildHS256Token(t, map[string]any{"alg": "HS256", "typ": "JWT"}, map[string]any{"sub": "u1"}, []byte("s3cr3t"))
+	raw := buildHS256Token(t, map[string]any{"alg": "HS256", "typ": "JWT"}, map[string]any{"sub": "u1"}, []byte("s3cr3t-long-enough-for-hs256!!"))
 	token, err := Parse(raw)
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
@@ -39,7 +39,7 @@ func TestParse(t *testing.T) {
 func TestVerifyHS256(t *testing.T) {
 	t.Parallel()
 
-	secret := []byte("test-secret")
+	secret := []byte("test-secret-long-enough-for-hs256-min!!")
 	raw := buildHS256Token(t, map[string]any{"alg": "HS256"}, map[string]any{"sub": "u1"}, secret)
 	token, err := Parse(raw)
 	if err != nil {
@@ -48,7 +48,7 @@ func TestVerifyHS256(t *testing.T) {
 	if !VerifyHS256(token.SigningInput, token.Signature, secret) {
 		t.Fatalf("expected HS256 verification to succeed")
 	}
-	if VerifyHS256(token.SigningInput, token.Signature, []byte("wrong")) {
+	if VerifyHS256(token.SigningInput, token.Signature, []byte("wrong-secret-long-enough-for-min!!")) {
 		t.Fatalf("expected HS256 verification to fail with wrong key")
 	}
 }

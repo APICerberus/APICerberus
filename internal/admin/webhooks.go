@@ -10,7 +10,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"log"
 	"strings"
@@ -224,14 +226,18 @@ func (m *WebhookManager) retryOrFail(delivery *store.WebhookDelivery, webhook *s
 	delivery.Attempt++
 
 	if delivery.Attempt < delivery.MaxAttempts {
-		// Schedule retry
+		// Schedule retry via worker to avoid goroutine leaks (CWE-404)
+		interval := time.Duration(webhook.RetryInterval) * time.Second
+		if interval == 0 {
+			interval = 60 * time.Second
+		}
 		go func() {
-			interval := time.Duration(webhook.RetryInterval) * time.Second
-			if interval == 0 {
-				interval = 60 * time.Second
-			}
 			time.Sleep(interval)
-			m.deliveryCh <- delivery
+			select {
+			case m.deliveryCh <- delivery:
+			default:
+				// Channel full or closed — delivery will be picked up by pending worker
+			}
 		}()
 	} else {
 		delivery.Status = "failed"
@@ -347,6 +353,10 @@ func (s *Server) handleCreateWebhook(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "validation_failed", "URL is required")
 		return
 	}
+	if err := validateWebhookURL(req.URL); err != nil {
+		writeError(w, http.StatusBadRequest, "validation_failed", err.Error())
+		return
+	}
 	if len(req.Events) == 0 {
 		writeError(w, http.StatusBadRequest, "validation_failed", "At least one event is required")
 		return
@@ -448,6 +458,10 @@ func (s *Server) handleUpdateWebhook(w http.ResponseWriter, r *http.Request) {
 		existing.Name = req.Name
 	}
 	if req.URL != "" {
+		if err := validateWebhookURL(req.URL); err != nil {
+			writeError(w, http.StatusBadRequest, "validation_failed", err.Error())
+			return
+		}
 		existing.URL = req.URL
 	}
 	if req.Secret != "" {
@@ -579,6 +593,10 @@ func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 	_ = st.CreateDelivery(delivery)
 
 	// Send test request synchronously
+	if err := validateWebhookURL(webhook.URL); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_webhook_url", err.Error())
+		return
+	}
 	// #nosec G704 -- webhook.URL is administrator-configured by design; SSRF protection is an admin-level responsibility.
 	req, _ := http.NewRequest("POST", webhook.URL, bytes.NewReader(payloadBytes))
 	req.Header.Set("Content-Type", "application/json")
@@ -685,6 +703,42 @@ func (s *Server) handleRotateWebhookSecret(w http.ResponseWriter, r *http.Reques
 		"secret":     newSecret,
 		"message":    "Secret rotated successfully. Store this secret securely as it will not be shown again.",
 	})
+}
+
+// validateWebhookURL rejects webhook URLs targeting loopback, link-local,
+// unspecified, or multicast addresses to prevent SSRF via webhook registration.
+// Only HTTPS is allowed for production; HTTP is permitted for development.
+func validateWebhookURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid webhook URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("webhook URL scheme must be http or https, got %q", u.Scheme)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("webhook URL has no host")
+	}
+
+	// Reject literal IPs in dangerous ranges.
+	ip := net.ParseIP(host)
+	if ip != nil {
+		if ip.IsLoopback() {
+			return fmt.Errorf("webhook URL targets loopback address %q", host)
+		}
+		if ip.IsUnspecified() {
+			return fmt.Errorf("webhook URL targets unspecified address %q", host)
+		}
+		if ip4 := ip.To4(); ip4 != nil && ip4[0] == 169 && ip4[1] == 254 {
+			return fmt.Errorf("webhook URL targets link-local/metadata address %q", host)
+		}
+		if ip.IsMulticast() {
+			return fmt.Errorf("webhook URL targets multicast address %q", host)
+		}
+	}
+	// Hostname (not a literal IP) — allowed; DNS resolution happens later.
+	return nil
 }
 
 // RegisterWebhookRoutes registers webhook management endpoints

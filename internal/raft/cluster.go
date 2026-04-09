@@ -2,6 +2,7 @@ package raft
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -88,7 +89,8 @@ func (cm *ClusterManager) Stop() error {
 func (cm *ClusterManager) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiKey := r.Header.Get("Authorization")
-		if apiKey != "Bearer "+cm.apiKey {
+		expected := "Bearer " + cm.apiKey
+		if subtle.ConstantTimeCompare([]byte(apiKey), []byte(expected)) != 1 {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}

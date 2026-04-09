@@ -617,7 +617,7 @@ func buildLifecycleTestConfig(t *testing.T, gwAddr, adminAddr, routeID, routePat
 		Admin: config.AdminConfig{
 			Addr:        adminAddr,
 			APIKey:      "secret-lifecycle-test",
-			TokenSecret: "secret-lifecycle-test-token",
+			TokenSecret: "secret-lifecycle-test-token-abcdefghijklmnopqrstuvwxyz",
 			TokenTTL:    1 * time.Hour,
 		},
 		Store: config.StoreConfig{

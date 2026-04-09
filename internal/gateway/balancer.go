@@ -191,6 +191,10 @@ func (w *WeightedRoundRobin) expandedHealthyTargets() []config.UpstreamTarget {
 		if weight <= 0 {
 			weight = 1
 		}
+		// Cap weight to prevent unbounded slice allocation (CWE-770)
+		if weight > 1000 {
+			weight = 1000
+		}
 		for i := 0; i < weight; i++ {
 			expanded = append(expanded, t)
 		}

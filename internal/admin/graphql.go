@@ -377,7 +377,15 @@ var consumerAPIKeyType = graphql.NewObject(graphql.ObjectConfig{
 	Name: "ConsumerAPIKey",
 	Fields: graphql.Fields{
 		"id":        &graphql.Field{Type: graphql.String},
-		"key":       &graphql.Field{Type: graphql.String},
+		"key":       &graphql.Field{Type: graphql.String, Resolve: func(p graphql.ResolveParams) (any, error) {
+			// Redact raw key values — only show prefix and last 4 chars
+			if k, ok := p.Source.(map[string]any); ok {
+				if raw, ok := k["key"].(string); ok && len(raw) > 8 {
+					return raw[:8] + "..." + raw[len(raw)-4:], nil
+				}
+			}
+			return "***redacted***", nil
+		}},
 		"createdAt": &graphql.Field{Type: graphql.String},
 		"expiresAt": &graphql.Field{Type: graphql.String},
 	},

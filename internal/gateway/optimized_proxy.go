@@ -229,8 +229,12 @@ func NewOptimizedProxy(cfg OptimizedProxyConfig) *OptimizedProxy {
 		},
 	}
 
-	// Pre-populate buffer pool
-	for i := 0; i < cfg.BufferPoolCapacity; i++ {
+	// Pre-populate buffer pool — cap to prevent excessive memory at startup (CWE-770)
+	capacity := cfg.BufferPoolCapacity
+	if capacity > 1024 {
+		capacity = 1024 // 64 KB * 1024 = 64 MB max pre-allocated
+	}
+	for i := 0; i < capacity; i++ {
 		b := make([]byte, cfg.BufferSize)
 		bufPool.Put(&b)
 	}
@@ -466,6 +470,11 @@ func (p *OptimizedProxy) buildUpstreamURL(req *http.Request, targetAddress strin
 		return nil, errors.New("missing host in target address")
 	}
 
+	// SSRF protection: block private, loopback, link-local, and metadata IPs
+	if err := validateUpstreamHost(base.Host); err != nil {
+		return nil, err
+	}
+
 	// Build path
 	upstreamPath := req.URL.Path
 	if route != nil && route.StripPath {
@@ -563,6 +572,17 @@ func (p *OptimizedProxy) coalesceKey(req *http.Request, upstreamURL *url.URL) st
 	sb.WriteString(strings.ToUpper(req.Method))
 	sb.WriteByte('|')
 	sb.WriteString(upstreamURL.String())
+
+	// Include auth identity in coalesce key to prevent cross-user data leakage
+	if auth := req.Header.Get("Authorization"); auth != "" {
+		sb.WriteByte('|')
+		sb.WriteString("auth=")
+		sb.WriteString(auth)
+	} else if apiKey := req.Header.Get("X-API-Key"); apiKey != "" {
+		sb.WriteByte('|')
+		sb.WriteString("key=")
+		sb.WriteString(apiKey)
+	}
 
 	// Include vary headers in key
 	varyHeaders := []string{"Accept", "Accept-Encoding", "Accept-Language"}

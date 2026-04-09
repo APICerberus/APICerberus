@@ -473,10 +473,17 @@ func (s *Store) ensureInitialAdminUser() error {
 	if adminPassword == "" {
 		// Generate a secure random password if not set
 		adminPassword = generateSecurePassword()
-		fmt.Fprintf(os.Stderr, "\n⚠️  WARNING: No APICERBERUS_ADMIN_PASSWORD set.\n")
-		fmt.Fprintf(os.Stderr, "🔑 Generated temporary admin password: %s\n", adminPassword)
-		fmt.Fprintf(os.Stderr, "📝 Login with: admin@apicerberus.local / %s\n", adminPassword)
-		fmt.Fprintf(os.Stderr, "⚠️  Please change this password immediately after first login!\n\n")
+		// Write password to a restricted-permission file instead of stderr
+		pwPath := ".apicerberus-initial-password"
+		if err := os.WriteFile(pwPath, []byte(adminPassword), 0o600); err != nil {
+			fmt.Fprintf(os.Stderr, "⚠️  WARNING: No APICERBERUS_ADMIN_PASSWORD set and failed to write generated password to file: %v\n", err)
+		} else {
+			fmt.Fprintf(os.Stderr, "⚠️  WARNING: No APICERBERUS_ADMIN_PASSWORD set.\n")
+			fmt.Fprintf(os.Stderr, "🔑 Generated temporary admin password written to: %s\n", pwPath)
+			fmt.Fprintf(os.Stderr, "📝 Login with: admin@apicerberus.local / <password from file>\n")
+			fmt.Fprintf(os.Stderr, "⚠️  Please change this password immediately after first login!\n")
+			fmt.Fprintf(os.Stderr, "⚠️  Delete the file after use: rm %s\n\n", pwPath)
+		}
 	}
 
 	id, err := uuid.NewString()
@@ -512,15 +519,21 @@ func (s *Store) ensureInitialAdminUser() error {
 func generateSecurePassword() string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
 	const length = 20
+	charsetLen := len(charset)
+	maxValid := 256 - (256 % charsetLen) // rejection sampling upper bound (CWE-330)
+
 	password := make([]byte, length)
+	buf := make([]byte, 1)
 	for i := range password {
-		randomByte := make([]byte, 1)
-		if _, err := rand.Read(randomByte); err != nil {
-			// Fallback if crypto/rand fails
-			password[i] = charset[i%len(charset)]
-			continue
+		for {
+			if _, err := rand.Read(buf); err != nil {
+				panic(fmt.Sprintf("crypto/rand unavailable: %v", err))
+			}
+			if int(buf[0]) < maxValid {
+				password[i] = charset[int(buf[0])%charsetLen]
+				break
+			}
 		}
-		password[i] = charset[int(randomByte[0])%len(charset)]
 	}
 	return string(password)
 }

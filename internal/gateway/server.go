@@ -553,7 +553,12 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			runAfterProxy(nil)
 			pool.Done(targetID)
-			time.Sleep(retryPolicy.Backoff(attempt))
+			// Respect context cancellation during retry backoff (CWE-400)
+			select {
+			case <-r.Context().Done():
+				return
+			case <-time.After(retryPolicy.Backoff(attempt)):
+			}
 			continue
 		}
 
@@ -994,7 +999,7 @@ func (g *Gateway) writePluginError(w http.ResponseWriter, err error) {
 		g.writeError(w, e.Status, e.Code, e.Message)
 		return
 	}
-	g.writeError(w, http.StatusBadRequest, "plugin_error", err.Error())
+	g.writeError(w, http.StatusBadRequest, "plugin_error", "plugin processing error")
 }
 
 func (g *Gateway) writeBillingError(w http.ResponseWriter, err error) {

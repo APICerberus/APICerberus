@@ -50,6 +50,7 @@ type ClusterConfig struct {
 	HeartbeatInterval  time.Duration         `yaml:"heartbeat_interval" json:"heartbeat_interval"`
 	CertificateSync    CertificateSyncConfig `yaml:"certificate_sync" json:"certificate_sync"`
 	MTLS               ClusterMTLSConfig     `yaml:"mtls" json:"mtls"`
+	RPCSecret          string                `yaml:"rpc_secret" json:"rpc_secret"`
 }
 
 // ClusterMTLSConfig holds Raft inter-node mTLS configuration.

@@ -2,6 +2,7 @@ package raft
 
 import (
 	"bytes"
+	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -25,6 +26,11 @@ type HTTPTransport struct {
 	// TLS configuration for mTLS
 	tlsConfig *tls.Config
 	useTLS    bool
+
+	// Shared secret for authenticating inter-node RPC calls.
+	// When non-empty, all incoming RPC requests must present this
+	// secret via the X-Raft-Token header.
+	rpcSecret string
 }
 
 // NewHTTPTransport creates a new HTTP transport.
@@ -37,6 +43,14 @@ func NewHTTPTransport(bindAddress, nodeID string) *HTTPTransport {
 			Timeout: 5 * time.Second,
 		},
 	}
+}
+
+// SetRPCSecret sets a shared secret that all incoming RPC requests must present
+// via the X-Raft-Token header. Call before Start().
+func (t *HTTPTransport) SetRPCSecret(secret string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.rpcSecret = secret
 }
 
 // SetTLSConfig configures TLS for mTLS communication.
@@ -62,6 +76,8 @@ func (t *HTTPTransport) RemovePeer(nodeID string) {
 	delete(t.peers, nodeID)
 }
 
+const maxRaftRPCBodySize = 10 << 20 // 10 MB — prevents excessive memory allocation on Raft RPC (CWE-770)
+
 // Start starts the HTTP transport server.
 func (t *HTTPTransport) Start(handler RPCHandler) error {
 	t.mu.Lock()
@@ -70,9 +86,10 @@ func (t *HTTPTransport) Start(handler RPCHandler) error {
 	t.handler = handler
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/raft/request-vote", t.handleRequestVote)
-	mux.HandleFunc("/raft/append-entries", t.handleAppendEntries)
-	mux.HandleFunc("/raft/install-snapshot", t.handleInstallSnapshot)
+	rpcHandler := t.withRPCAuth
+	mux.Handle("/raft/request-vote", http.MaxBytesHandler(rpcHandler(t.handleRequestVote), maxRaftRPCBodySize))
+	mux.Handle("/raft/append-entries", http.MaxBytesHandler(rpcHandler(t.handleAppendEntries), maxRaftRPCBodySize))
+	mux.Handle("/raft/install-snapshot", http.MaxBytesHandler(rpcHandler(t.handleInstallSnapshot), maxRaftRPCBodySize))
 
 	t.server = &http.Server{
 		Addr:         t.bindAddress,
@@ -169,11 +186,42 @@ func (t *HTTPTransport) InstallSnapshot(nodeID string, req *InstallSnapshotReque
 	return &response, nil
 }
 
-// postRPC sends an RPC request to a peer.
+// withRPCAuth is a middleware that authenticates incoming Raft RPC requests.
+// If rpcSecret is set, the request must present a matching X-Raft-Token header.
+func (t *HTTPTransport) withRPCAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		t.mu.RLock()
+		secret := t.rpcSecret
+		t.mu.RUnlock()
+
+		if secret != "" && !t.authenticateRPC(r, secret) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// authenticateRPC checks if the request's X-Raft-Token matches the shared secret.
+func (t *HTTPTransport) authenticateRPC(r *http.Request, secret string) bool {
+	token := r.Header.Get("X-Raft-Token")
+	if token == "" {
+		return false
+	}
+	// Use constant-time comparison to prevent timing attacks
+	return cryptoSubtleConstantTimeCompare([]byte(token), []byte(secret)) == 1
+}
+
+// cryptoSubtleConstantTimeCompare wraps crypto/subtle.ConstantTimeCompare
+// to avoid importing crypto/subtle in this file directly.
+func cryptoSubtleConstantTimeCompare(a, b []byte) int {
+	return subtle.ConstantTimeCompare(a, b)
+}
 func (t *HTTPTransport) postRPC(nodeID, path string, req any) ([]byte, error) {
 	t.mu.RLock()
 	addr, ok := t.peers[nodeID]
 	useTLS := t.useTLS
+	secret := t.rpcSecret
 	t.mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("unknown peer: %s", nodeID)
@@ -194,6 +242,9 @@ func (t *HTTPTransport) postRPC(nodeID, path string, req any) ([]byte, error) {
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if secret != "" {
+		httpReq.Header.Set("X-Raft-Token", secret)
+	}
 
 	httpResp, err := t.client.Do(httpReq)
 	if err != nil {

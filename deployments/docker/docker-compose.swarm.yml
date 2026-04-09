@@ -252,7 +252,7 @@ services:
         constraints:
           - node.role == manager
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set}
     volumes:
       - type: volume
         source: grafana-data

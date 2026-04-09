@@ -35,6 +35,14 @@ func NewCORS(cfg CORSConfig) *CORS {
 		}
 	}
 
+	// Security: reject wildcard origins with credentials enabled.
+	// This would allow any origin to make credentialed requests,
+	// enabling cross-origin cookie/token theft.
+	if allowAllOrigins && cfg.AllowCredentials {
+		allowAllOrigins = false
+		cfg.AllowCredentials = false
+	}
+
 	methods := normalizeList(cfg.AllowedMethods)
 	if len(methods) == 0 {
 		methods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}

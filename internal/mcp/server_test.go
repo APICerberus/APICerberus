@@ -349,7 +349,7 @@ func newTestServer(t *testing.T) *Server {
 		Admin: config.AdminConfig{
 			Addr:        ":0",
 			APIKey:      "test-admin-key",
-			TokenSecret: "test-admin-token-secret",
+			TokenSecret: "test-admin-token-secret-for-hs256!!",
 			TokenTTL:    1 * time.Hour,
 			UIEnabled:   false,
 			UIPath:      "/dashboard",

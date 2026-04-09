@@ -486,7 +486,7 @@ func newFederationEnabledServer(t *testing.T) (adminBaseURL string, cleanup func
 		},
 		Admin: config.AdminConfig{
 			APIKey:      "secret-admin",
-			TokenSecret: "secret-admin-token",
+			TokenSecret: "secret-admin-token-with-32-chars-min",
 			TokenTTL:    1 * time.Hour,
 			UIEnabled:   true,
 		},

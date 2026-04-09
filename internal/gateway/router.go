@@ -613,7 +613,12 @@ func hasRegexMeta(path string) bool {
 	return strings.ContainsAny(path, "[](){}+?|^$\\*")
 }
 
+const maxRegexLength = 1024 // Prevents ReDoS via excessively long patterns (CWE-1333)
+
 func compileRegex(path string) (*regexp.Regexp, error) {
+	if len(path) > maxRegexLength {
+		return nil, fmt.Errorf("route pattern exceeds maximum length of %d characters", maxRegexLength)
+	}
 	p := path
 	if !strings.HasPrefix(p, "^") {
 		p = "^" + p

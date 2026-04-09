@@ -941,17 +941,15 @@ func (s *Server) ensureAdminToken(adminSrv *admin.Server, adminKey string) (stri
 		return "", fmt.Errorf("admin token exchange failed: %s", extractAdminError(parsed, rec.Code))
 	}
 
-	var result struct {
-		Token string `json:"token"`
+	// Token is delivered via admin_session cookie, not response body (CWE-319)
+	cookies := rec.Result().Cookies()
+	for _, c := range cookies {
+		if c.Name == "apicerberus_admin_session" {
+			s.adminToken = c.Value
+			return c.Value, nil
+		}
 	}
-	if err := json.Unmarshal(responseBytes, &result); err != nil {
-		return "", fmt.Errorf("unmarshal admin token response: %w", err)
-	}
-	if result.Token == "" {
-		return "", errors.New("admin token exchange returned empty token")
-	}
-	s.adminToken = result.Token
-	return result.Token, nil
+	return "", errors.New("admin token exchange returned no session cookie")
 }
 
 func (s *Server) callAdmin(method, path string, payload any, query url.Values) (any, error) {

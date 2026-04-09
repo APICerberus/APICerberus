@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"crypto/subtle"
 	"errors"
 	"fmt"
 	"io"
@@ -233,47 +232,6 @@ func (s *Server) handle(pattern string, handler http.HandlerFunc) {
 	s.mux.HandleFunc(pattern, s.withAdminBearerAuth(handler))
 }
 
-func (s *Server) withAdminAuth(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		clientIP := extractClientIP(r)
-
-		s.mu.RLock()
-		cfg := s.cfg.Admin
-		s.mu.RUnlock()
-
-		// IP allow-list check (enforced before auth)
-		if !isAllowedIP(clientIP, cfg.AllowedIPs) {
-			writeError(w, http.StatusForbidden, "ip_not_allowed", "Client IP is not in the admin allow-list")
-			return
-		}
-
-		// Rate limiting check
-		if s.isRateLimited(clientIP) {
-			writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many failed authentication attempts. Please try again later.")
-			return
-		}
-
-		// Try Bearer token first
-		if token := extractBearerToken(r); token != "" {
-			if err := verifyAdminToken(token, cfg.TokenSecret); err == nil {
-				s.clearFailedAuth(clientIP)
-				next(w, r)
-				return
-			}
-		}
-
-		// Fall back to static key
-		provided := r.Header.Get("X-Admin-Key")
-		if subtle.ConstantTimeCompare([]byte(provided), []byte(cfg.APIKey)) != 1 {
-			s.recordFailedAuth(clientIP)
-			writeError(w, http.StatusUnauthorized, "admin_unauthorized", "Invalid admin key or token")
-			return
-		}
-		s.clearFailedAuth(clientIP)
-		next(w, r)
-	}
-}
-
 func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 	storeMetrics := map[string]any{}
 	if st := s.gateway.Store(); st != nil {
@@ -331,6 +289,9 @@ func (s *Server) handleConfigExport(w http.ResponseWriter, _ *http.Request) {
 	cfg := cloneConfig(s.cfg)
 	s.mu.RUnlock()
 
+	// Redact all secrets from the config before exporting
+	redactSecrets(cfg)
+
 	raw, err := yamlpkg.Marshal(cfg)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "config_export_failed", err.Error())
@@ -339,6 +300,41 @@ func (s *Server) handleConfigExport(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/x-yaml; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(raw)
+}
+
+// redactSecrets replaces all secret/key/password fields in the config with
+// a masked placeholder before export.
+func redactSecrets(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	// Admin secrets
+	cfg.Admin.APIKey = "***redacted***"
+	cfg.Admin.TokenSecret = "***redacted***"
+
+	// Portal session secret
+	cfg.Portal.Session.Secret = "***redacted***"
+
+	// Redis password
+	cfg.Redis.Password = "***redacted***"
+
+	// Kafka SASL credentials
+	cfg.Kafka.SASL.Password = "***redacted***"
+
+	// Tracing OTLP headers (may contain auth tokens)
+	for k := range cfg.Tracing.OTLPHeaders {
+		cfg.Tracing.OTLPHeaders[k] = "***redacted***"
+	}
+
+	// Consumer API keys — redact the actual key values
+	for i := range cfg.Consumers {
+		for j := range cfg.Consumers[i].APIKeys {
+			cfg.Consumers[i].APIKeys[j].Key = "***redacted***"
+		}
+	}
+
+	// TLS key file paths are not secrets themselves, but SkipVerify is a
+	// security-sensitive flag — leave it visible for audit purposes.
 }
 
 func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
@@ -353,7 +349,12 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 	}
 	normalized := normalizeYAMLEmptyMaps(raw, emptyMapImportSentinel)
 
-	file, err := os.CreateTemp("", "apicerberus-config-import-*.yaml")
+	// Create temp file in a restricted directory to prevent other users from reading imported config (CWE-377)
+	importDir := os.TempDir()
+	if dir := os.Getenv("APICERBERUS_TMPDIR"); dir != "" {
+		importDir = dir
+	}
+	file, err := os.CreateTemp(importDir, "apicerberus-config-import-*.yaml")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "config_import_failed", err.Error())
 		return

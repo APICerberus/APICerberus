@@ -128,6 +128,10 @@ func (s *Server) isWebSocketAuthorized(r *http.Request) bool {
 	// Allow Bearer token via query parameter (common for WebSocket clients)
 	if token := strings.TrimSpace(r.URL.Query().Get("token")); token != "" {
 		if err := verifyAdminToken(token, cfg.TokenSecret); err == nil {
+			// Clear token from URL to prevent logging (CWE-532)
+			q := r.URL.Query()
+			q.Del("token")
+			r.URL.RawQuery = q.Encode()
 			return true
 		}
 	}

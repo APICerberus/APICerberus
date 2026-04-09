@@ -24,8 +24,8 @@ func TestRedirectHandleConfiguredPath(t *testing.T) {
 	if rr.Code != http.StatusMovedPermanently {
 		t.Fatalf("expected 301 got %d", rr.Code)
 	}
-	if rr.Header().Get("Location") != "https://example.com/new?x=1" {
-		t.Fatalf("unexpected location header %q", rr.Header().Get("Location"))
+	if rr.Header().Get("Location") != "https://example.com/new" {
+		t.Fatalf("unexpected location header %q (query params intentionally not forwarded for security)", rr.Header().Get("Location"))
 	}
 }
 

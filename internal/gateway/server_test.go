@@ -1784,8 +1784,8 @@ func TestGatewayPluginPipelineRedirect(t *testing.T) {
 	if rr.Code != http.StatusTemporaryRedirect {
 		t.Fatalf("expected 307 got %d body=%q", rr.Code, rr.Body.String())
 	}
-	if rr.Header().Get("Location") != "https://example.com/new?foo=bar" {
-		t.Fatalf("unexpected redirect location %q", rr.Header().Get("Location"))
+	if rr.Header().Get("Location") != "https://example.com/new" {
+		t.Fatalf("unexpected redirect location %q (query params intentionally not forwarded for security)", rr.Header().Get("Location"))
 	}
 	if upstreamHits.Load() != 0 {
 		t.Fatalf("expected upstream not to be called for redirect")

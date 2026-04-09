@@ -22,7 +22,7 @@ func TestAuthJWTValidHS256(t *testing.T) {
 	t.Parallel()
 
 	now := time.Unix(1_700_000_000, 0).UTC()
-	secret := []byte("top-secret")
+	secret := []byte("top-secret-32-bytes-minimum-required!!")
 	token := buildHS256JWT(t,
 		map[string]any{"alg": "HS256", "typ": "JWT"},
 		map[string]any{
@@ -113,7 +113,7 @@ func TestAuthJWTExpired(t *testing.T) {
 	t.Parallel()
 
 	now := time.Unix(1_700_000_000, 0).UTC()
-	secret := []byte("top-secret")
+	secret := []byte("top-secret-32-bytes-minimum-required!!")
 	token := buildHS256JWT(t,
 		map[string]any{"alg": "HS256"},
 		map[string]any{
@@ -142,7 +142,7 @@ func TestAuthJWTWrongIssuer(t *testing.T) {
 	t.Parallel()
 
 	now := time.Unix(1_700_000_000, 0).UTC()
-	secret := []byte("top-secret")
+	secret := []byte("top-secret-32-bytes-minimum-required!!")
 	token := buildHS256JWT(t,
 		map[string]any{"alg": "HS256"},
 		map[string]any{
@@ -170,7 +170,7 @@ func TestAuthJWTWrongAudience(t *testing.T) {
 	t.Parallel()
 
 	now := time.Unix(1_700_000_000, 0).UTC()
-	secret := []byte("top-secret")
+	secret := []byte("top-secret-32-bytes-minimum-required!!")
 	token := buildHS256JWT(t,
 		map[string]any{"alg": "HS256"},
 		map[string]any{
@@ -198,7 +198,7 @@ func TestAuthJWTMissingRequiredClaim(t *testing.T) {
 	t.Parallel()
 
 	now := time.Unix(1_700_000_000, 0).UTC()
-	secret := []byte("top-secret")
+	secret := []byte("top-secret-32-bytes-minimum-required!!")
 	token := buildHS256JWT(t,
 		map[string]any{"alg": "HS256"},
 		map[string]any{
@@ -328,7 +328,7 @@ func TestAuthJWTValidNBF(t *testing.T) {
 	t.Parallel()
 
 	now := time.Unix(1_700_000_000, 0).UTC()
-	secret := []byte("top-secret")
+	secret := []byte("top-secret-32-bytes-minimum-required!!")
 	token := buildHS256JWT(t,
 		map[string]any{"alg": "HS256"},
 		map[string]any{
@@ -358,7 +358,7 @@ func TestAuthJWTNBFNotYetValid(t *testing.T) {
 	t.Parallel()
 
 	now := time.Unix(1_700_000_000, 0).UTC()
-	secret := []byte("top-secret")
+	secret := []byte("top-secret-32-bytes-minimum-required!!")
 	token := buildHS256JWT(t,
 		map[string]any{"alg": "HS256"},
 		map[string]any{
@@ -383,7 +383,7 @@ func TestAuthJWTNBFWithinClockSkew(t *testing.T) {
 	t.Parallel()
 
 	now := time.Unix(1_700_000_000, 0).UTC()
-	secret := []byte("top-secret")
+	secret := []byte("top-secret-32-bytes-minimum-required!!")
 	token := buildHS256JWT(t,
 		map[string]any{"alg": "HS256"},
 		map[string]any{
@@ -584,7 +584,7 @@ func TestAuthJWTWithJTIReplayPreventsReuse(t *testing.T) {
 	t.Parallel()
 
 	now := time.Unix(1_700_000_000, 0).UTC()
-	secret := []byte("top-secret")
+	secret := []byte("top-secret-32-bytes-minimum-required!!")
 	jti := "replay-test-jti"
 	token := buildHS256JWT(t,
 		map[string]any{"alg": "HS256"},

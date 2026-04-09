@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -357,6 +358,9 @@ func (kw *KafkaWriter) dial(broker string) (net.Conn, error) {
 
 	// Configure TLS if enabled
 	if kw.config.TLS.Enabled {
+		if kw.config.TLS.SkipVerify {
+			log.Printf("[WARN] kafka: TLS certificate verification is disabled. This is insecure and should not be used in production.")
+		}
 		tlsConfig := &tls.Config{
 			InsecureSkipVerify: kw.config.TLS.SkipVerify, // #nosec G402 -- InsecureSkipVerify is admin-configurable via Kafka TLS config.
 			ServerName:         kw.config.TLS.ServerName,

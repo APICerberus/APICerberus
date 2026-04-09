@@ -48,8 +48,8 @@ services:
       - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
     environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:?GRAFANA_ADMIN_USER must be set}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3000}
       - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-clock-panel
@@ -141,7 +141,8 @@ services:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: apicerberus-cadvisor
     restart: unless-stopped
-    privileged: true
+    # Runs unprivileged — relies on bind-mounted host filesystems
+    # for container metadata instead of privileged mode
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro

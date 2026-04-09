@@ -157,10 +157,9 @@ func CaptureRequestBody(req *http.Request, maxBodyBytes int64) ([]byte, error) {
 	clone := make([]byte, len(full))
 	copy(clone, full)
 	req.Body = io.NopCloser(bytes.NewReader(clone))
+	// Reuse the same buffer for GetBody instead of allocating another copy (CWE-770)
 	req.GetBody = func() (io.ReadCloser, error) {
-		dup := make([]byte, len(clone))
-		copy(dup, clone)
-		return io.NopCloser(bytes.NewReader(dup)), nil
+		return io.NopCloser(bytes.NewReader(clone)), nil
 	}
 
 	return truncateCopy(clone, maxBodyBytes), nil

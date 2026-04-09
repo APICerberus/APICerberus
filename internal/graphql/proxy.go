@@ -95,7 +95,7 @@ func (p *Proxy) Forward(req *Request) (*Response, error) {
 	defer httpResp.Body.Close()
 
 	// Parse response
-	respBody, err := io.ReadAll(io.LimitReader(httpResp.Body, 50<<20))
+	respBody, err := io.ReadAll(io.LimitReader(httpResp.Body, 10<<20)) // 10 MB limit (CWE-770)
 	if err != nil {
 		return nil, err
 	}

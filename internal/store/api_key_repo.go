@@ -359,13 +359,19 @@ func randomToken(length int) (string, error) {
 		return "", errors.New("token length must be positive")
 	}
 	const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	raw := make([]byte, length)
-	if _, err := rand.Read(raw); err != nil {
-		return "", fmt.Errorf("generate api key token: %w", err)
-	}
+	alphabetLen := len(alphabet)
 	out := make([]byte, length)
-	for i := range raw {
-		out[i] = alphabet[int(raw[i])%len(alphabet)]
+	buf := make([]byte, 1)
+	for i := 0; i < length; i++ {
+		for {
+			if _, err := rand.Read(buf); err != nil {
+				return "", fmt.Errorf("generate api key token: %w", err)
+			}
+			if int(buf[0]) < 256-(256%alphabetLen) {
+				out[i] = alphabet[int(buf[0])%alphabetLen]
+				break
+			}
+		}
 	}
 	return string(out), nil
 }

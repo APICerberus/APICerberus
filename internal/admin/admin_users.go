@@ -39,7 +39,36 @@ func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "list_users_failed", err.Error())
 		return
 	}
-	_ = jsonutil.WriteJSON(w, http.StatusOK, result)
+	// Sanitize users before returning
+	users := make([]map[string]any, 0, len(result.Users))
+	for i := range result.Users {
+		users = append(users, sanitizedUser(&result.Users[i]))
+	}
+	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+		"users": users,
+		"total": result.Total,
+	})
+}
+
+// sanitizedUser returns a user map with sensitive fields removed.
+func sanitizedUser(u *store.User) map[string]any {
+	if u == nil {
+		return nil
+	}
+	return map[string]any{
+		"id":             u.ID,
+		"email":          u.Email,
+		"name":           u.Name,
+		"company":        u.Company,
+		"role":           u.Role,
+		"status":         u.Status,
+		"credit_balance": u.CreditBalance,
+		"ip_whitelist":   u.IPWhitelist,
+		"metadata":       u.Metadata,
+		"rate_limits":    u.RateLimits,
+		"created_at":     u.CreatedAt,
+		"updated_at":     u.UpdatedAt,
+	}
 }
 
 func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +114,7 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "create_user_failed", err.Error())
 		return
 	}
-	_ = jsonutil.WriteJSON(w, http.StatusCreated, user)
+	_ = jsonutil.WriteJSON(w, http.StatusCreated, sanitizedUser(user))
 }
 
 func (s *Server) getUser(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +135,7 @@ func (s *Server) getUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "user_not_found", "User not found")
 		return
 	}
-	_ = jsonutil.WriteJSON(w, http.StatusOK, user)
+	_ = jsonutil.WriteJSON(w, http.StatusOK, sanitizedUser(user))
 }
 
 func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
@@ -182,7 +211,7 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "update_user_failed", err.Error())
 		return
 	}
-	_ = jsonutil.WriteJSON(w, http.StatusOK, user)
+	_ = jsonutil.WriteJSON(w, http.StatusOK, sanitizedUser(user))
 }
 
 func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request) {
@@ -243,6 +272,10 @@ func (s *Server) resetUserPassword(w http.ResponseWriter, r *http.Request) {
 	password := strings.TrimSpace(asString(payload["password"]))
 	if password == "" {
 		writeError(w, http.StatusBadRequest, "invalid_password", "password is required")
+		return
+	}
+	if len(password) < 8 {
+		writeError(w, http.StatusBadRequest, "invalid_password", "password must be at least 8 characters")
 		return
 	}
 

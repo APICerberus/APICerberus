@@ -325,6 +325,8 @@ func IsSubscriptionQuery(query string) bool {
 // --- WebSocket frame helpers (minimal, unmasked server frames) ---
 
 // readWSFrame reads a single WebSocket frame. It handles client-masked frames.
+const maxWebSocketFrameSize = 1 << 20 // 1 MB — prevents OOM via oversized frame (CWE-770)
+
 func readWSFrame(r *bufio.Reader) (opcode byte, payload []byte, err error) {
 	// First two bytes: FIN+opcode, MASK+payload length.
 	header := make([]byte, 2)
@@ -352,6 +354,11 @@ func readWSFrame(r *bufio.Reader) (opcode byte, payload []byte, err error) {
 		for i := 0; i < 8; i++ {
 			length = length<<8 | uint64(ext[i])
 		}
+	}
+
+	// Prevent OOM: reject frames exceeding 1 MB
+	if length > maxWebSocketFrameSize {
+		return 0, nil, fmt.Errorf("websocket frame size %d exceeds maximum %d", length, maxWebSocketFrameSize)
 	}
 
 	var maskKey [4]byte

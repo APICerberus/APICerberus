@@ -594,7 +594,7 @@ func buildE2EConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath, upstrea
 		Admin: config.AdminConfig{
 			Addr:        adminAddr,
 			APIKey:      "secret-e2e-test",
-			TokenSecret: "secret-e2e-test-token",
+			TokenSecret: "secret-e2e-test-token-abcdefghijklmnopqrstuvwxyz",
 			TokenTTL:    1 * time.Hour,
 		},
 		Store: config.StoreConfig{

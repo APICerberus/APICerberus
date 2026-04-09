@@ -229,7 +229,7 @@ func v008Config(t *testing.T, gatewayAddr, adminAddr, portalAddr, routeID, route
 		Admin: config.AdminConfig{
 			Addr:        adminAddr,
 			APIKey:      "secret-v008",
-			TokenSecret: "secret-v008-token",
+			TokenSecret: "secret-v008-token-abcdefghijklmnopqrstuvwxyz",
 			TokenTTL:    1 * time.Hour,
 		},
 		Portal: config.PortalConfig{

@@ -6,14 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"golang.org/x/net/websocket"
+	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/wsjson"
 )
 
 // Executor executes federated GraphQL queries.
@@ -644,7 +644,9 @@ func (e *Executor) runSubscription(sub *SubscriptionConnection, step *PlanStep) 
 	}
 
 	// Connect to WebSocket
-	ws, err := websocket.Dial(wsURL, "", wsURL)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	ws, _, err := websocket.Dial(ctx, wsURL, nil)
 	if err != nil {
 		sub.Errors <- fmt.Errorf("websocket connection failed: %w", err)
 		return
@@ -655,7 +657,7 @@ func (e *Executor) runSubscription(sub *SubscriptionConnection, step *PlanStep) 
 	initMsg := map[string]any{
 		"type": "connection_init",
 	}
-	if err := websocket.JSON.Send(ws, initMsg); err != nil {
+	if err := wsjson.Write(ctx, ws, initMsg); err != nil {
 		sub.Errors <- fmt.Errorf("websocket init failed: %w", err)
 		return
 	}
@@ -669,7 +671,7 @@ func (e *Executor) runSubscription(sub *SubscriptionConnection, step *PlanStep) 
 			"variables": step.Variables,
 		},
 	}
-	if err := websocket.JSON.Send(ws, subMsg); err != nil {
+	if err := wsjson.Write(ctx, ws, subMsg); err != nil {
 		sub.Errors <- fmt.Errorf("subscription start failed: %w", err)
 		return
 	}
@@ -677,13 +679,13 @@ func (e *Executor) runSubscription(sub *SubscriptionConnection, step *PlanStep) 
 	// Listen for messages
 	for {
 		var msg struct {
-			Type    string                 `json:"type"`
-			ID      string                 `json:"id"`
+			Type    string         `json:"type"`
+			ID      string         `json:"id"`
 			Payload map[string]any `json:"payload"`
 		}
 
-		if err := websocket.JSON.Receive(ws, &msg); err != nil {
-			if err != io.EOF {
+		if err := wsjson.Read(ctx, ws, &msg); err != nil {
+			if !strings.Contains(err.Error(), "going away") && err != io.EOF {
 				sub.Errors <- fmt.Errorf("websocket receive error: %w", err)
 			}
 			return
@@ -721,17 +723,15 @@ func (e *Executor) StopSubscription(subID string) error {
 	}
 
 	if sub.Conn != nil {
-		// Send stop message
+		// Send stop message (best-effort)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 		stopMsg := map[string]any{
 			"type": "stop",
 			"id":   subID,
 		}
-		if err := websocket.JSON.Send(sub.Conn, stopMsg); err != nil {
-			// Best-effort stop; connection may already be closed.
-		}
-		if err := sub.Conn.Close(); err != nil {
-			log.Printf("[WARN] federation: failed to close subscription websocket: %v", err)
-		}
+		_ = wsjson.Write(ctx, sub.Conn, stopMsg)
+		_ = sub.Conn.Close(websocket.StatusNormalClosure, "")
 	}
 
 	return nil

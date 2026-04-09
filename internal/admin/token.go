@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -57,7 +58,10 @@ func issueAdminToken(secret string, ttl time.Duration) (string, error) {
 	}
 
 	signingInput := jwt.EncodeSegment(headerBytes) + "." + jwt.EncodeSegment(payloadBytes)
-	signature := jwt.SignHS256(signingInput, []byte(secret))
+	signature, err := jwt.SignHS256(signingInput, []byte(secret))
+	if err != nil {
+		return "", fmt.Errorf("sign token: %w", err)
+	}
 	token := signingInput + "." + jwt.EncodeSegment(signature)
 	return token, nil
 }
@@ -168,10 +172,9 @@ func (s *Server) withAdminStaticAuth(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // handleTokenIssue issues a new admin JWT when presented with the static key.
-func (s *Server) handleTokenIssue(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleTokenIssue(w http.ResponseWriter, _ *http.Request) {
 	s.mu.RLock()
 	cfg := s.cfg.Admin
-	gwHTTPS := s.cfg.Gateway.HTTPSAddr != ""
 	s.mu.RUnlock()
 
 	token, err := issueAdminToken(cfg.TokenSecret, cfg.TokenTTL)
@@ -181,23 +184,22 @@ func (s *Server) handleTokenIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set HttpOnly cookie for XSS-safe authentication transport.
+	// Always set Secure flag to prevent token leakage over HTTP (CWE-614)
 	cookie := &http.Cookie{
 		Name:     adminSessionCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   int(cfg.TokenTTL.Seconds()),
-	}
-	if gwHTTPS || r.URL.Scheme == "https" {
-		cookie.Secure = true
 	}
 	http.SetCookie(w, cookie)
 
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
-		"token":      token,
 		"token_type": "Bearer",
 		"expires_in": int(cfg.TokenTTL.Seconds()),
+		"message":    "Session cookie set successfully",
 	})
 }
 

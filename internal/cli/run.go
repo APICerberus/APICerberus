@@ -116,6 +116,11 @@ func runStart(args []string) error {
 		gatewayFSM := raft.NewGatewayFSM()
 		transport := raft.NewHTTPTransport(cfg.Cluster.BindAddress, cfg.Cluster.NodeID)
 
+		// Set RPC secret for inter-node authentication
+		if cfg.Cluster.RPCSecret != "" {
+			transport.SetRPCSecret(cfg.Cluster.RPCSecret)
+		}
+
 		var raftErr error
 		raftNode, raftErr = raft.NewNode(raftCfg, gatewayFSM, transport)
 		if raftErr != nil {
@@ -345,6 +350,9 @@ func runMCP(args []string) error {
 		}
 		gatewayFSM := raft.NewGatewayFSM()
 		t := raft.NewHTTPTransport(cfg.Cluster.BindAddress, cfg.Cluster.NodeID)
+		if cfg.Cluster.RPCSecret != "" {
+			t.SetRPCSecret(cfg.Cluster.RPCSecret)
+		}
 		raftNode, err = raft.NewNode(raftCfg, gatewayFSM, t)
 		if err != nil {
 			return fmt.Errorf("initialize raft node: %w", err)

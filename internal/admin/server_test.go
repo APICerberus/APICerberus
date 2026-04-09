@@ -69,7 +69,17 @@ func TestAdminBearerTokenAuth(t *testing.T) {
 	if err := json.NewDecoder(tokenResp.Body).Decode(&tokenBody); err != nil {
 		t.Fatalf("decode token response: %v", err)
 	}
-	token = tokenBody["token"].(string)
+	// Token is now delivered via cookie, not in response body
+	cookies := tokenResp.Cookies()
+	for _, c := range cookies {
+		if c.Name == "apicerberus_admin_session" {
+			token = c.Value
+			break
+		}
+	}
+	if token == "" {
+		t.Fatalf("expected admin_session cookie in response")
+	}
 
 	// Access protected endpoint with Bearer token
 	req, _ := http.NewRequest(http.MethodGet, serverURL+"/admin/api/v1/status", nil)
@@ -459,8 +469,8 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 
 	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users", token,nil)
 	assertStatus(t, resp, http.StatusOK)
-	assertHasJSONField(t, resp, "Users")
-	assertHasJSONField(t, resp, "Total")
+	assertHasJSONField(t, resp, "users")
+	assertHasJSONField(t, resp, "total")
 
 	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID, token,nil)
 	assertStatus(t, resp, http.StatusOK)

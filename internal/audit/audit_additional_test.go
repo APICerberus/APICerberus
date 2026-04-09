@@ -1760,17 +1760,18 @@ func TestResponseCaptureWriter_StatusCode_ZeroAfterWrite(t *testing.T) {
 	}
 }
 
-// Test MaskBody with nil masker bodyFieldPath
+// Test MaskBody with nil masker bodyFieldPath — now applies default sensitive fields
 func TestMaskBody_NilMaskerFields(t *testing.T) {
-	// Create masker with no body fields
+	// Create masker with no body fields — defaults are applied
 	masker := NewMasker(nil, nil, "***")
 
 	body := []byte(`{"password":"secret"}`)
 	result := masker.MaskBody(body)
 
-	// Should return copy of original since no fields to mask
-	if !bytes.Equal(result, body) {
-		t.Error("MaskBody with no fields should return copy of original")
+	// Should mask "password" field since defaults are applied
+	expected := []byte(`{"password":"***"}`)
+	if !bytes.Equal(result, expected) {
+		t.Errorf("MaskBody with defaults should mask password. got %s, want %s", result, expected)
 	}
 }
 

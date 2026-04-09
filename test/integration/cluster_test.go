@@ -686,7 +686,7 @@ func buildClusterTestConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath,
 		Admin: config.AdminConfig{
 			Addr:        adminAddr,
 			APIKey:      "secret-cluster-test",
-			TokenSecret: "secret-cluster-test-token",
+			TokenSecret: "secret-cluster-test-token-abcdefghijklmnopqrstuvwxyz",
 			TokenTTL:    1 * time.Hour,
 		},
 		Cluster: config.ClusterConfig{

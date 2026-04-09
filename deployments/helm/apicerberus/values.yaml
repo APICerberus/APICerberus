@@ -44,13 +44,17 @@ service:
 ingress:
   enabled: false
   className: ""
-  annotations: {}
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
   hosts:
     - host: apicerberus.local
       paths:
         - path: /
           pathType: Prefix
-  tls: []
+  tls:
+    - secretName: apicerberus-tls
+      hosts:
+        - apicerberus.local
 
 resources:
   limits:

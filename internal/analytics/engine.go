@@ -16,6 +16,7 @@ const (
 	minimumBucketRetention  = time.Minute
 	cleanupIntervalPerWrite = time.Minute
 	maxLatencySamples       = 10_000
+	maxTimeSeriesBuckets    = 10_000 // caps memory between cleanup cycles
 )
 
 type RequestMetric struct {
@@ -281,6 +282,14 @@ func (s *TimeSeriesStore) Record(metric RequestMetric) {
 	key := minute.Unix()
 
 	s.mu.Lock()
+	if len(s.buckets) >= maxTimeSeriesBuckets {
+		s.cleanupLocked(ts)
+		s.lastCleanup = ts
+		if len(s.buckets) >= maxTimeSeriesBuckets {
+			s.mu.Unlock()
+			return
+		}
+	}
 	b := s.buckets[key]
 	if b == nil {
 		b = &bucketAggregate{

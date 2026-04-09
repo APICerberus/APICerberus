@@ -41,14 +41,21 @@ func getAdminBearerToken(t *testing.T, adminAddr, adminKey string) string {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("get admin token status=%d body=%s", resp.StatusCode, string(body))
 	}
-	var result struct {
-		Token string `json:"token"`
+	// Token is delivered via http-only cookie, not response body (security fix M15)
+	var tokenFound bool
+	for _, c := range resp.Cookies() {
+		if c.Name == "apicerberus_admin_session" {
+			adminTokenCache.Store(cacheKey, c.Value)
+			tokenFound = true
+			break
+		}
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatalf("decode admin token: %v", err)
+	if !tokenFound {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("get admin token: no apicerberus_admin_session cookie in response, body=%s", string(body))
 	}
-	adminTokenCache.Store(cacheKey, result.Token)
-	return result.Token
+	v, _ := adminTokenCache.Load(cacheKey)
+	return v.(string)
 }
 
 // TestAuthFlowAPIKey tests the complete API key authentication flow
@@ -469,7 +476,7 @@ func buildAuthTestConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath, up
 		Admin: config.AdminConfig{
 			Addr:        adminAddr,
 			APIKey:      "secret-auth-test",
-			TokenSecret: "secret-auth-test-token",
+			TokenSecret: "secret-auth-test-token-abcdefghijklmnopqrstuvwxyz",
 			TokenTTL:    1 * time.Hour,
 		},
 		Store: config.StoreConfig{

@@ -13,7 +13,27 @@ type Masker struct {
 	replacement   string
 }
 
+// Default sensitive header/body fields masked when no explicit config is provided.
+var (
+	defaultMaskHeaders = []string{
+		"Authorization", "Cookie", "X-Admin-Key", "X-API-Key",
+		"X-Real-IP", "X-Forwarded-For", "Proxy-Authorization",
+	}
+	defaultMaskBodyFields = []string{
+		"password", "secret", "token", "access_token", "refresh_token",
+		"api_key", "api_secret", "private_key", "credit_card",
+	}
+)
+
 func NewMasker(maskHeaders, maskBodyFields []string, replacement string) *Masker {
+	// Apply defaults when no explicit config is provided (CWE-209)
+	if len(maskHeaders) == 0 {
+		maskHeaders = defaultMaskHeaders
+	}
+	if len(maskBodyFields) == 0 {
+		maskBodyFields = defaultMaskBodyFields
+	}
+
 	headers := make(map[string]struct{}, len(maskHeaders))
 	for _, key := range maskHeaders {
 		trimmed := strings.ToLower(strings.TrimSpace(key))

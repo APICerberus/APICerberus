@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strings"
-	"text/template"
 	"time"
 )
 
@@ -373,7 +373,7 @@ func (e *WebhookTemplateEngine) RegisterTemplate(tpl WebhookTemplate) error {
 	tpl.UpdatedAt = now
 
 	// Compile template
-	compiled, err := template.New(tpl.ID).Parse(tpl.Body)
+	compiled, err := template.New(tpl.ID).Funcs(safeTemplateFuncMap()).Parse(tpl.Body)
 	if err != nil {
 		return fmt.Errorf("failed to parse template: %w", err)
 	}
@@ -466,6 +466,33 @@ func (e *WebhookTemplateEngine) Render(templateID string, data WebhookTemplateDa
 	return buf.String(), nil
 }
 
+// safeTemplateFuncMap returns a restricted function map for webhook templates.
+// Only safe, non-dangerous functions are exposed — no method calls that could
+// exfiltrate data or access the filesystem are allowed.
+func safeTemplateFuncMap() template.FuncMap {
+	return template.FuncMap{
+		"upper": strings.ToUpper,
+		"lower": strings.ToLower,
+		"title": strings.Title,
+		"trim":  strings.TrimSpace,
+		"replace": strings.ReplaceAll,
+		"join":  strings.Join,
+		"split": strings.Split,
+		"printf": fmt.Sprintf,
+		"json": func(v any) (string, error) {
+			data, err := json.Marshal(v)
+			if err != nil {
+				return "", err
+			}
+			return string(data), nil
+		},
+		"formatTime": func(t time.Time, layout string) string {
+			return t.Format(layout)
+		},
+		"now": time.Now,
+	}
+}
+
 // RenderWithTemplate renders using a provided template string.
 func (e *WebhookTemplateEngine) RenderWithTemplate(templateBody string, data WebhookTemplateData) (string, error) {
 	if e == nil {
@@ -481,7 +508,7 @@ func (e *WebhookTemplateEngine) RenderWithTemplate(templateBody string, data Web
 		data.Status = "firing"
 	}
 
-	compiled, err := template.New("inline").Parse(templateBody)
+	compiled, err := template.New("inline").Funcs(safeTemplateFuncMap()).Parse(templateBody)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse template: %w", err)
 	}
@@ -577,7 +604,7 @@ func (e *WebhookTemplateEngine) ValidateTemplate(body string) error {
 		return fmt.Errorf("template engine is nil")
 	}
 
-	_, err := template.New("validate").Parse(body)
+	_, err := template.New("validate").Funcs(safeTemplateFuncMap()).Parse(body)
 	if err != nil {
 		return fmt.Errorf("invalid template: %w", err)
 	}
@@ -662,8 +689,8 @@ func TemplateVariableDocs() map[string]string {
 
 // CreateCustomTemplate creates a custom template with validation.
 func CreateCustomTemplate(id, name, body string, headers map[string]string) (WebhookTemplate, error) {
-	// Validate template body
-	_, err := template.New("validate").Parse(body)
+	// Validate template body with safe function map
+	_, err := template.New("validate").Funcs(safeTemplateFuncMap()).Parse(body)
 	if err != nil {
 		return WebhookTemplate{}, fmt.Errorf("invalid template body: %w", err)
 	}

@@ -99,10 +99,10 @@ func (tm *TLSManager) TLSConfig() *tls.Config {
 
 func parseTLSMinVersion(v string) uint16 {
 	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "1.0":
-		return tls.VersionTLS10
-	case "1.1":
-		return tls.VersionTLS11
+	case "1.0", "1.1":
+		// TLS 1.0 and 1.1 are deprecated (CWE-327); reject to prevent downgrade attacks
+		log.Printf("[WARN] tls: rejecting deprecated TLS version %q, enforcing TLS 1.2 minimum", v)
+		return tls.VersionTLS12
 	case "1.2":
 		return tls.VersionTLS12
 	case "1.3":
@@ -120,9 +120,8 @@ func parseTLSCipherSuites(names []string) []uint16 {
 	for _, cs := range tls.CipherSuites() {
 		cipherMap[strings.ToLower(cs.Name)] = cs.ID
 	}
+	// Weak ciphers (RSA key exchange, no forward secrecy) removed for security (CWE-326)
 	for name, id := range map[string]uint16{
-		"TLS_RSA_WITH_AES_128_CBC_SHA":    tls.TLS_RSA_WITH_AES_128_CBC_SHA,
-		"TLS_RSA_WITH_AES_256_CBC_SHA":    tls.TLS_RSA_WITH_AES_256_CBC_SHA,
 		"TLS_RSA_WITH_AES_128_GCM_SHA256": tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
 		"TLS_RSA_WITH_AES_256_GCM_SHA384": tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
 	} {

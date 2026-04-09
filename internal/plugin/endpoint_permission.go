@@ -62,7 +62,12 @@ func (p *EndpointPermission) Evaluate(ctx *PipelineContext) error {
 	}
 	userID := strings.TrimSpace(ctx.Consumer.ID)
 	if userID == "" {
-		return nil
+		// Deny access when consumer identity cannot be determined (CWE-285)
+		return &EndpointPermissionError{
+			Code:    "permission_denied",
+			Message: "Endpoint access requires an authenticated consumer",
+			Status:  http.StatusForbidden,
+		}
 	}
 	routeID := permissionRouteID(ctx.Route)
 	if routeID == "" {

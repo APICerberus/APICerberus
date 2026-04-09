@@ -436,7 +436,7 @@ func v005Config(t *testing.T, gwAddr, adminAddr, routeID, routePath, upstreamHos
 		Admin: config.AdminConfig{
 			Addr:        adminAddr,
 			APIKey:      "secret-v005",
-			TokenSecret: "secret-v005-token",
+			TokenSecret: "secret-v005-token-abcdefghijklmnopqrstuvwxyz",
 			TokenTTL:    1 * time.Hour,
 		},
 		Store: config.StoreConfig{

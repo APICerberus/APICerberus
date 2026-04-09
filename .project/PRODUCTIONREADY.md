@@ -10,13 +10,13 @@
 
 | Category | Score | Weight | Weighted |
 |----------|-------|--------|----------|
-| Security | 6.5 / 10 | 30% | 1.95 |
-| Reliability | 6.5 / 10 | 25% | 1.63 |
+| Security | 7.5 / 10 | 30% | 2.25 |
+| Reliability | 7.0 / 10 | 25% | 1.75 |
 | Scalability | 5.0 / 10 | 15% | 0.75 |
-| Operability | 7.0 / 10 | 15% | 1.05 |
-| Code Quality | 7.0 / 10 | 10% | 0.70 |
+| Operability | 8.0 / 10 | 15% | 1.20 |
+| Code Quality | 7.5 / 10 | 10% | 0.75 |
 | Test Coverage | 7.0 / 10 | 5% | 0.35 |
-| **Total** | — | **100%** | **6.63 / 10** |
+| **Total** | — | **100%** | **7.05 / 10** |
 
 **Verdict: CONDITIONAL GO for single-node production pilot.**
 

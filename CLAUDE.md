@@ -274,7 +274,38 @@ Upstream health monitoring in `internal/gateway/health.go`:
 - **Circuit breaker**: Automatic recovery with exponential backoff
 - **Health scores**: Used by adaptive load balancing algorithms
 
-### Default Ports
+### Graceful Shutdown
+
+Shutdown hook system in `internal/shutdown/manager.go`:
+- **Hook registration**: Components register cleanup functions with `shutdown.Register(name, hook)`
+- **LIFO execution**: Hooks execute in reverse order of registration (last registered, first executed)
+- **Timeout support**: Hooks respect context deadlines
+- **Error aggregation**: All hook errors are collected and returned
+
+Usage:
+```go
+// Register a shutdown hook
+shutdown.Register("my-component", func(ctx context.Context) error {
+    return myComponent.Close()
+})
+
+// In main, start the signal listener
+shutdown.Start()
+
+// Trigger shutdown manually with timeout
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+shutdown.Shutdown(ctx)
+```
+
+Default shutdown sequence (from `cmd/apicerberus/main.go`):
+1. Stop accepting new connections
+2. Wait for in-flight requests to complete (with timeout)
+3. Close gateway servers (HTTP/HTTPS/gRPC)
+4. Stop Raft cluster (if enabled)
+5. Close database connections
+6. Stop audit logging
+7. Shutdown tracing
 | Service | Port |
 |---------|------|
 | Gateway HTTP | 8080 |

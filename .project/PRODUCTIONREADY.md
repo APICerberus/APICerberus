@@ -10,13 +10,13 @@
 
 | Category | Score | Weight | Weighted |
 |----------|-------|--------|----------|
-| Security | 5.5 / 10 | 30% | 1.65 |
+| Security | 6.5 / 10 | 30% | 1.95 |
 | Reliability | 6.5 / 10 | 25% | 1.63 |
 | Scalability | 5.0 / 10 | 15% | 0.75 |
 | Operability | 7.0 / 10 | 15% | 1.05 |
 | Code Quality | 7.0 / 10 | 10% | 0.70 |
 | Test Coverage | 7.0 / 10 | 5% | 0.35 |
-| **Total** | — | **100%** | **6.48 / 10** |
+| **Total** | — | **100%** | **6.63 / 10** |
 
 **Verdict: NO-GO.**
 
@@ -35,8 +35,8 @@ The codebase is functionally impressive and well-structured, but it contains **c
 1. ~~**Stored-XSS vector for admin compromise**: The React admin dashboard stores the admin API key in browser `localStorage` (`web/src/lib/api.ts`). Any XSS injection can exfiltrate this key and gain full admin access.~~ ✅ **RESOLVED**: Admin login now uses native HTML form POST — the key never enters JavaScript. Server sets HttpOnly, SameSite=Strict session cookie.
 2. ~~**Client-IP spoofing**~~ ✅ **RESOLVED**: `X-Forwarded-For` now uses trusted-proxy validation with right-to-left parsing and CIDR support. When no trusted proxies configured, forwarding headers are ignored (secure by default).
 3. **Dangerous example defaults**: ~~`apicerberus.example.yaml` ships with `admin.api_key: "change-me"`~~ ✅ **RESOLVED**: Example config uses empty strings with startup validation enforcing strong secrets. Placeholder detection rejects values containing "change", "secret", or "password".
-4. **Custom WebSocket origin validation**: The admin WebSocket endpoint uses hand-rolled origin checking instead of a battle-tested library. This is fragile and likely bypassable.
-5. **No TLS min-version config**: The gateway does not expose configuration for minimum TLS version or cipher suites, making it dependent on Go defaults which may negotiate weak parameters.
+4. ~~**Custom WebSocket origin validation**~~ ✅ **RESOLVED**: Origin checking strengthened with strict scheme/port/host validation, no Referer fallback.
+5. ~~**No TLS min-version config**~~ ✅ **RESOLVED**: `TLSConfig` has `MinVersion` and `CipherSuites` fields with TLS 1.2 default.
 6. ~~**No per-request auth rate-limiting**~~ ✅ **RESOLVED**: `AuthBackoff` implements per-IP exponential backoff (100ms → 30s max) for invalid API key attempts. Integrated into `AuthAPIKey` plugin.
 
 **What would raise the score to 7.0+:**

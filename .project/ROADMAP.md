@@ -124,11 +124,13 @@
 - **Task**: Use SQLite `backup` API or `VACUUM INTO` in the backup script, taking a `BUSY` lock to guarantee consistency.
 - **Files**: `scripts/backup.sh`
 
-### 4.5 Add Frontend CSP + CSRF (P2)
-- **Task**:
-  - Inject a strict `Content-Security-Policy` in the Vite build (`index.html`).
-  - Add CSRF double-submit cookie for portal mutations.
-- **Files**: `web/index.html`, `web/src/lib/api.ts`, `internal/portal/server.go`
+### 4.5 Add Frontend CSP + CSRF (P2) ✅ DONE
+- **Status**: CSP header already set via `<meta http-equiv>` in `web/index.html`.
+  Added server-side `Content-Security-Policy` headers to both admin (`ui.go`) and
+  portal (`ui.go`) HTML responses with strict policies (no `unsafe-eval`, no
+  `object-src`, `form-action 'self'`, `frame-ancestors 'none'`).
+  CSRF double-submit cookie already implemented in portal (`withCSRF` middleware).
+- **Files**: `web/index.html`, `internal/admin/ui.go`, `internal/portal/ui.go`
 
 ---
 

@@ -12,13 +12,28 @@
 ### 1.1 Module Setup
 
 ```go
-// go.mod — minimal, curated external dependencies
-module github.com/APICerberus/APICerberus
+// go.mod — curated external dependencies
+module github.com/APICerberus/APICerebrus
 
-go 1.25
+go 1.25.0
 ```
 
-All functionality is implemented using Go standard library only. The following `stdlib` packages are the primary building blocks:
+Core routing, proxying, plugin pipeline, and auth use Go standard library packages.
+The following external dependencies are used:
+
+| Dependency | Purpose |
+|-----------|---------|
+| `modernc.org/sqlite` | Pure-Go SQLite (no CGO) for user/key/audit storage |
+| `github.com/redis/go-redis/v9` | Distributed rate-limiting backend |
+| `github.com/graphql-go/graphql` | GraphQL Federation schema parsing |
+| `go.opentelemetry.io/otel/*` | OpenTelemetry tracing (OTLP + stdout exporters) |
+| `google.golang.org/grpc` | gRPC server + HTTP transcoding |
+| `google.golang.org/protobuf` | Protobuf message handling |
+| `golang.org/x/crypto` | Argon2 password hashing, additional crypto |
+| `golang.org/x/net` | HTTP/2 server support |
+| `github.com/fsnotify/fsnotify` | File watch for hot config reload |
+
+The following `stdlib` packages are the primary building blocks for core gateway logic:
 
 ```
 net/http           — HTTP server, reverse proxy, HTTP/2
@@ -99,10 +114,8 @@ LDFLAGS     := -s -w \
 build: build-web
 	CGO_ENABLED=1 go build -ldflags="$(LDFLAGS)" -o bin/apicerberus ./cmd/apicerberus
 
-# CGO_ENABLED=1 is required for SQLite (pure Go SQLite driver uses CGO)
-# Alternative: use modernc.org/sqlite which is pure Go — but that's an external dep
-# Solution: We embed a minimal SQLite implementation via CGO with the C amalgamation
-# bundled in the repo (see section 7 for SQLite strategy)
+# SQLite via modernc.org/sqlite (pure Go, no CGO needed)
+# Cross-compilation works out of the box
 
 build-web:
 	cd web && npm run build

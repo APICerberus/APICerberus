@@ -11,8 +11,8 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
-    "lint": "echo 'Skipping type check for test files - run npm run build for full check'",
-    "typecheck": "tsc --noEmit || echo 'Type errors in test files are expected'",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "lint:fix": "echo 'No automatic fixes available'"
   },
   "devDependencies": {

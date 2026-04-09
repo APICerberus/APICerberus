@@ -1,239 +1,158 @@
-# APICerebrus Production Readiness Roadmap
+# Project Roadmap
 
-> Generated: 2026-04-08  
-> Priority: P0 = Blocker, P1 = High, P2 = Medium, P3 = Low  
-> Milestones: Harden → Stabilise → Scale → Polish
+> Based on comprehensive codebase analysis performed on 2026-04-10
+> This roadmap prioritizes work needed to bring the project to production quality.
 
----
+## Current State Assessment
 
-## Milestone 1: Security Hardening (P0)
+APICerebrus is a feature-rich API Gateway at v1.0.0-rc.1 with 170K+ Go LOC, 24K+ frontend LOC, 3,398 passing tests, and 100+ admin API endpoints. The core functionality is solid — routing, proxying (HTTP/gRPC/GraphQL), authentication, rate limiting, billing, audit logging, Raft clustering, and MCP server are all implemented and mostly working.
 
-**Goal**: Remove the most dangerous production blockers.
+**Key blockers for production readiness:**
+1. 17 failing tests (including critical E2E flows for billing, audit, permissions)
+2. SQLite write contention causing silent data loss (audit drops, API key tracking failures)
+3. No database migration framework — schema changes are risky
+4. E2E test infrastructure is unstable
 
-### 1.1 Fix Admin Key Storage (P0) ✅ DONE
-- **Status**: Admin login now uses native HTML form POST (`<form action="/admin/login" method="POST">`).
-  The key goes directly from browser to server without entering JavaScript memory.
-  Server validates against static API key and sets an HttpOnly, SameSite=Strict session cookie.
-  Legacy `exchangeAdminKeyForToken()` retained for programmatic/SSO flows only.
-- **Files**: `web/src/pages/admin/Login.tsx`, `internal/admin/token.go`, `internal/admin/server.go`, `web/src/lib/api.ts`
+**What's working well:**
+- Core gateway proxy with radix tree router
+- All 10 load balancing algorithms
+- 4 rate limiting algorithms + Redis distributed
+- Plugin pipeline with 20+ plugins
+- User management with credit billing
+- OpenTelemetry tracing, Prometheus metrics
+- Raft clustering with mTLS
+- React 19 dashboard with modern stack
 
-### 1.2 Harden Example Configuration (P0) ✅ DONE
-- **Status**: `apicerberus.example.yaml` uses empty strings for all secrets.
-  Config validation in `validate()` enforces:
-  - `admin.api_key` required, rejects placeholder values (change/secret/password/123)
-  - `admin.token_secret` min 32 chars
-  - `portal.session.secret` min 32 chars, rejects placeholder values
-  - `portal.session.secure` must be true when HTTPS is configured
-  - `cors.allowed_origins` uses `[]` not `["*"]`
-- **Files**: `apicerberus.example.yaml`, `internal/config/load.go`
+## Phase 1: Critical Fixes (Week 1-2)
 
-### 1.3 Validate X-Forwarded-For (P0) ✅ DONE
-- **Status**: Already implemented. `ExtractClientIP` (`netutil/clientip.go`):
-  - **Secure by default**: When `gateway.trusted_proxies` is empty, `X-Forwarded-For` and `X-Real-IP` are ignored — `RemoteAddr` is used
-  - **Right-to-left parsing**: Walks XFF from right to left, skipping trusted proxies, returning the rightmost untrusted IP
-  - **CIDR support**: Trusted proxies support individual IPs and CIDR ranges
-  - **Anti-spoofing**: Only trusts forwarding headers if the immediate connection IP is a trusted proxy
-- **Files**: `internal/pkg/netutil/clientip.go`, `internal/config/load.go` (TrustedProxies config), `internal/cli/run.go` (SetTrustedProxies on start)
+### Must-fix items blocking basic functionality
 
-### 1.4 WebSocket Origin Security (P1) ✅ DONE
-- **Status**: Strengthened `isValidWebSocketOrigin` — removed Referer fallback, enforced http/https schemes, proper port matching, host boundary checking for wildcards, 25 unit tests added.
-- **Files**: `internal/admin/ws.go`, `internal/admin/ws_origin_test.go`
+- [ ] **Fix SQLite write contention** — Add retry with exponential backoff for all SQLite write operations, increase busy timeout from 5s to 15s, enable WAL journal mode verification. Affected: `internal/store/apikey_repo.go`, `internal/audit/logger.go`. Effort: 4h.
+- [ ] **Fix 5 admin unit test failures** — `TestAdjustCredits_Advanced`, `TestUpdateUserStatus_Advanced`, `TestCreditOverview_More`, `TestAdjustCredits_InvalidBody`, `TestAdjustCredits_AmountValidation`. Root cause: SQLite timing under parallel test execution. Effort: 4h.
+- [ ] **Fix `TestGatewayBillingRejectDeductAndTestKeyBypass`** — Billing flow test failing. Investigate credit deduction and test key bypass logic in gateway proxy. Effort: 2h.
+- [ ] **Fix `TestPluginAbortScenarios`** — Plugin pipeline abort logic test. Effort: 2h.
+- [ ] **Remove WASM plugin claim from README** — Feature claimed but not implemented. Misleading documentation. Effort: 0.5h.
+- [ ] **Remove Plugin Marketplace claim from README** — Not implemented. Effort: 0.5h.
 
-### 1.5 Add TLS Minimum Version / Cipher Suite Config (P1) ✅ DONE
-- **Status**: Already implemented. `TLSConfig` struct has `MinVersion` and `CipherSuites` fields.
-  `TLSManager.TLSConfig()` parses them and builds `*tls.Config` with proper defaults (TLS 1.2 min, modern ciphers).
-- **Files**: `internal/gateway/tls.go` (`parseTLSMinVersion`, `parseTLSCipherSuites`, `TLSConfig()` method)
+## Phase 2: Core Completion (Week 3-6)
 
----
+### Complete missing core features from specification
 
-## Milestone 2: Reliability & Resource Safety (P0–P1)
+- [ ] **Stabilize E2E test infrastructure** — Fix 9 failing E2E tests. Root causes likely: test fixture setup/teardown, timing issues, config state between tests. Files: `test/e2e_*_test.go`. Effort: 16h.
+  - TestE2EAdminConfigureAndProxy
+  - TestE2EAuditLoggingCapturesMaskedData
+  - TestE2EZeroBalanceRejectedWith402
+  - TestE2ERetentionCleanupDeletesOldLogs
+  - TestE2ETestKeySkipsCreditDeduction
+  - TestE2EPermissionDeniedReturns403Reason
+  - TestE2EUserCreateKeyRequestDeductAndTransactionLog
+  - TestE2EPortalLoginKeyPlaygroundLogsCreditsFlow
+  - TestE2EAnalyticsTimeSeriesReturnsAggregatedData
+  - TestE2EHotReloadWithConfigWatch (8.03s — likely timeout)
 
-### 2.1 Enforce Request Body Limits (P0) ✅ DONE
-- **Status**: Already implemented with hard limits, not advisory.
-  - **Incoming requests**: Content-Length checked first (fast path → 413). Chunked bodies buffered with `io.LimitReader(limit+1)`, rejected if over.
-  - **Coalesced responses**: Content-Length pre-check, bounded `io.ReadAll(io.LimitReader(maxBody+1))`, `CompleteTooLarge` for over-limit.
-  - **Non-coalesced responses**: Streamed with bounded `io.CopyBuffer` — no memory accumulation.
-  - **Audit capture**: Response body capture bounded by `maxBodyBytes` with truncation.
-- **Files**: `internal/gateway/server.go:209-231`, `internal/gateway/optimized_proxy.go:366-391`, `internal/audit/capture.go:63-75`
+- [ ] **Implement database migration framework** — Integrate `golang-migrate/migrate` or equivalent. Create initial migration from current SQLite schema. Add migration commands to CLI. Files: new `internal/migrations/` package. Spec reference: data model in SPEC §16-19. Effort: 8h.
 
-### 2.2 Cap Analytics Latency Buffer (P0) ✅ DONE
-- **Status**: Reservoir sampling (Vitter's Algorithm R) with `maxLatencySamples = 10_000` per bucket is already implemented in `engine.go` lines 288-295.
-- **Verification**: `defaultBucketRetention = 24h` caps total buckets. Worst case: 1,440 × 10,000 × 8 bytes ≈ 115 MB.
-- **Files**: `internal/analytics/engine.go`
+- [ ] **Improve `internal/pkg/jwt` test coverage** — Currently 61.8%. Add tests for ES256, EdDSA, nbf validation, jti replay cache. Effort: 4h.
 
-### 2.3 Fix Request Coalescing Memory Risk (P1) ✅ DONE
-- **Status**: Already bounded. `CoalescingMaxBodyBytes` (default 1MB) caps buffered responses.
-  Responses over the limit trigger `CompleteTooLarge`, causing waiters to retry independently.
-  Content-Length pre-check avoids buffering entirely for known-large responses.
-- **Files**: `internal/gateway/optimized_proxy.go`
+- [ ] **Improve `internal/portal` test coverage** — Currently 76.3%. Add tests for portal handlers (login, API key management, playground). Effort: 4h.
 
-### 2.4 Reuse Webhook HTTP Client (P1) ✅ DONE
-- **Status**: WebhookManager already used a shared client. Added tuned `http.Transport` with connection pooling (MaxIdleConns=100, HTTP/2, 90s idle timeout).
-- **Bonus**: Fixed `HTTPClientPool.GetStats()` returning zeroed values instead of actual stats.
-- **Files**: `internal/admin/webhooks.go`, `internal/gateway/connection_pool.go`
+- [ ] **Audit log retry on SQLite busy** — When batch insert fails, retry with exponential backoff before dropping. Add dead-letter queue for permanently failed entries. Files: `internal/audit/logger.go`. Effort: 4h.
 
-### 2.5 Add Per-Request Upstream Timeout (P1) ✅ DONE
-- **Status**: Added `UpstreamTimeout` to `RequestContext`. Wired from `service.ReadTimeout` (default 30s) into both `proxy.Forward` and `proxy.Do`.
-- **Files**: `internal/gateway/proxy.go`, `internal/gateway/server.go`
+## Phase 3: Hardening (Week 7-8)
 
-### 2.6 Raft Transport Encryption (P1) ✅ DONE
-- **Status**: mTLS implemented with auto CA generation, node cert signing, and TLS certificate manager.
-- **Files**: `internal/raft/tls.go`
+### Security, error handling, edge cases
 
-### 2.7 Async Log Hook (P2) ✅ DONE
-- **Status**: `AsyncLogHook` wraps synchronous `LogHook` with buffered channel + background goroutine.
-  Entries are drained asynchronously; buffer-full drops silently to avoid blocking the caller.
-  `Close()` drains remaining entries with non-blocking channel read and 5s timeout.
-- **Files**: `internal/logging/structured.go`, `internal/logging/structured_test.go`
+- [ ] **Add input validation to all admin API path/query parameters** — Currently some endpoints may not validate ID formats, pagination params, date ranges. Effort: 8h.
+- [ ] **Add request ID to all error responses** — Ensure every error response includes a correlation/request ID for audit trail lookup. Effort: 2h.
+- [ ] **Implement rate limiting on admin API endpoints** — Currently admin API may not have rate limits. Protect against brute force on auth endpoints. Effort: 4h.
+- [ ] **Add graceful degradation for Redis unavailability** — When Redis is down, distributed rate limiting should fall back to local mode without errors. Files: `internal/ratelimit/`. Effort: 4h.
+- [ ] **Add circuit breaker for upstream health check dependencies** — Prevent cascading failures when many upstreams go down simultaneously. Effort: 2h.
+- [ ] ** Harden CSP headers** — Review and tighten Content-Security-Policy for admin and portal. Effort: 2h.
+- [ ] **Add security headers to all responses** — HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy. Effort: 2h.
 
-### 2.8 Webhook Per-Request Timeouts (P2) ✅ DONE
-- **Status**: `processDelivery` sets `context.WithTimeout` from `webhook.Timeout` (default 30s) on each
-  request. Client-level `Timeout: 30s` acts as a safety net. Shared `http.Transport` with connection
-  pooling (MaxIdleConns=100, HTTP/2, 90s idle timeout).
-- **Files**: `internal/admin/webhooks.go`
+## Phase 4: Testing (Week 9-10)
 
----
+### Comprehensive test coverage
 
-## Milestone 3: Identity & Auth Unification (P1)
+- [ ] **Add fuzz tests for router** — Fuzz the radix tree router with malformed paths, Unicode, null bytes, path traversal attempts. Files: `internal/gateway/router_test.go`. Effort: 4h.
+- [ ] **Add fuzz tests for YAML parser** — Fuzz config parsing with malformed YAML. Files: `internal/pkg/yaml/`. Effort: 2h.
+- [ ] **Add fuzz tests for JSON parser** — Fuzz JSON request body parsing. Files: `internal/pkg/json/`. Effort: 2h.
+- [ ] **Add load testing framework** — Use `vegeta` or `k6` for sustained load testing. Target: 50K req/s per spec. Effort: 8h.
+- [ ] **Add frontend component tests** — Vitest tests for key React components (data tables, forms, charts). Target: 60% frontend coverage. Effort: 16h.
+- [ ] **Add frontend E2E tests** — Playwright tests for admin dashboard flows (login, create service/route, view analytics). Effort: 16h.
+- [ ] **Raise overall coverage to 80%+** — Focus on `internal/pkg/jwt` (61.8%), `test/helpers` (48.0%), `internal/cli` (76.8%), `internal/portal` (76.3%). Effort: 8h.
 
-### 3.1 Unify Users and Consumers (P1) ✅ DONE
-- **Task**: Bridge the gap between `store.User` (portal/admin) and `config.Consumer` (gateway).
-- **Status**: Fixed gateway-level auth wiring to use SQLite-backed API key lookup instead of only
-  YAML-defined consumers. Previously `newAuthAPIKey` received `nil` as the lookup function in both
-  `New()` and `Reload()`, so store-based keys only worked in route-level plugin pipelines.
-  Now both paths query SQLite first, falling back to YAML consumers for backwards compatibility.
-- **`userToConsumer()` enhancements**:
-  - Populates `Consumer.RateLimit` from `user.RateLimits` JSON map (`requests_per_second`, `burst`)
-  - Extracts `ACLGroups` from `user.Metadata["acl_groups"]` with type-safe conversion
-  - Carries `credit_balance` into metadata for billing-aware plugins
-- **Data flow**: `AuthAPIKey.Authenticate` → `APIKeyLookup` (SQLite) → `ResolveUserByRawKey` →
-  JOIN `api_keys` to `users` → `userToConsumer` → `*config.Consumer`
-- **Files**: `internal/gateway/server.go` (`New`, `Reload`, `userToConsumer`)
+## Phase 5: Performance & Optimization (Week 11-12)
 
-### 3.2 Add Rate-Limiting to Failed Auth (P2) ✅ DONE
-- **Status**: Implemented `AuthBackoff` — per-IP exponential backoff (100ms → 30s max) for invalid API key attempts.
-  Integrated into `AuthAPIKey` via options. Only triggers on `invalid_api_key` errors.
-- **Files**: `internal/plugin/auth_backoff.go`, `internal/plugin/auth_apikey.go`, `internal/gateway/server.go`
+### Performance tuning and optimization
 
-### 3.3 JWT Enhancements (P2) ✅ DONE
-- **Task**: Add `nbf` validation, `jti` tracking (optional Redis-backed replay cache), and ES256/EdDSA support.
-- **Status**:
-  - **`nbf` validation**: Validates Not Before claim with configurable clock skew tolerance.
-    Rejects tokens used before their `nbf` time (`invalid_jwt_claims` error).
-  - **`jti` replay cache**: Optional in-memory replay cache (`JTIReplayCache`) that tracks
-    JWT IDs with per-entry TTLs (based on token expiry). Enabled via `enable_jti_replay: true`
-    in plugin config. Automatic cleanup of expired entries every 5 minutes.
-  - **ES256**: ECDSA P-256 signature verification via `internal/pkg/jwt/es256.go`.
-    Supports both direct `ECDSAPublicKey` config and JWKS key resolution (EC keys with P-256 curve).
-  - **EdDSA**: Ed25519 signature verification via `internal/pkg/jwt/es256.go`.
-    Requires `EdDSAPublicKey` to be configured (no JWKS support yet).
-  - **JWKS extended**: `JWKSClient` now parses both RSA and EC keys from JWKS documents.
-    `GetECDSAKey()` resolves P-256 EC keys by `kid`.
-- **Files**: `internal/plugin/auth_jwt.go`, `internal/plugin/jti_replay.go`,
-  `internal/plugin/registry.go`, `internal/pkg/jwt/es256.go`, `internal/pkg/jwt/jwks.go`,
-  `internal/pkg/jwt/rs256.go`
+- [ ] **Parallelize plugin execution within phases** — Plugins in the same phase that don't share state can run concurrently. Files: `internal/plugin/pipeline.go`. Effort: 8h.
+- [ ] **Object pool for audit log entries** — Reduce allocations in hot path. Files: `internal/audit/logger.go`. Effort: 2h.
+- [ ] **Optimize JSON marshaling in admin API** — Use `json.Encoder` streaming instead of `json.Marshal` + `write`. Files: `internal/pkg/json/`. Effort: 4h.
+- [ ] **Add SQLite connection pool tuning** — Configure `SetMaxOpenConns`, `SetMaxIdleConns`, `SetConnMaxLifetime` based on workload. Effort: 2h.
+- [ ] **Frontend bundle analysis** — Add `rollup-plugin-visualizer` to Vite config. Identify and eliminate dead code. Effort: 2h.
+- [ ] **Frontend code splitting** — Ensure React Flow, CodeMirror, and Recharts are lazy-loaded only when needed. Effort: 4h.
+- [ ] **Benchmark critical paths** — Add benchmarks for router matching, plugin pipeline, proxy forwarding. Track regression in CI. Effort: 4h.
 
----
+## Phase 6: Documentation & DX (Week 13-14)
 
-## Milestone 4: Operational Excellence (P1–P2)
+### Documentation and developer experience
 
-### 4.1 Fix MCP Cluster Mock Data (P1) ✅ DONE
-- **Status**: Already implemented. `cluster.status` and `cluster.nodes` query the actual Raft node state
-  (`GetState()`, `GetTerm()`, `GetLeaderID()`, `CommitIndex`, `LastApplied`, `Peers`).
-- **Files**: `internal/mcp/server.go`, `internal/raft/node.go`
+- [ ] **Generate OpenAPI/Swagger spec** — Add `swaggo/swag` annotations to admin handlers or use `ogen` for code-first spec generation. Effort: 16h.
+- [ ] **Update API.md** — Reflect all 100+ current endpoints (currently documents ~70). Effort: 4h.
+- [ ] **Add architecture decision records (ADRs)** — Document key decisions: SQLite vs PostgreSQL, custom YAML parser, 5-phase pipeline, SubnetAware vs Geo-aware. Effort: 4h.
+- [ ] **Add contributing guide with dev environment setup** — Docker compose for local development with SQLite, Redis, upstream mock. Effort: 4h.
+- [ ] **Add troubleshooting guide** — Common issues: SQLite locked, Redis connection, certificate renewal, Raft cluster join failures. Effort: 4h.
+- [ ] **Add `.goreleaser.yml`** — Multi-platform binary releases with version info embedded. Effort: 4h.
+- [ ] **Add GitHub Actions CI workflow** — Auto-run tests, lint, security scans on PR. Effort: 4h.
 
-### 4.2 Real GeoIP or Rename Feature (P2) ✅ DONE
-- **Status**: Renamed to `subnet_aware`. `geo_aware` kept as deprecated alias for backward compatibility.
-- **Files**: `internal/loadbalancer/geo.go`, `internal/gateway/balancer.go`, `internal/gateway/balancer_extra.go`
+## Phase 7: Release Preparation (Week 15-16)
 
-### 4.3 Graceful Shutdown Hooks (P2) ✅ DONE
-- **Status**: `Gateway.Shutdown` now waits for the audit goroutine to finish draining
-  and flushing its buffer (`auditDone` channel). Tracer flush was already wired
-  (`tracer.Shutdown(ctx)`). Analytics is in-memory with synchronous writes — no
-  flush needed (data is lost on process exit regardless).
-- **Files**: `internal/gateway/server.go`, `internal/analytics/engine.go`
+### Final production preparation
 
-### 4.6 Fix Reload Panic (P1) ✅ DONE
-- **Status**: `Gateway.Reload` was panicking with `close of closed channel` when
-  restarting the audit goroutine. The fix cancels the old audit context, releases
-  the mutex, waits for the old goroutine to signal completion via `auditDone`
-  channel (10s timeout), then re-acquires the lock and creates the replacement.
-- **Files**: `internal/gateway/server.go` (Reload function)
+- [ ] **Run full security audit** — Re-run gosec, govulncheck, trivy. Verify all findings resolved. Effort: 4h.
+- [ ] **Docker image optimization** — Use `distroless/static` or `alpine` base. Minimize image size. Add non-root user. Effort: 2h.
+- [ ] **Add health check endpoint** — Comprehensive `/health` that checks DB, Redis (if configured), Raft status. Effort: 2h.
+- [ ] **Add readiness probe endpoint** — `/ready` that returns 503 until all dependencies are initialized. Effort: 2h.
+- [ ] **Configure log rotation** — Ensure production log rotation is documented and tested. Effort: 2h.
+- [ ] **Test backup/restore procedure** — Verify `scripts/backup.sh` and `scripts/restore.sh` work end-to-end. Effort: 4h.
+- [ ] **Zero-downtime deployment test** — Verify rolling update with Raft cluster works without request loss. Effort: 4h.
+- [ ] **Release candidate validation** — Full test suite pass, security clean, performance targets met. Effort: 8h.
 
-### 4.4 SQLite Backup with Locking (P2) ✅ DONE
-- **Status**: Script already uses `sqlite3 ".backup"` (SQLite backup API).
-  Added `.timeout 5000` for BUSY handling, `VACUUM INTO` fallback,
-  and `PRAGMA integrity_check` verification after backup creation.
-- **Files**: `scripts/backup.sh`
+## Beyond v1.0: Future Enhancements
 
-### 4.5 Add Frontend CSP + CSRF (P2) ✅ DONE
-- **Status**: CSP header already set via `<meta http-equiv>` in `web/index.html`.
-  Added server-side `Content-Security-Policy` headers to both admin (`ui.go`) and
-  portal (`ui.go`) HTML responses with strict policies (no `unsafe-eval`, no
-  `object-src`, `form-action 'self'`, `frame-ancestors 'none'`).
-  CSRF double-submit cookie already implemented in portal (`withCSRF` middleware).
-- **Files**: `web/index.html`, `internal/admin/ui.go`, `internal/portal/ui.go`
+- [ ] **SSO/OIDC Integration** (v0.7.0) — OAuth2/OIDC provider support for enterprise SSO
+- [ ] **RBAC** (v0.7.0) — Role-based access control beyond admin/user binary
+- [ ] **White-label Branding** (v0.7.0) — Customizable dashboard branding
+- [ ] **WASM Plugin Runtime** — `wazero`-based WASM plugin execution for user-defined plugins
+- [ ] **Plugin Marketplace** — Discovery and installation mechanism for community plugins
+- [ ] **True Geographic Load Balancing** — MaxMind GeoIP2 integration for location-aware routing
+- [ ] **gRPC Streaming Health Checks** — Native gRPC health checking protocol
+- [ ] **GraphQL APQ** — Automatic Persisted Queries for production GraphQL
+- [ ] **ACME DNS-01 Challenge** — Wildcard certificate support
+- [ ] **Multi-tenant Clustering** — Per-tenant Raft groups for isolation
 
----
+## Effort Summary
 
-## Milestone 5: Frontend Quality (P2–P3)
+| Phase | Estimated Hours | Priority | Dependencies |
+|-------|----------------|----------|-------------|
+| Phase 1: Critical Fixes | 13h | CRITICAL | None |
+| Phase 2: Core Completion | 38h | HIGH | Phase 1 |
+| Phase 3: Hardening | 26h | HIGH | Phase 1 |
+| Phase 4: Testing | 50h | HIGH | Phase 2 |
+| Phase 5: Performance & Optimization | 28h | MEDIUM | Phase 2 |
+| Phase 6: Documentation & DX | 38h | MEDIUM | Phase 1 |
+| Phase 7: Release Preparation | 28h | HIGH | Phase 4, 5 |
+| **Total** | **221h** | | |
 
-### 5.1 Re-enable TypeScript Checks (P2) ✅ DONE
-- **Status**: `tsc --noEmit` passes cleanly. `lint` and `typecheck` scripts both run real TypeScript checks.
+## Risk Assessment
 
-### 5.2 Complete Placeholder Pages (P3) ✅ DONE
-- **Status**: All admin pages are fully implemented. System Logs has live WebSocket
-  tail streaming, filtering (level/source/search), JSON export, auto-scroll, and
-  metadata display. The `PlaceholderPage` in `App.tsx` serves as a fallback for
-  any future nav items that don't have dedicated routes yet.
-- **Files**: `web/src/pages/admin/SystemLogs.tsx`, `web/src/components/logs/LogTail.tsx`
-
-### 5.3 Add E2E Smoke Tests (P3) ✅ DONE
-- **Status**: 16 Go E2E test files covering:
-  - Gateway routing, auth, billing, rate limiting, proxy forwarding
-  - CLI commands (user, credit, audit, analytics, gateway entities)
-  - MCP server (stdio transport)
-  - Full request lifecycle with plugin pipeline
-  - Benchmarks and performance tests
-  - **Chaos tests**: SQLite corruption rejection, Redis unavailability + local fallback,
-    upstream panic recovery, unreachable upstream handling
-- **Files**: `test/e2e_v*_test.go`, `test/e2e_v010_cli_smoke_test.go`, `test/e2e_v010_mcp_stdio_test.go`, `test/e2e_v003_bench_test.go`, `test/e2e_v070_chaos_test.go`
-
----
-
-## Milestone 6: Documentation Cleanup (P2)
-
-### 6.1 Correct Dependency Claims (P2) ✅ DONE
-- **Status**: Updated `IMPLEMENTATION.md` with accurate external dependency table (9 direct deps documented).
-
-### 6.2 Task List Integrity (P2) ✅ DONE
-- **Status**: `.project/TASKS.md` has 0 unchecked items. All completed features are properly tracked.
-
-### 6.3 Fix Go Version (P2) ✅ DONE
-- **Status**: Verified. `go 1.25.0` is valid for Go 1.26.x installations.
-
----
-
-## Suggested Execution Order
-
-| Week | Focus |
-|------|-------|
-| 1 | P0 security (admin key, secrets, XFF), P0 body limit, analytics buffer cap |
-| 2 | P0–P1 reliability (webhook client, proxy timeout, coalescing memory) |
-| 3 | P1 auth unification (gateway keys in DB), P1 MCP cluster fix |
-| 4 | P2 frontend CSP/CSRF, TS fixes, operational hooks, docs cleanup |
-| 5+ | Raft mTLS, E2E tests, GeoIP decision, long-tail polish |
-
----
-
-## Risk Register
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| XSS steals admin key | Medium | Critical | ~~Move key to HttpOnly cookie (Week 1)~~ ✅ **Done** |
-| OOM from analytics | High | High | ~~Cap latency samples (Week 1)~~ ✅ **Done** |
-| Rate-limit bypass via XFF | High | Medium | ~~Trusted proxy parsing (Week 1)~~ ✅ **Done** |
-| Coalescing memory spike | Medium | High | ~~Disable or bound coalescing (Week 2)~~ ✅ **Done** |
-| Request body over-limit | Medium | High | ~~Hard limit enforcement~~ ✅ **Done** |
-| Raft plaintext traffic | Low | High | ~~mTLS on Raft RPC (Week 2–3)~~ ✅ **Done** |
-| Placeholder pages disappoint users | High | Low | Hide or implement before GA (Week 4–5) — only System Logs remains |
+| Risk | Probability | Impact | Mitigation |
+|------|-------------|--------|------------|
+| SQLite write contention worsens under production load | High | High | Implement retry + backoff immediately (Phase 1); consider PostgreSQL migration for v2.0 |
+| E2E tests remain flaky after fixes | Medium | Medium | Isolate tests with dedicated fixtures; consider testcontainers for clean DB per test |
+| Migration framework introduction breaks existing deployments | Medium | High | Test migrations extensively; provide rollback scripts; document migration process |
+| Performance targets (50K req/s) not met with sequential plugin pipeline | Medium | Medium | Parallelize plugins (Phase 5); benchmark early to identify bottlenecks |
+| Frontend bundle grows beyond acceptable size | Low | Low | Add bundle analysis (Phase 5); implement code splitting |
+| Raft cluster instability under network partition | Low | High | Test partition scenarios; improve Raft transport resilience |
+| Security regression after fixes | Medium | High | Add security scanning to CI (Phase 7); run gosec/govulncheck on every PR |

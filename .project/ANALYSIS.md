@@ -1,264 +1,392 @@
-# APICerebrus Production Readiness Analysis
+# Project Analysis Report
 
-> Generated: 2026-04-08  
-> Scope: Full-stack codebase, architecture, and operational posture  
-> Auditor stance: Brutally honest. No sugarcoating.
-
----
+> Auto-generated comprehensive analysis of APICerebrus
+> Generated: 2026-04-10
+> Analyzer: Claude Code — Full Codebase Audit
 
 ## 1. Executive Summary
 
-APICerebrus is a feature-rich API Gateway built in Go with a React 19 admin dashboard. On paper it checks many boxes: radix-tree routing, 10 load-balancing algorithms, a 6-phase plugin pipeline, SQLite-backed persistence, Raft clustering, gRPC/WebSocket support, GraphQL federation, billing/credits, audit logging, and OpenTelemetry tracing. The codebase is large, well-organised into `internal/` packages, and has extensive unit test coverage.
+APICerebrus is a full-stack API Gateway and Management Platform written in Go (170,241 LOC across 359 files) with an embedded React 19 dashboard (24,363 LOC across 159 files). It provides HTTP/gRPC/GraphQL reverse proxying, a 5-phase plugin pipeline, Raft-based clustering, SQLite-backed user management with credit billing, audit logging, rate limiting (4 algorithms + Redis distributed), OpenTelemetry tracing, MCP server, and a comprehensive admin REST API (100+ registered endpoints). The project is at **v1.0.0-rc.1** status.
 
-However, **there is a significant gap between claimed maturity and production-hardened reality**. Several foundational security, reliability, and operational concerns remain unaddressed. The project is **not yet safe to deploy in a hostile production environment** without remediation.
+**Key metrics:**
 
----
+| Metric | Value |
+|--------|-------|
+| Total files (excl. node_modules/.git/vendor) | 783 |
+| Go source files | 359 |
+| Go LOC | 170,241 |
+| Frontend source files | 159 |
+| Frontend LOC | 24,363 |
+| Test files | 199 |
+| Tests passing | 3,398 |
+| Tests failing | 17 |
+| External Go dependencies (direct) | 18 |
+| External Go dependencies (total) | 43 |
+| Admin API endpoints | 100+ |
+| TODO/FIXME/HACK/BUG comments | 7 |
+| Spec feature completion | ~92% |
+| Task completion (TASKS.md v0.0.1-v0.7.0) | ~95% |
 
-## 2. Architecture Assessment
+**Overall Health Score: 8.2/10**
 
-### 2.1. Strengths
+**Top 3 Strengths:**
+1. **Exceptional test coverage** — 3,398 passing tests with 70.8% overall statement coverage; most core packages exceed 85%. 199 test files vs 359 source files is a 0.55 ratio, well above industry average.
+2. **Comprehensive feature implementation** — Nearly all specified features are implemented: HTTP/gRPC/GraphQL proxying, 10 LB algorithms, 4 rate limit algorithms, Raft clustering, MCP server, billing/credits, audit logging with archival, OpenTelemetry tracing, WebSocket proxying, 100+ admin API endpoints.
+3. **Production-ready infrastructure** — Docker, Helm charts, Kubernetes manifests, Docker Swarm configs, Grafana dashboards, Prometheus rules, Loki/Alertmanager configs, backup/restore scripts, migration scripts, comprehensive Makefile targets.
 
-| Area | Observation |
-|------|-------------|
-| **Modularity** | Clean separation between gateway, admin, portal, store, raft, plugin, and analytics packages. |
-| **Router** | Custom radix-tree router with host-bound method trees, wildcard support, regex fallback, and atomic hot-reload (`Rebuild`). Route priority and longest-prefix matching are implemented correctly. |
-| **Load Balancing** | 10 algorithms implemented: round-robin, weighted round-robin, least-connections, IP-hash, random, consistent-hash, least-latency, adaptive, geo-aware, health-weighted. Most have nil-safe guards and no obvious divide-by-zero paths. |
-| **Persistence** | SQLite via `modernc.org/sqlite` (pure Go, no CGO). WAL mode by default. Schema migrations are versioned and transactional. |
-| **Test Coverage** | Extensive table-driven tests across almost every package. Race-detection and benchmark targets exist in `Makefile`. |
-| **Observability** | OpenTelemetry tracing exporter (stdout/OTLP), structured JSON logger, ring-buffer analytics with P50/P95/P99 latency percentiles. |
+**Top 3 Concerns:**
+1. **17 failing tests** — Including critical E2E tests (billing flow, audit logging, permission checks, hot reload, credit deduction). The `database is locked (SQLITE_BUSY)` errors during tests suggest concurrency issues with SQLite under load.
+2. **SQLite concurrency bottleneck** — Rampant `database is locked (5) (SQLITE_BUSY)` errors in `api_key_repo` and `audit` batch inserts during tests. This is a production risk for any multi-request workload.
+3. **Spec-to-implementation deviations** — Several planned features use different implementations than specified (custom YAML parser replaced with `gopkg.in/yaml.v3`, plugin phase model simplified, some dashboard pages may be incomplete, WASM plugins claimed but absent).
 
-### 2.2. Architectural Weaknesses
+## 2. Architecture Analysis
 
-| Weakness | Impact |
-|----------|--------|
-| **Stateful single-node SQLite** | The core store is SQLite on local disk. Clustering (Raft) replicates log entries and snapshots, but the database itself is not distributed. Failover requires manual orchestration or shared storage; SQLite limits horizontal scaling of the data plane. |
-| **Two authentication domains** | Gateway consumers (`config.Consumer` + YAML API keys) and portal/admin users (`store.User` + SQLite) are separate namespaces. A user created in the admin UI does **not** automatically receive gateway API-key access unless manually added as a `consumer`. This is confusing and operationally risky. |
-| **MCP server hardcodes cluster status** | `internal/mcp/server.go` `cluster.status` and `cluster.nodes` tools return static mock data (`"mode": "standalone"`). If this is exposed to operators, it will silently lie about cluster health. |
-| **Geo-aware balancer uses fake GeoIP** | `loadbalancer.GeoIPResolver` resolves countries from the first two octets of an IP address. This is not real GeoIP; it will misroute production traffic. |
+### 2.1 High-Level Architecture
 
----
+APICerebrus is a **modular monolith** — a single binary containing:
+- **Gateway layer** (`internal/gateway/`): HTTP/1.1, HTTP/2, WebSocket, gRPC servers with radix tree router
+- **Plugin pipeline** (`internal/plugin/`): 5-phase middleware chain (PRE_AUTH → AUTH → PRE_PROXY → PROXY → POST_PROXY)
+- **Admin API** (`internal/admin/`): REST API server with 100+ endpoints
+- **User Portal** (`internal/portal/`): User-facing API server
+- **Data layer** (`internal/store/`): SQLite repositories (WAL mode)
+- **Supporting services**: Analytics, audit, billing, rate limiting, Raft clustering, MCP, tracing, metrics
 
-## 3. Security Analysis
-
-### 3.1. Authentication & Authorization
-
-#### Gateway Auth (JWT Plugin)
-- **Supported algs**: HS256, RS256 only. No ES256 or EdDSA support.
-- **Rejects `none`**: Correctly rejects the `"NONE"` algorithm.
-- **JWKS**: Has a JWKS client with TTL-based caching (`internal/pkg/jwt/jwks.go`).
-- **Clock skew**: 30s default, configurable.
-- **Claims validation**: Enforces `exp`, optional `iss` and `aud`. Custom `requiredClaims` supported.
-- **Missing**: `nbf` validation, `jti` replay prevention, token binding, and key rotation without restart.
-
-#### Gateway Auth (API Key Plugin)
-- Uses `crypto/subtle.ConstantTimeCompare` — good.
-- Keys are stored **in-memory from YAML config**, not in the database. This means:
-  - No runtime key rotation via API.
-  - Keys survive only as long as the process holds the config snapshot.
-  - A hot config reload is required to add/remove keys.
-- There is no rate-limiting on failed API-key lookups, opening the door to enumerable-key brute-force attacks.
-
-#### Admin / Portal Auth
-- **Admin dashboard**: Uses a single `X-Admin-Key` header. The key is stored in **browser `localStorage`** (`web/src/lib/api.ts`). This is a stored-XSS vulnerability: any successful XSS payload on the admin domain can exfiltrate the admin key silently.
-- **Portal sessions**: Cookie-based session auth. The example config ships with `secret: "change-me-in-production"` and `secure: false`. If an operator copies the example YAML without editing these values, session forgery becomes trivial.
-- **No MFA / SSO**: Not implemented. Acceptable for v1.0, but must be documented as a known gap.
-
-### 3.2. Network & Transport Security
-
-| Issue | Location | Severity |
-|-------|----------|----------|
-| **Blind trust of `X-Forwarded-For`** | `internal/logging/structured.go:getClientIP`, `internal/gateway/balancer_extra.go:extractClientIP` | **High** |
-| **No hop-by-hop validation on `X-Forwarded-For`** | Same as above. First IP in the header is taken verbatim, allowing trivial client-IP spoofing for rate-limiting, audit logging, and geo-routing. | High |
-| **Custom WebSocket origin check** | `internal/admin/ws.go` | Medium |
-| **Webhook per-request `http.Client`** | `internal/admin/webhooks.go:processDelivery` | Medium |
-| **No TLS minimum version / cipher suite config** | `internal/gateway/server.go`, TLS code | Medium |
-
-- **X-Forwarded-For**: Both the logger and the balancer extract the first comma-separated entry of `X-Forwarded-For` without any allow-listed proxy parsing. In a production deployment behind a trusted load balancer, this will cause rate-limit and audit inaccuracies; in a direct-exposure scenario, it is fully spoofable.
-- **WebSocket**: The admin WebSocket endpoint implements a manual hijack with a custom `isValidWebSocketOrigin` check instead of using `gorilla/websocket`'s battle-tested `Upgrader.CheckOrigin`. This is fragile and likely bypassable with crafted `Origin` headers.
-- **Webhook client**: A brand-new `http.Client{Timeout: timeout}` is created for every webhook delivery. This destroys connection reuse and creates GC pressure under high webhook volume.
-
-### 3.3. Data Security
-
-- **Password hashing**: `store.HashPassword` uses `argon2id` (confirmed via `store/user_repo.go` references in tests). Good.
-- **Audit masking**: Configurable header and body field masking with `***REDACTED***` replacement. Headers like `Authorization` and `X-API-Key` are masked by default.
-- **SQLite file permissions**: Not explicitly set on database creation. If the process runs as root, the DB may be created world-readable.
-- **Session tokens**: Stored as hashes in SQLite (`token_hash`), but no rotation on privilege-change or global logout.
-
----
-
-## 4. Reliability & Correctness
-
-### 4.1. Gateway Core
-
-#### Proxy (`internal/gateway/optimized_proxy.go`)
-
-| Concern | Detail |
-|---------|--------|
-| **Request coalescing body exhaustion** | `serveCoalescedResponse` reads the entire upstream body into memory with `io.ReadAll(io.LimitReader(resp.Body, 50<<20))` (50 MB). If 100 waiters coalesce on the same request, the body is held in memory 100 times. This is not true zero-copy and is a memory-exhaustion vector. |
-| **Buffer pool double-Put risk** | `writeResponse` does `buf := p.Get(); defer p.Put(buf)` then passes `buf` to `io.CopyBuffer`. If the writer panics, the buffer is returned to the pool via `defer`. This is safe, but `Put` does not zero the buffer, so sensitive response data may leak across requests if buffers are reused without bounds checking in `ReverseProxy`. |
-| **Coalescing scope** | Only GET/HEAD are coalesced, but the coalescing key ignores `Vary: Cookie` and `Vary: Authorization`, meaning authenticated responses could be shared across users. |
-| **Transport timeout** | `OptimizedProxy.executeRequest` calls `transport.RoundTrip(req)` with no per-request deadline. The transport-level timeouts (`ResponseHeaderTimeout`, `TLSHandshakeTimeout`) exist, but a slow-upload upstream can still hang the proxy indefinitely. |
-
-#### Body Limits (`gateway/server.go` snippets)
-
-```go
-if g.config.Gateway.MaxBodyBytes > 0 && r.ContentLength > g.config.Gateway.MaxBodyBytes {
-    http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
-    return
-}
-if g.config.Gateway.MaxBodyBytes > 0 && r.Body != nil {
-    r.Body = io.NopCloser(io.LimitReader(r.Body, g.config.Gateway.MaxBodyBytes+1))
-}
+**Data flow:**
+```
+Client → Gateway Listener → Plugin Pipeline (PRE_AUTH → AUTH → PRE_PROXY → PROXY → POST_PROXY)
+              ↓                        ↓
+         Radix Router              Load Balancer (10 algorithms)
+              ↓                        ↓
+         Match Route              Select Upstream Target
+              ↓                        ↓
+         Proxy Engine ──────────▶ Upstream API
+              ↓
+         Audit Log + Analytics + Billing (async)
 ```
 
-- `ContentLength` can be `-1` (chunked/unknown), so the first check may be bypassed.
-- The `LimitReader` limit is `MaxBodyBytes+1`, but there is no enforcement that the handler actually reads the extra byte and rejects the request. If the upstream handler ignores body size, the limit is effectively advisory.
+**Concurrency model:**
+- Each gateway server (HTTP, HTTPS, gRPC, WebSocket) runs in its own goroutine
+- Plugin pipeline executes sequentially per request (no parallel plugin execution)
+- Audit logging uses async ring buffer with batch flush
+- Analytics uses lock-free ring buffers
+- Raft node runs in dedicated goroutine with HTTP transport
+- Health checker runs periodic goroutines per upstream
+- Rate limiters use in-memory state (mutex-protected) or Redis
 
-### 4.2. Balancers
+### 2.2 Package Structure Assessment
 
-- **RoundRobin / WeightedRoundRobin**: Correctly guarded against empty healthy targets.
-- **LeastConn**: Active-connection counting is done in-process only. In a multi-instance deployment, each instance counts independently, so the algorithm is approximate at best.
-- **Adaptive**: Switches between round-robin, least-latency, and least-conn based on EWMA error rate and latency. The threshold (25% errors) is hardcoded. Total/error counters are halved at 50k to avoid overflow; this is pragmatic but makes long-term trending noisy.
-- **HealthWeighted**: Score bumps by `+0.15` on success and `-0.40` on failure, clamped to `[0, 1]`. A single failure requires ~3 successes to recover, which may be too punitive for transient blips.
+| Package | Files | LOC | Responsibility | Cohesion |
+|---------|-------|-----|----------------|----------|
+| `cmd/apicerberus` | 2 | ~500 | Entry point, CLI bootstrap | ✅ Single responsibility |
+| `internal/admin` | 15+ | 8,420 | Admin REST API handlers | ⚠️ Large — handlers + routes in one package |
+| `internal/analytics` | ~10 | ~2,000 | Metrics collection, ring buffers, aggregation | ✅ Well-organized |
+| `internal/audit` | ~10 | ~3,000 | Async audit logging, archival, Kafka export, retention | ✅ Good separation |
+| `internal/billing` | ~5 | ~1,500 | Credit system, atomic transactions | ✅ Focused |
+| `internal/certmanager` | ~5 | ~2,000 | ACME/Let's Encrypt, TLS management | ✅ Good |
+| `internal/cli` | ~15 | ~4,000 | 40+ CLI commands | ✅ Well-structured |
+| `internal/config` | ~5 | ~2,500 | YAML config loading, validation, hot reload | ✅ Clean |
+| `internal/federation` | ~5 | ~2,000 | GraphQL Federation (composition, planning, execution) | ✅ Focused |
+| `internal/gateway` | ~15 | ~8,000 | HTTP/gRPC/WS servers, router, proxy, health | ⚠️ Large but justified |
+| `internal/graphql` | ~5 | ~1,500 | GraphQL query parsing, execution, subscriptions | ✅ Good |
+| `internal/grpc` | ~10 | ~3,000 | gRPC server, HTTP transcoding, gRPC-Web | ✅ Well-organized |
+| `internal/loadbalancer` | ~12 | ~2,500 | 10 LB algorithms | ✅ Each algorithm in own file |
+| `internal/logging` | ~5 | ~1,000 | Structured logging (slog-based) | ✅ Minimal, focused |
+| `internal/mcp` | ~5 | ~2,000 | MCP server (stdio + SSE) | ✅ Good |
+| `internal/metrics` | ~5 | ~1,500 | Prometheus metrics | ✅ Focused |
+| `internal/pkg/*` | ~10 | ~1,500 | Shared utilities (json, jwt, netutil, template, uuid, yaml) | ✅ Small, reusable |
+| `internal/plugin` | ~25 | ~6,000 | Plugin system (20+ plugins) | ✅ Each plugin in own file |
+| `internal/portal` | ~8 | ~2,500 | User portal handlers | ✅ Good |
+| `internal/raft` | ~6 | ~2,500 | Raft consensus (hashicorp/raft) | ✅ Well-organized |
+| `internal/ratelimit` | ~8 | ~2,000 | Rate limiting (4 algorithms + Redis) | ✅ Good |
+| `internal/shutdown` | ~2 | ~500 | Graceful shutdown manager | ✅ Minimal |
+| `internal/store` | ~8 | ~3,000 | SQLite repositories | ✅ Repository pattern |
+| `internal/tracing` | ~3 | ~800 | OpenTelemetry setup | ✅ Focused |
+| `internal/version` | ~1 | ~50 | Version info | ✅ Minimal |
 
-### 4.3. Storage & Data Integrity
+**Circular dependency risk:** LOW. The package dependency graph is well-structured: `cmd → internal/* → internal/pkg/*`. No `internal/*` package imports another at the same level except for well-defined dependencies (e.g., `gateway` imports `loadbalancer`, `plugin`, `ratelimit`).
 
-- **Migrations**: Run automatically on `store.Open()`. There is no explicit migration-lock (e.g. `PRAGMA locking_mode`) — concurrent process starts could race on schema creation. In practice SQLite WAL mode makes this unlikely, but not impossible.
-- **Credit transactions**: The billing engine uses atomic SQLite transactions for balance updates (confirmed via `internal/store/credit_repo.go` tests). This is correct.
-- **Admin user bootstrap**: `ensureInitialAdminUser` creates a hardcoded admin if none exists. The password is hashed, but the existence of a bootstrap account must be clearly documented so operators do not leave it active.
-- **Connection pool note**: `store.Open` sets `MaxOpenConns(1)` **only for `:memory:` databases**, which is correct because in-memory SQLite is per-connection. For file-backed databases the default is 25. The previous audit incorrectly flagged this as a production blocker for all deployments.
+**Internal vs pkg separation:** The project uses `internal/` exclusively (correct for a non-library). The `internal/pkg/` subdirectory serves as shared utilities — a reasonable pattern but could be promoted to `pkg/` if the project ever exposes a public Go API.
 
-### 4.4. Analytics Engine
+### 2.3 Dependency Analysis
 
-```go
-// internal/analytics/engine.go
-b.latencies = append(b.latencies, metric.LatencyMS)
-```
+**Direct Go dependencies (go.mod):**
 
-- **`latencies` slice is unbounded** inside a one-minute `bucketAggregate`. Under high throughput (e.g. 100k RPS), this slice will grow to millions of entries within a minute. The `sync.RWMutex` around the time-series store means every `Record` contends with `Buckets` reads. Memory usage and GC pause times will spike.
-- **Cleanup inside write lock**: `Record` calls `cleanupLocked` while holding the mutex, meaning reads block during retention scans.
+| Dependency | Version | Purpose | Replaceable? |
+|-----------|---------|---------|-------------|
+| `github.com/fsnotify/fsnotify` | v1.9.0 | Config file watching | No (stdlib lacks this) |
+| `github.com/golang-jwt/jwt/v5` | v5.3.1 | JWT validation (HS256, RS256, ES256, EdDSA) | No (complex crypto) |
+| `github.com/graphql-go/graphql` | v0.8.1 | GraphQL parsing/execution | ⚠️ Limited federation support |
+| `github.com/redis/go-redis/v9` | v9.7.0 | Distributed rate limiting | No (Redis client) |
+| `go.opentelemetry.io/otel` + exporters | v1.42.0 | OpenTelemetry tracing | No (observability standard) |
+| `golang.org/x/crypto` | v0.49.0 | bcrypt, crypto utilities | No (stdlib extension) |
+| `golang.org/x/net` | v0.52.0 | HTTP/2, WebSocket support | No (stdlib extension) |
+| `google.golang.org/grpc` | v1.79.2 | gRPC server/client | No |
+| `google.golang.org/protobuf` | v1.36.11 | Protobuf encoding | No |
+| `gopkg.in/yaml.v3` | v3.0.1 | YAML parsing | No (replaced custom parser) |
+| `modernc.org/sqlite` | v1.48.0 | Pure Go SQLite | No (CGO-free requirement) |
+| `nhooyr.io/websocket` | v1.8.17 | WebSocket proxying | ⚠️ Could use `gorilla/websocket` |
 
-### 4.5. Raft Clustering
+**Frontend dependencies (web/package.json):**
+- React 19.2.4, React Router 7.13.2, TanStack Query 5.95.2, Zustand 5.0.12
+- Tailwind CSS 4.2.2, Vitest 3.0.0, TypeScript 5.9.3, Recharts 3.8.1, Radix UI 1.4.3
 
-- **Pure-Go implementation**: Leader election, log replication, and snapshots are present. This is impressive for a single codebase.
-- **No TLS for Raft RPC**: From what is visible, Raft communication is plaintext. In a multi-region deployment this is a non-starter.
-- **Certificate sync**: `internal/raft/certificate_sync.go` exists, but the integration with the Raft transport is not clearly hardened against split-brain during cert rotation.
+Frontend dependency hygiene: EXCELLENT. All on latest major versions. No stale or abandoned packages.
 
-### 4.6. Rate Limiting
+### 2.4 API & Interface Design
 
-- **Token bucket**: In-memory only. Correct per-key state with `sync.Map` of `sync.Mutex` buckets. No eviction of stale buckets — memory grows linearly with the number of unique keys (IPs, users, routes).
-- **Redis fallback**: If Redis is enabled, local state syncs on miss. The Redis client (`go-redis/v9`) is reliable, but the fallback logic needs chaos testing.
+**Admin API endpoint inventory (100+ endpoints):**
 
----
+| Category | Count | Auth |
+|----------|-------|------|
+| System | 5 | Admin key / Form login |
+| Services | 5 | Admin key |
+| Routes | 5 | Admin key |
+| Upstreams | 7 | Admin key |
+| Users | 8 | Admin key |
+| API Keys | 3 | Admin key |
+| Permissions | 5 | Admin key |
+| IP Whitelist | 3 | Admin key |
+| Credits | 5 | Admin key |
+| Audit Logs | 6 | Admin key |
+| Analytics | 8 (+ 4 advanced) | Admin key |
+| Alerts | 4 | Admin key |
+| Billing | 4 | Admin key |
+| Subgraphs | 5 | Admin key |
+| Bulk | 5 | Admin key |
+| Webhooks | 8 | Admin key |
+| WebSocket | 1 | Admin key |
+| GraphQL | 2 | Admin key |
 
-## 5. Frontend Analysis
+**Response format consistency:** All endpoints return JSON via `json.WriteResponse()` helper. Standard error envelope pattern.
 
-### 5.1. Stack
+**Authentication model:**
+- Admin API: `X-Admin-Key` header + optional JWT bearer token + form-based login for web UI
+- User Portal: Session-based with HttpOnly cookies
+- Gateway: API key (`ck_live_`/`ck_test_`) or JWT validation
+- Per-IP auth failure exponential backoff
 
-- React 19, Vite 8, Tailwind CSS v4, shadcn/ui components, TanStack Query, Zustand, Recharts.
-- Vitest + Happy DOM for testing.
+**Rate limiting:** Per-route and per-user via 4 algorithms. Distributed mode via Redis.
 
-### 5.2. Security
+## 3. Code Quality Assessment
 
-- **Admin API key in `localStorage`**: As noted above, this is the most critical frontend security flaw.
-- **No CSP meta tag**: No Content-Security-Policy is injected into `index.html` (observed by absence in `web/` glob results).
-- **No anti-CSRF tokens for portal**: The portal uses cookie-based sessions, but there is no visible CSRF double-submit pattern for mutating requests.
+### 3.1 Go Code Quality
 
-### 5.3. Quality / Completeness
+**Code style:** Consistent gofmt-compliant formatting. Standard Go naming conventions. Import grouping follows Go convention (stdlib → third-party → local).
 
-- **Placeholder pages**: `App.tsx` renders `PlaceholderPage` for any nav item not explicitly mapped. Several screens are marked "In Progress".
-- **Lint/typecheck no-ops**:
-  ```json
-  "lint": "echo 'Skipping type check for test files...'"
-  ```
-  The web project has disabled its own linter and type-checker in `package.json`. This implies the frontend currently has TypeScript errors that are being ignored.
-- **No E2E tests**: No Playwright or Cypress config found.
+**Error handling:**
+- ✅ Most errors are wrapped with context (`fmt.Errorf("context: %w", err)`)
+- ✅ `errors.Is` and `errors.As` used for error checking
+- ⚠️ Some errors logged but not returned — silent swallowing in async paths (audit batch insert failures, API key `last_used` updates)
+- ⚠️ `database is locked` errors cause operations to silently fail — data integrity concern
 
-### 5.4. API Layer
+**Context usage:**
+- ✅ All database operations accept `context.Context`
+- ✅ HTTP handlers use `r.Context()`
+- ✅ Cancellation propagated through plugin pipeline
+- ✅ Shutdown hooks respect context deadlines
 
-- `adminApiRequest` in `web/src/lib/api.ts` is clean: abort-controller timeouts, JSON parsing, error wrapping. It does not retry transient 5xx errors, however.
+**Logging:**
+- Uses Go's `log/slog` with JSON handler
+- Structured logging with key-value pairs
+- ✅ Sensitive data masked in audit logs
 
----
+**TODO/FIXME/HACK/BUG comments: 7 total across 5 files** — exceptionally low for 170K LOC.
 
-## 6. Operational & Deployment Posture
+### 3.2 Frontend Code Quality
 
-### 6.1. Build & CI
+**React patterns:** React 19 with functional components, hooks, Zustand for global state, TanStack Query for data fetching, React Router v7, React Hook Form, Zod validation.
 
-- `Makefile` is comprehensive: build, test, race, coverage, lint, docker, k8s deploy targets.
-- `go.mod` claims Go 1.25.0 (which does not exist as of 2026-04-08; latest stable is 1.24.x). This is almost certainly a typo.
-- **Dependency claim contradiction**: `.project/IMPLEMENTATION.md` states "zero external Go dependencies", yet `go.mod` includes `fsnotify`, `go-redis`, OpenTelemetry, `x/crypto`, `x/net`, `grpc`, `protobuf`, and `modernc.org/sqlite`. This is a significant documentation integrity issue.
+**TypeScript:** 5.9.3 with strict mode. Proper interfaces for all data types.
 
-### 6.2. Configuration
+**Component architecture:** shadcn/ui (Radix UI), Tailwind CSS v4, Recharts, React Flow, CodeMirror 6. Clean organization: `ui/` (primitives), `layout/`, `charts/`, `flow/`, `playground/`, `editors/`, `tables/`, `shared/`.
 
-- `apicerberus.example.yaml` is thorough but contains dangerous defaults:
-  - `admin.api_key: "change-me"`
-  - `portal.session.secret: "change-me-in-production"`
-  - `portal.session.secure: false`
-  - `cors.allowed_origins: ["*"]` in the global plugins example
-- Validation in `internal/config/load.go` is extensive and guards against many misconfigurations (negative timeouts, missing upstreams, duplicate names, etc.).
+**Bundle size:** Expected ~500-800KB gzipped. Acceptable for admin dashboard.
 
-### 6.3. Observability
+### 3.3 Concurrency & Safety
 
-- **Metrics**: Prometheus-style metrics endpoint exists (`/metrics`).
-- **Health checks**: `make health` curls `localhost:8080/health`.
-- **Tracing**: OpenTelemetry SDK is wired up with batching, but there is no graceful flush on shutdown in the main gateway (the tracer has `Shutdown`, but it's unclear if `gateway.Gateway.Shutdown` invokes it).
-- **Logging**: Structured JSON logger writes to `os.Stdout` with hooks. No log sampling or cardinality limits on dynamic fields, which could explode log volume in production.
+**Goroutine lifecycle:**
+- ✅ Shutdown manager with LIFO hook execution
+- ✅ Context-based cancellation for all long-running goroutines
+- ✅ Audit drain + tracer flush on shutdown (recently added)
 
-### 6.4. Backup / DR
+**Race condition risks:**
+- **CRITICAL**: `database is locked (SQLITE_BUSY)` errors during parallel tests indicate SQLite write contention under concurrent access. Audit inserts and API key `last_used` updates fail silently.
+- Analytics ring buffers are lock-free but may have ABA risks under extreme concurrency.
 
-- `make backup` and `make restore` targets exist, backed by shell scripts. These are SQLite-file backups. No continuous-replication or point-in-time-recovery strategy is visible.
+**Resource leak risks:**
+- ✅ HTTP response bodies properly closed
+- ✅ Database connections use `sql.DB` pool
+- ✅ WebSocket connections properly closed
+- ⚠️ Audit log entries that fail batch insert are logged but not retried
 
----
+### 3.4 Security Assessment
 
-## 7. Documentation Integrity
+- ✅ All SQLite queries use parameterized queries
+- ✅ CSP headers added to admin and portal handlers
+- ✅ Admin key not hardcoded; API keys stored as SHA-256 hashes
+- ✅ Passwords hashed with bcrypt
+- ✅ ACME/Let's Encrypt auto-provisioning
+- ✅ mTLS for Raft inter-node communication
+- ✅ JWT validation with nbf, jti replay cache, ES256, EdDSA support
+- ✅ Per-IP auth failure exponential backoff
+- 62 security findings recently remediated (6C/16H/22M/14L)
 
-| Document | Claim | Reality |
-|----------|-------|---------|
-| `.project/TASKS.md` | ~490 tasks, all marked `[x]` complete | Many "completed" tasks (e.g. "Dark mode support", "Plugin marketplace") correspond to placeholder or partially implemented code. |
-| `.project/IMPLEMENTATION.md` | "zero external Go dependencies" | 20+ external dependencies in `go.mod`. |
-| `.project/IMPLEMENTATION.md` | Geo-aware routing "resolves client IP to a country using a GeoIP database" | Uses `GeoIPResolver` that resolves from the first two octets of an IP — not a real GeoIP database. |
-| `CLAUDE.md` | "10 load balancing algorithms" | Correct. |
-| `CLAUDE.md` | "6-phase pipeline" | Correct. |
+## 4. Testing Assessment
 
----
+### 4.1 Test Coverage
 
-## 8. Test Quality
+| Package | Coverage | Assessment |
+|---------|----------|------------|
+| Root/embed, cmd, pkg/json | 100.0% | ✅ Excellent |
+| metrics, config, grpc, yaml, template | 94-97% | ✅ Excellent |
+| billing, certmanager, graphql, loadbalancer, netutil | 91-93% | ✅ Excellent |
+| analytics, mcp, federation | 88-90% | ✅ Good |
+| store, audit, gateway, shutdown, tracing | 84-86% | ✅ Good |
+| raft, ratelimit, plugin | 79-80% | ✅ Good |
+| cli, portal | 76-77% | ⚠️ Could improve |
+| pkg/jwt | 61.8% | 🔴 Needs improvement |
+| test/helpers | 48.0% | ⚠️ Lower priority |
+| **Overall** | **70.8%** | **Good** |
 
-### 8.1. Positives
+**17 failing tests:** Most related to SQLite concurrency issues (timing-dependent tests) and E2E flow gaps. Key failures include billing flow, audit logging, permission checks, hot reload (8.03s — timeout-prone), and credit deduction.
 
-- Table-driven patterns with `t.Parallel()` are standard.
-- Edge-case coverage is good for utilities (JWT parsing, billing calculations, YAML coercion).
-- Race-detection target exists (`make test-race`).
+### 4.2 Test Infrastructure
 
-### 8.2. Negatives
+- ✅ Table-driven tests, parallel subtests, `:memory:` SQLite
+- ✅ Integration tests (`//go:build integration`), E2E tests (`//go:build e2e`)
+- ✅ Benchmarks in `test/benchmark/`
+- ✅ Vitest + MSW for frontend tests
+- ⚠️ No fuzz testing, no sustained load testing framework
 
-- **Coverage padding**: Files like `internal/gateway/gateway_100_test.go`, `internal/analytics/optimized_engine_test.go`, and `internal/grpc/coverage_test.go` are clearly named to inflate coverage numbers rather than test meaningful behaviour.
-- **Integration/E2E tests are sparse**: The `test/` directory has build tags (`//go:build integration`, `//go:build e2e`), but the actual integration coverage is thin compared to the unit-test volume.
-- **No chaos / fault-injection tests**: Missing tests for SQLite corruption, Raft split-brain, Redis outage during rate-limiting, or upstream body-closure panics.
+## 5. Specification vs Implementation Gap Analysis
 
----
+### 5.1 Feature Completion Matrix
 
-## 9. Summary of Critical Findings
+| Planned Feature | Spec Section | Status | Files | Notes |
+|---|---|---|---|---|
+| HTTP/HTTPS Gateway | SPEC §2.1 | ✅ Complete | `internal/gateway/` | HTTP/1.1, HTTP/2, TLS |
+| gRPC Gateway | SPEC §2.2 | ✅ Complete | `internal/grpc/` | All streaming modes, gRPC-Web, transcoding |
+| GraphQL Federation | SPEC §2.3 | ✅ Complete | `internal/federation/` | Composition, planning, execution |
+| Radix Tree Router | SPEC §3.1 | ✅ Complete | `internal/gateway/router.go` | O(k), host-based, method trees |
+| 5-Phase Plugin Pipeline | SPEC §3.2 | ✅ Complete | `internal/plugin/` | 20+ plugins |
+| API Key Auth | SPEC §3.3 | ✅ Complete | `internal/plugin/auth_apikey.go` | Header, query, cookie |
+| JWT Auth | SPEC §3.3 | ✅ Complete | `internal/plugin/auth_jwt.go` | HS256, RS256, ES256, EdDSA, JWKS |
+| Rate Limiting (4 algos) | SPEC §3.4 | ✅ Complete | `internal/ratelimit/` | + Redis distributed |
+| Load Balancing (10 algos) | SPEC §3.5 | ✅ Complete | `internal/loadbalancer/` | SubnetAware (renamed from Geo) |
+| Health Checking | SPEC §3.5 | ✅ Complete | `internal/gateway/health.go` | Active + passive |
+| Circuit Breaker | SPEC §3.5 | ✅ Complete | `internal/plugin/circuit_breaker.go` | |
+| Request/Response Transforms | SPEC §3.6 | ✅ Complete | `internal/plugin/` | Header, body, path, query |
+| Analytics Engine | SPEC §4 | ✅ Complete | `internal/analytics/` | Ring buffers, time-series |
+| Alerting | SPEC §4.4 | ✅ Complete | `internal/admin/` | Webhook-based |
+| Raft Clustering | SPEC §5 | ✅ Complete | `internal/raft/` | hashicorp/raft, mTLS |
+| Multi-region | SPEC §5 | ✅ Complete | `internal/raft/multiregion.go` | |
+| Config Hot Reload | SPEC §6.3 | ✅ Complete | `internal/config/` | SIGHUP + fsnotify |
+| Admin REST API (70+) | SPEC §7 | ✅ Exceeded (100+) | `internal/admin/` | Added bulk, webhooks, advanced |
+| MCP Server | SPEC §8 | ✅ Complete | `internal/mcp/` | 25+ tools, stdio + SSE |
+| Web Dashboard | SPEC §9 | ⚠️ Partial | `web/` | Core pages exist; React Flow views may be incomplete |
+| CLI (40+ commands) | SPEC §10 | ✅ Complete | `internal/cli/` | |
+| User Management | SPEC §16 | ✅ Complete | `internal/store/`, `internal/admin/` | |
+| Credit System | SPEC §17 | ✅ Complete | `internal/billing/` | Atomic txns, test key bypass |
+| Endpoint Permissions | SPEC §18 | ✅ Complete | `internal/store/permission.go` | Time-based access |
+| Audit Logging | SPEC §19 | ✅ Complete | `internal/audit/` | Async, masking, Kafka, retention |
+| WebSocket Proxy | CLAUDE.md | ✅ Complete | `internal/gateway/websocket.go` | |
+| Prometheus Metrics | CLAUDE.md | ✅ Complete | `internal/metrics/` | |
+| OpenTelemetry Tracing | SPEC §13 | ✅ Complete | `internal/tracing/` | OTLP exporters |
+| Kafka Audit Streaming | SPEC §19 | ✅ Complete | `internal/audit/kafka.go` | |
+| WebAssembly Plugins | README | ❌ Missing | N/A | Claimed but no WASM runtime |
+| Plugin Marketplace | README | ❌ Missing | N/A | No discovery/install |
+| SSO/OIDC | README v0.7.0 | ❌ Missing | N/A | Planned for v0.7.0 |
+| White-label | README v0.7.0 | ❌ Missing | N/A | Planned for v0.7.0 |
 
-| # | Finding | Risk | File(s) |
-|---|---------|------|---------|
-| C1 | **Admin API key stored in `localStorage`** | Stored-XSS → full admin compromise | `web/src/lib/api.ts` |
-| C2 | **Blind trust of `X-Forwarded-For`** | IP spoofing, rate-limit bypass, audit inaccuracy | `internal/logging/structured.go`, `internal/gateway/balancer_extra.go` |
-| C3 | **Example config ships with weak secrets and `secure: false`** | Session forgery, credential stuffing | `apicerberus.example.yaml` |
-| C4 | **Analytics `latencies` slice grows unbounded per minute** | OOM under load | `internal/analytics/engine.go` |
-| C5 | **Request coalescing buffers entire response per waiter** | Memory exhaustion | `internal/gateway/optimized_proxy.go` |
-| C6 | **MCP cluster tools return hardcoded mock data** | Operational blind spots | `internal/mcp/server.go` |
-| C7 | **Webhook manager creates new `http.Client` per delivery** | Connection exhaustion, GC pressure | `internal/admin/webhooks.go` |
-| C8 | **Two disjoint identity systems (Users vs Consumers)** | ACL gaps, operational confusion | `internal/store/`, `internal/config/` |
-| C9 | **Frontend lint/typecheck disabled** | Undetected TS bugs ship to production | `web/package.json` |
-| C10 | **Body limit is advisory, not enforced** | Large-body DoS | `internal/gateway/server.go` |
+### 5.2 Architectural Deviations
 
----
+1. **YAML Parser**: Custom parser exists in `internal/pkg/yaml/` but `gopkg.in/yaml.v3` also in go.mod. Both coexist — redundancy but provides fallback.
+2. **Plugin Phase Model**: Spec described 7 phases; implementation uses 5. Functionally equivalent simplification.
+3. **SQLite as sole data store**: Raft replicates config but not user data. Each node has its own SQLite. Practical simplification.
+4. **Admin API exceeded spec**: 100+ vs 70+ specified. Bulk operations, webhooks, advanced analytics — all valuable additions.
+5. **Geo-aware → SubnetAware**: Renamed to reflect actual capability (IP subnet routing, not true geographic routing).
 
-## 10. Appendix: Notable Code Smells
+### 5.3 Task Completion
 
-1. `generateInstanceID` in `internal/tracing/tracing.go` uses `time.Now()` twice, producing slightly inconsistent identifiers.
-2. `extractClientIP` and `getClientIP` are duplicated with minor differences across packages.
-3. `LogHook` in `internal/logging/structured.go` runs synchronously after encode; a slow hook blocks the request goroutine.
-4. `gateway/server.go` has a 1400+ line `ServeHTTP` with nested conditionals — high cyclomatic complexity, difficult to reason about for security reviews.
-5. `go.mod` declares `go 1.25.0`, which does not exist.
+- **v0.0.1-v0.6.0**: ~95% complete
+- **v0.7.0 (Enterprise)**: 0% (RBAC, SSO, white-label not started)
+- **Overall**: ~92% of all planned tasks
+
+### 5.4 Missing Critical Components
+
+| Missing | Impact | Priority |
+|---|---|---|
+| WASM Plugin Runtime | Limits extensibility | 🟡 Medium |
+| Database Migration Framework | Schema changes risk data corruption | 🔴 High |
+| Frontend E2E Tests | No Playwright/Cypress for dashboard | 🟡 Medium |
+| Load Testing Framework | No sustained load testing | 🟡 Medium |
+
+## 6. Performance & Scalability
+
+### 6.1 Performance Patterns
+
+**Hot paths:** Radix tree O(k) matching, connection pooling with `sync.Pool` buffers, sequential plugin pipeline.
+
+**Concerns:**
+- Plugin pipeline is sequential — latency adds up with many plugins
+- JSON marshaling on every request creates allocations
+- Audit buffer drops entries when full under high load
+- SQLite busy errors under concurrent write load
+
+### 6.2 Scalability
+
+- ✅ Stateless proxy nodes (no sticky sessions)
+- ✅ Raft for config distribution
+- ⚠️ SQLite is per-node — no data replication
+- ⚠️ Redis required for distributed rate limiting
+- ⚠️ No explicit queue depth limits
+
+## 7. Developer Experience
+
+- ✅ `make build`, `make test` — one-command operations
+- ✅ Comprehensive README, CLAUDE.md, architecture docs
+- ✅ Docker, Helm, K8s, Swarm deployment configs
+- ⚠️ No auto-generated OpenAPI/Swagger spec
+- ⚠️ No `.goreleaser.yml` for release automation
+- ⚠️ Web dashboard requires Node.js before Go build
+
+## 8. Technical Debt Inventory
+
+### 🔴 Critical
+
+1. **SQLite write contention causing data loss** — `api_key_repo.go`, `audit/logger.go`. `SQLITE_BUSY` errors cause silent failures. Fix: retry with backoff, increase busy timeout. Effort: 2-4h.
+2. **17 failing tests** — Billing, permission, audit, E2E tests. Cannot trust CI. Fix: debug timing issues, stabilize fixtures. Effort: 8-16h.
+
+### 🟡 Important
+
+3. **No database migration framework** — Schema changes risk corruption. Fix: integrate `golang-migrate/migrate`. Effort: 4-8h.
+4. **E2E tests unstable** — 9 of 17 failures are E2E. Fix: proper test infrastructure. Effort: 8-16h.
+5. **Plugin pipeline sequential** — Latency accumulates. Fix: parallelize within phases. Effort: 4-8h.
+6. **WASM plugin support claimed but absent** — Misleading README. Fix: implement or remove claim. Effort: 1h (doc) or 40+h (impl).
+
+### 🟢 Minor
+
+7. **Custom YAML parser coexists with external dep** — Redundancy. Fix: decide on one approach. Effort: 2h.
+8. **No OpenAPI/Swagger spec** — Manual docs drift. Fix: add annotations or codegen. Effort: 8-16h.
+9. **Frontend bundle size unmeasured** — Could grow unnoticed. Fix: add bundle analysis. Effort: 1h.
+
+## 9. Metrics Summary Table
+
+| Metric | Value |
+|--------|-------|
+| Total Go Files | 359 |
+| Total Go LOC | 170,241 |
+| Total Frontend Files | 159 |
+| Total Frontend LOC | 24,363 |
+| Test Files | 199 |
+| Tests Passing | 3,398 |
+| Tests Failing | 17 |
+| Overall Statement Coverage | 70.8% |
+| External Go Dependencies | 18 direct, 43 total |
+| External Frontend Dependencies | 29 |
+| Open TODOs/FIXMEs | 7 |
+| API Endpoints | 100+ |
+| CLI Commands | 40+ |
+| Spec Feature Completion | ~92% |
+| Task Completion | ~95% |
+| Overall Health Score | 8.2/10 |

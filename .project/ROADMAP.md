@@ -65,19 +65,18 @@
   - Stream the response into a bounded shared buffer with refcounting.
 - **Files**: `internal/gateway/optimized_proxy.go`
 
-### 2.4 Reuse Webhook HTTP Client (P1)
-- **Task**: Use a shared `http.Client` (or the existing `HTTPClientPool`) for webhook deliveries.
-- **Add**: Per-webhook timeout via `context.WithTimeout`, not `http.Client{Timeout}`.
+### 2.4 Reuse Webhook HTTP Client (P1) ✅ DONE
+- **Status**: WebhookManager already used a shared client. Added tuned `http.Transport` with connection pooling (MaxIdleConns=100, HTTP/2, 90s idle timeout).
+- **Bonus**: Fixed `HTTPClientPool.GetStats()` returning zeroed values instead of actual stats.
 - **Files**: `internal/admin/webhooks.go`, `internal/gateway/connection_pool.go`
 
-### 2.5 Add Per-Request Upstream Timeout (P1)
-- **Task**: `OptimizedProxy.executeRequest` should respect a context deadline.
-- **Approach**: Wrap `req.Context()` with `context.WithTimeout` in `Forward` / `Do`.
-- **Files**: `internal/gateway/optimized_proxy.go`
+### 2.5 Add Per-Request Upstream Timeout (P1) ✅ DONE
+- **Status**: Added `UpstreamTimeout` to `RequestContext`. Wired from `service.ReadTimeout` (default 30s) into both `proxy.Forward` and `proxy.Do`.
+- **Files**: `internal/gateway/proxy.go`, `internal/gateway/server.go`
 
-### 2.6 Raft Transport Encryption (P1)
-- **Task**: Add mTLS for inter-node Raft communication.
-- **Files**: `internal/raft/node.go`, `internal/raft/certificate_sync.go`
+### 2.6 Raft Transport Encryption (P1) ✅ DONE
+- **Status**: mTLS implemented with auto CA generation, node cert signing, and TLS certificate manager.
+- **Files**: `internal/raft/tls.go`
 
 ---
 

@@ -11,12 +11,12 @@
 | Category | Score | Weight | Weighted |
 |----------|-------|--------|----------|
 | Security | 8.5 / 10 | 30% | 2.55 |
-| Reliability | 8.0 / 10 | 25% | 2.00 |
+| Reliability | 8.5 / 10 | 25% | 2.13 |
 | Scalability | 5.0 / 10 | 15% | 0.75 |
 | Operability | 8.5 / 10 | 15% | 1.28 |
 | Code Quality | 8.5 / 10 | 10% | 0.85 |
 | Test Coverage | 8.0 / 10 | 5% | 0.40 |
-| **Total** | — | **100%** | **7.83 / 10** |
+| **Total** | — | **100%** | **7.96 / 10** |
 
 **Verdict: CONDITIONAL GO for single-node production pilot.**
 
@@ -49,7 +49,7 @@ All critical security issues have been resolved.
 
 ---
 
-### 2.2 Reliability — 8.0 / 10
+### 2.2 Reliability — 8.5 / 10
 
 **Verdict: Stable with known operational constraints.**
 
@@ -60,13 +60,11 @@ All critical reliability issues have been resolved. Remaining concerns are scali
 1. ~~**Unbounded memory growth in analytics**~~ ✅ **RESOLVED**: Reservoir sampling with `maxLatencySamples = 10_000` per bucket.
 2. ~~**Request coalescing copies entire response per waiter**~~ ✅ **RESOLVED**: `CoalescingMaxBodyBytes` (default 1MB) caps buffered responses.
 3. ~~**Body limit is advisory, not enforced**~~ ✅ **RESOLVED**: Content-Length pre-check + chunked limit+1 buffering.
-4. ~~**Webhook per-request client**~~ ✅ **RESOLVED**: Shared `http.Transport` with connection pooling.
+4. ~~**Webhook per-request client**~~ ✅ **RESOLVED**: Shared `http.Transport` with connection pooling (MaxIdleConns=100, HTTP/2, 90s idle timeout).
 5. ~~**Slow-hook blocks log writes**~~ ✅ **RESOLVED**: `AsyncLogHook` wraps synchronous hooks with buffered channel + background goroutine. Drop-on-full prevents blocking the caller.
 6. ~~**Raft transport is plaintext**~~ ✅ **RESOLVED**: mTLS encryption with automatic CA generation.
 7. ~~**Reload panics on close of closed channel**~~ ✅ **RESOLVED**: `Gateway.Reload` now waits for the old audit goroutine to finish (via done channel with 10s timeout) before creating a replacement. Mutex is released during the wait to avoid deadlock.
-
-**What would raise the score to 8.5+:**
-- Add per-request context timeouts to webhook HTTP client.
+8. ~~**Webhook missing per-request timeouts**~~ ✅ **RESOLVED**: `processDelivery` sets `context.WithTimeout` from `webhook.Timeout` (default 30s) on each request. Client-level timeout acts as safety net.
 
 ---
 

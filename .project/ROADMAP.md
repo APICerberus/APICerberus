@@ -86,6 +86,12 @@
   `Close()` drains remaining entries with non-blocking channel read and 5s timeout.
 - **Files**: `internal/logging/structured.go`, `internal/logging/structured_test.go`
 
+### 2.8 Webhook Per-Request Timeouts (P2) ✅ DONE
+- **Status**: `processDelivery` sets `context.WithTimeout` from `webhook.Timeout` (default 30s) on each
+  request. Client-level `Timeout: 30s` acts as a safety net. Shared `http.Transport` with connection
+  pooling (MaxIdleConns=100, HTTP/2, 90s idle timeout).
+- **Files**: `internal/admin/webhooks.go`
+
 ---
 
 ## Milestone 3: Identity & Auth Unification (P1)

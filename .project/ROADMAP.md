@@ -84,13 +84,19 @@
 
 ## Milestone 3: Identity & Auth Unification (P1)
 
-### 3.1 Unify Users and Consumers (P1)
+### 3.1 Unify Users and Consumers (P1) ✅ DONE
 - **Task**: Bridge the gap between `store.User` (portal/admin) and `config.Consumer` (gateway).
-- **Approach**:
-  - Store API keys in the `api_keys` table with a `scope` column (`portal` | `gateway`).
-  - Allow gateway auth to query SQLite for keys, falling back to in-memory config for backwards compatibility.
-  - Deprecate YAML-only consumer keys over two minor releases.
-- **Files**: `internal/plugin/auth_apikey.go`, `internal/store/api_key_repo.go`, `internal/config/`
+- **Status**: Fixed gateway-level auth wiring to use SQLite-backed API key lookup instead of only
+  YAML-defined consumers. Previously `newAuthAPIKey` received `nil` as the lookup function in both
+  `New()` and `Reload()`, so store-based keys only worked in route-level plugin pipelines.
+  Now both paths query SQLite first, falling back to YAML consumers for backwards compatibility.
+- **`userToConsumer()` enhancements**:
+  - Populates `Consumer.RateLimit` from `user.RateLimits` JSON map (`requests_per_second`, `burst`)
+  - Extracts `ACLGroups` from `user.Metadata["acl_groups"]` with type-safe conversion
+  - Carries `credit_balance` into metadata for billing-aware plugins
+- **Data flow**: `AuthAPIKey.Authenticate` → `APIKeyLookup` (SQLite) → `ResolveUserByRawKey` →
+  JOIN `api_keys` to `users` → `userToConsumer` → `*config.Consumer`
+- **Files**: `internal/gateway/server.go` (`New`, `Reload`, `userToConsumer`)
 
 ### 3.2 Add Rate-Limiting to Failed Auth (P2) ✅ DONE
 - **Status**: Implemented `AuthBackoff` — per-IP exponential backoff (100ms → 30s max) for invalid API key attempts.

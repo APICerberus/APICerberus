@@ -96,7 +96,7 @@ func New(cfg *config.Config) (*Gateway, error) {
 	auditLogger := newAuditLogger(st, cfg)
 	auditRetention := newAuditRetention(st, cfg)
 	authBackoff := plugin.NewAuthBackoff()
-	authAPIKey := newAuthAPIKey(cfg, consumers, nil, authBackoff)
+	authAPIKey := newAuthAPIKey(cfg, consumers, apiKeyLookup, authBackoff)
 	routePipelines, routeHasAuth, err := plugin.BuildRoutePipelinesWithContext(cfg, plugin.BuilderContext{
 		Consumers:        consumers,
 		APIKeyLookup:     apiKeyLookup,
@@ -730,7 +730,7 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 	newBillingEngine := billing.NewEngine(newStore, newCfg.Billing)
 	newAuditLogger := newAuditLogger(newStore, newCfg)
 	newAuditRetention := newAuditRetention(newStore, newCfg)
-	newAuthAPIKey := newAuthAPIKey(newCfg, newConsumers, nil, g.authBackoff)
+	newAuthAPIKey := newAuthAPIKey(newCfg, newConsumers, newAPIKeyLookup, g.authBackoff)
 	newRoutePipelines, newRouteHasAuth, err := plugin.BuildRoutePipelinesWithContext(newCfg, plugin.BuilderContext{
 		Consumers:        newConsumers,
 		APIKeyLookup:     newAPIKeyLookup,
@@ -1263,9 +1263,47 @@ func userToConsumer(user *store.User) *config.Consumer {
 	for key, value := range user.Metadata {
 		metadata[key] = value
 	}
+
+	// Map user.RateLimits to Consumer.RateLimit struct.
+	// User.RateLimits is a JSON map that may contain "requests_per_second"
+	// and "burst" keys (matching the plugin config schema).
+	var rateLimit config.ConsumerRateLimit
 	if len(user.RateLimits) > 0 {
 		metadata["rate_limits"] = cloneAnyMap(user.RateLimits)
+		if v, ok := user.RateLimits["requests_per_second"]; ok {
+			switch n := v.(type) {
+			case float64:
+				rateLimit.RequestsPerSecond = int(n)
+			case int:
+				rateLimit.RequestsPerSecond = n
+			}
+		}
+		if v, ok := user.RateLimits["burst"]; ok {
+			switch n := v.(type) {
+			case float64:
+				rateLimit.Burst = int(n)
+			case int:
+				rateLimit.Burst = n
+			}
+		}
 	}
+
+	// Extract ACL groups from user metadata if present.
+	var aclGroups []string
+	if aclRaw, ok := user.Metadata["acl_groups"]; ok {
+		switch v := aclRaw.(type) {
+		case []string:
+			aclGroups = v
+		case []any:
+			aclGroups = make([]string, 0, len(v))
+			for _, item := range v {
+				if s, ok := item.(string); ok {
+					aclGroups = append(aclGroups, s)
+				}
+			}
+		}
+	}
+
 	if len(user.IPWhitelist) > 0 {
 		whitelist := make([]string, 0, len(user.IPWhitelist))
 		for _, value := range user.IPWhitelist {
@@ -1279,10 +1317,15 @@ func userToConsumer(user *store.User) *config.Consumer {
 			metadata["ip_whitelist"] = whitelist
 		}
 	}
+	if user.CreditBalance > 0 {
+		metadata["credit_balance"] = user.CreditBalance
+	}
 	return &config.Consumer{
-		ID:       user.ID,
-		Name:     user.Name,
-		Metadata: metadata,
+		ID:        user.ID,
+		Name:      user.Name,
+		RateLimit: rateLimit,
+		ACLGroups: aclGroups,
+		Metadata:  metadata,
 	}
 }
 

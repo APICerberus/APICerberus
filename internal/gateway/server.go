@@ -796,6 +796,30 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 	}
 	if g.auditCancel != nil {
 		g.auditCancel()
+		oldAuditDone := g.auditDone
+		// Release the lock so the old audit goroutine can acquire it to
+		// close the channel. The non-audit field updates have already been
+		// applied above under the same lock.
+
+		if g.healthCancel != nil {
+			g.healthCancel()
+			base := g.runCtx
+			if base == nil {
+				base = context.Background()
+			}
+			healthCtx, cancel := context.WithCancel(base)
+			g.healthCancel = cancel
+			g.health.Start(healthCtx)
+		}
+
+		g.mu.Unlock()
+		// Wait for the old audit goroutine to finish before reusing the field.
+		select {
+		case <-oldAuditDone:
+		case <-time.After(10 * time.Second):
+		}
+
+		g.mu.Lock()
 		base := g.runCtx
 		if base == nil {
 			base = context.Background()

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toQueryRecord } from "./helpers";
-import { portalApiRequest } from "@/lib/portal-api";
+import { portalApiRequest, setPortalCSRFToken, clearPortalCSRFToken } from "@/lib/portal-api";
 import type {
   PlaygroundTemplate,
   PlaygroundTemplateListResponse,
@@ -92,7 +92,11 @@ export function usePortalLogin() {
         method: "POST",
         body: payload,
       }),
-    onSuccess: async () => {
+    onSuccess: async (data) => {
+      // Store CSRF token from login response
+      if (data.csrf_token) {
+        setPortalCSRFToken(data.csrf_token);
+      }
       await queryClient.invalidateQueries({ queryKey: portalQueryKeys.authMe });
     },
   });
@@ -107,6 +111,8 @@ export function usePortalLogout() {
         body: {},
       }),
     onSuccess: async () => {
+      // Clear CSRF token on logout
+      clearPortalCSRFToken();
       await queryClient.removeQueries({ queryKey: ["portal"] });
     },
   });

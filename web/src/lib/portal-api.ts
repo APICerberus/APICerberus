@@ -2,6 +2,28 @@ import { API_CONFIG } from "./constants";
 
 type QueryValue = string | number | boolean | null | undefined;
 
+// CSRF Token Management
+const CSRF_TOKEN_KEY = "portal_csrf_token";
+
+export function setPortalCSRFToken(token: string) {
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem(CSRF_TOKEN_KEY, token);
+  }
+}
+
+export function getPortalCSRFToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.sessionStorage.getItem(CSRF_TOKEN_KEY);
+}
+
+export function clearPortalCSRFToken() {
+  if (typeof window !== "undefined") {
+    window.sessionStorage.removeItem(CSRF_TOKEN_KEY);
+  }
+}
+
 export type PortalApiRequestOptions = Omit<RequestInit, "body"> & {
   query?: Record<string, QueryValue>;
   body?: unknown;
@@ -84,6 +106,15 @@ export async function portalApiRequest<T>(path: string, options: PortalApiReques
   if (options.body !== undefined) {
     headers.set("Content-Type", "application/json");
     body = JSON.stringify(options.body);
+  }
+
+  // Add CSRF token for state-changing operations
+  const method = options.method ?? "GET";
+  if (method === "POST" || method === "PUT" || method === "DELETE" || method === "PATCH") {
+    const csrfToken = getPortalCSRFToken();
+    if (csrfToken) {
+      headers.set("X-CSRF-Token", csrfToken);
+    }
   }
 
   const url = resolveUrl(withQuery(path, options.query));

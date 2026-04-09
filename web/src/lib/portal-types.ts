@@ -20,6 +20,7 @@ export type PortalSession = {
 
 export type PortalAuthResponse = {
   user: PortalUser;
+  csrf_token?: string;
   session: PortalSession;
 };
 

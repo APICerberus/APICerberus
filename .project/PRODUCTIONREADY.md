@@ -13,10 +13,10 @@
 | Security | 8.5 / 10 | 30% | 2.55 |
 | Reliability | 8.5 / 10 | 25% | 2.13 |
 | Scalability | 5.0 / 10 | 15% | 0.75 |
-| Operability | 8.5 / 10 | 15% | 1.28 |
+| Operability | 9.0 / 10 | 15% | 1.35 |
 | Code Quality | 8.5 / 10 | 10% | 0.85 |
 | Test Coverage | 8.0 / 10 | 5% | 0.40 |
-| **Total** | — | **100%** | **7.96 / 10** |
+| **Total** | — | **100%** | **8.03 / 10** |
 
 **Verdict: CONDITIONAL GO for single-node production pilot.**
 
@@ -86,7 +86,7 @@ All critical reliability issues have been resolved. Remaining concerns are scali
 
 ---
 
-### 2.4 Operability — 8.5 / 10
+### 2.4 Operability — 9.0 / 10
 
 **Verdict: Good tooling with complete operational hooks.**
 
@@ -97,18 +97,15 @@ All critical reliability issues have been resolved. Remaining concerns are scali
 - Structured JSON logging with trace/span ID propagation.
 - SQLite-backed API key auth works for both gateway-level and route-level auth — no dual-key confusion.
 - `userToConsumer()` maps rate limits, ACL groups, and credit balance from user store to consumer struct.
+- ~~**MCP cluster tools lie**~~ ✅ **RESOLVED**: Wired to real Raft node state.
+- ~~**No graceful flush on shutdown**~~ ✅ **RESOLVED**: `Gateway.Shutdown` now waits for audit drain and tracer flush.
+- ~~**Documentation integrity issues**~~ ✅ **RESOLVED**: `IMPLEMENTATION.md` now has accurate dependency table.
 
-**Negatives:**
-1. ~~**MCP cluster tools lie**~~ ✅ **RESOLVED**: Wired to real Raft node state.
-2. ~~**No graceful flush on shutdown**~~ ✅ **RESOLVED**: `Gateway.Shutdown` now waits for audit drain and tracer flush.
-3. **Geo-aware routing is subnet-based**: The "subnet_aware" algorithm (formerly "geo_able") groups IPs by their first two octets. `geo_able` is kept as a deprecated alias. For true geographic routing, integrate MaxMind GeoIP2.
-4. ~~**Documentation integrity issues**~~ ✅ **RESOLVED**: `IMPLEMENTATION.md` now has accurate dependency table.
+**Remaining negatives:**
+1. **Geo-aware routing is subnet-based**: The "subnet_aware" algorithm (formerly "geo_able") groups IPs by their first two octets. `geo_able` is kept as a deprecated alias. For true geographic routing, integrate MaxMind GeoIP2.
 
-**What would raise the score to 9.0+:**
-- ~~Wire MCP cluster tools to real Raft state.~~ ✅ **Done**
-- ~~Document the single-node scaling model honestly.~~ ✅ **Done (CLAUDE.md, ROADMAP)**
-- ~~Flush all buffered telemetry on shutdown.~~ ✅ **Done (audit drain wait + tracer shutdown)**
-- ~~Wire gateway-level auth to SQLite API key lookup.~~ ✅ **Done**
+**What would raise the score to 9.5+:**
+- Integrate MaxMind GeoIP2 for true geographic routing.
 
 ---
 

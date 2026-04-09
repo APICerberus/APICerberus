@@ -86,7 +86,7 @@ All critical reliability issues have been resolved. Remaining concerns are scali
 
 ---
 
-### 2.4 Operability — 8.0 / 10
+### 2.4 Operability — 8.5 / 10
 
 **Verdict: Good tooling with complete operational hooks.**
 
@@ -112,7 +112,7 @@ All critical reliability issues have been resolved. Remaining concerns are scali
 
 ---
 
-### 2.5 Code Quality — 7.5 / 10
+### 2.5 Code Quality — 8.5 / 10
 
 **Verdict: Competent and consistent. Wiring bugs resolved.**
 
@@ -131,6 +131,9 @@ All critical reliability issues have been resolved. Remaining concerns are scali
 3. ~~**Coverage-padding tests**~~ ✅ **RESOLVED**: Renamed to `gateway_edge_test.go` with standard naming conventions.
 4. ~~**go.mod typo**~~ ✅ **RESOLVED**: `go 1.25.0` is valid for Go 1.26.x installations.
 
+**What would raise the score to 9.0+:**
+- Refactor `ServeHTTP` into smaller, focused handler methods for improved auditability and test coverage.
+
 ---
 
 ### 2.6 Test Coverage — 8.0 / 10
@@ -146,7 +149,7 @@ All critical reliability issues have been resolved. Remaining concerns are scali
 
 **Negatives:**
 1. ~~**Coverage inflation**~~ ✅ **RESOLVED**: Edge-case test files renamed and validated as meaningful tests.
-2. **Missing chaos tests**: No tests for SQLite corruption, Raft split-brain, Redis unavailability during rate-limiting, or upstream panic recovery.
+2. **Missing chaos tests**: Partial coverage — SQLite corruption rejection, Redis unavailability fallback, and upstream resilience tests added. Remaining gaps: Raft split-brain, Redis rate-limiting during active requests.
 3. **E2E coverage is thin**: The `test/e2e_*` build-tag files exist but do not appear to cover critical user journeys end-to-end.
 
 ---

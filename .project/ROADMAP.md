@@ -189,13 +189,15 @@
 - **Files**: `web/src/pages/admin/SystemLogs.tsx`, `web/src/components/logs/LogTail.tsx`
 
 ### 5.3 Add E2E Smoke Tests (P3) ✅ DONE
-- **Status**: 15 Go E2E test files (~4,355 lines) covering:
+- **Status**: 16 Go E2E test files covering:
   - Gateway routing, auth, billing, rate limiting, proxy forwarding
   - CLI commands (user, credit, audit, analytics, gateway entities)
   - MCP server (stdio transport)
   - Full request lifecycle with plugin pipeline
   - Benchmarks and performance tests
-- **Files**: `test/e2e_v*_test.go`, `test/e2e_v010_cli_smoke_test.go`, `test/e2e_v010_mcp_stdio_test.go`, `test/e2e_v003_bench_test.go`
+  - **Chaos tests**: SQLite corruption rejection, Redis unavailability + local fallback,
+    upstream panic recovery, unreachable upstream handling
+- **Files**: `test/e2e_v*_test.go`, `test/e2e_v010_cli_smoke_test.go`, `test/e2e_v010_mcp_stdio_test.go`, `test/e2e_v003_bench_test.go`, `test/e2e_v070_chaos_test.go`
 
 ---
 

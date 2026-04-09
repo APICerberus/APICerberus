@@ -27,6 +27,7 @@ import (
 
 	"github.com/APICerberus/APICerebrus/internal/billing"
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 	"github.com/APICerberus/APICerebrus/internal/plugin"
 )
 
@@ -2282,17 +2283,22 @@ func TestAppendForwardedHeaders_HTTPS(t *testing.T) {
 
 // TestAffinityKey tests affinityKey function
 func TestAffinityKey(t *testing.T) {
-	// Test with X-Forwarded-For
+	// Configure trusted proxies for XFF tests
+	netutil.SetTrustedProxies([]string{"10.0.0.0/8"})
+	defer netutil.SetTrustedProxies(nil)
+
+	// Test with X-Forwarded-For (RemoteAddr must be trusted for XFF to be used)
 	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("X-Forwarded-For", "10.0.0.1, 10.0.0.2")
+	req.RemoteAddr = "10.0.0.1:12345"
+	req.Header.Set("X-Forwarded-For", "203.0.113.5, 10.0.0.2")
 	ctx := &RequestContext{Request: req}
 
 	key := affinityKey(ctx)
-	if key != "10.0.0.1" {
-		t.Errorf("Expected key='10.0.0.1', got '%s'", key)
+	if key != "203.0.113.5" {
+		t.Errorf("Expected key='203.0.113.5', got '%s'", key)
 	}
 
-	// Test with RemoteAddr
+	// Test with RemoteAddr only (untrusted source, XFF ignored)
 	req = httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "192.168.1.1:12345"
 	ctx = &RequestContext{Request: req}
@@ -2311,17 +2317,22 @@ func TestAffinityKey(t *testing.T) {
 
 // TestExtractClientIP tests extractClientIP function
 func TestExtractClientIP(t *testing.T) {
-	// Test with X-Forwarded-For
+	// Configure trusted proxies for XFF tests
+	netutil.SetTrustedProxies([]string{"10.0.0.0/8"})
+	defer netutil.SetTrustedProxies(nil)
+
+	// Test with X-Forwarded-For (RemoteAddr must be trusted for XFF to be used)
 	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("X-Forwarded-For", "10.0.0.1, 10.0.0.2")
+	req.RemoteAddr = "10.0.0.1:12345"
+	req.Header.Set("X-Forwarded-For", "203.0.113.5, 10.0.0.2")
 	ctx := &RequestContext{Request: req}
 
 	ip := extractClientIP(ctx)
-	if ip != "10.0.0.1" {
-		t.Errorf("Expected ip='10.0.0.1', got '%s'", ip)
+	if ip != "203.0.113.5" {
+		t.Errorf("Expected ip='203.0.113.5', got '%s'", ip)
 	}
 
-	// Test with RemoteAddr
+	// Test with RemoteAddr only (untrusted source, XFF ignored)
 	req = httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "192.168.1.1:12345"
 	ctx = &RequestContext{Request: req}

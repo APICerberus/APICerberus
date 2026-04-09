@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 )
 
 func TestIPRestrictWhitelistHitAndMiss(t *testing.T) {
@@ -76,6 +78,10 @@ func TestIPRestrictBlacklistHitAndMiss(t *testing.T) {
 
 func TestIPRestrictCIDRWithForwardedHeader(t *testing.T) {
 	t.Parallel()
+
+	// Configure trusted proxies so X-Forwarded-For is parsed
+	netutil.SetTrustedProxies([]string{"10.0.0.0/8"})
+	defer netutil.SetTrustedProxies(nil)
 
 	plugin, err := NewIPRestrict(IPRestrictConfig{
 		Whitelist: []string{"203.0.113.0/24"},

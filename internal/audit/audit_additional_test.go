@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
 
@@ -334,6 +335,10 @@ func TestTruncateCopy(t *testing.T) {
 
 // Test requestClientIP function
 func TestRequestClientIP(t *testing.T) {
+	// Configure trusted proxies for XFF/X-Real-IP tests
+	netutil.SetTrustedProxies([]string{"192.0.2.0/24", "10.0.0.0/8"})
+	defer netutil.SetTrustedProxies(nil)
+
 	t.Run("X-Forwarded-For header", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		req.Header.Set("X-Forwarded-For", "192.168.1.1, 10.0.0.1")

@@ -17,10 +17,15 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/config"
 	"github.com/APICerberus/APICerebrus/internal/gateway"
 	"github.com/APICerberus/APICerebrus/internal/logging"
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 )
 
 // TestExtractClientIPVarious tests extractClientIP with various headers
 func TestExtractClientIPVarious(t *testing.T) {
+	// Configure trusted proxies for XFF tests
+	netutil.SetTrustedProxies([]string{"10.0.0.0/8"})
+	defer netutil.SetTrustedProxies(nil)
+
 	tests := []struct {
 		name       string
 		remoteAddr string
@@ -29,15 +34,15 @@ func TestExtractClientIPVarious(t *testing.T) {
 	}{
 		{
 			name:       "x-forwarded-for",
-			remoteAddr: "192.168.1.1:1234",
-			headers:    map[string]string{"X-Forwarded-For": "10.0.0.1, 10.0.0.2"},
-			expected:   "10.0.0.1",
+			remoteAddr: "10.0.0.1:1234",
+			headers:    map[string]string{"X-Forwarded-For": "203.0.113.5, 10.0.0.2"},
+			expected:   "203.0.113.5",
 		},
 		{
 			name:       "x-real-ip",
-			remoteAddr: "192.168.1.1:1234",
-			headers:    map[string]string{"X-Real-Ip": "10.0.0.5"},
-			expected:   "10.0.0.5",
+			remoteAddr: "10.0.0.1:1234",
+			headers:    map[string]string{"X-Real-Ip": "198.51.100.10"},
+			expected:   "198.51.100.10",
 		},
 		{
 			name:       "cf-connecting-ip-not-supported",
@@ -4064,6 +4069,10 @@ func TestIsWebSocketUpgradeRequest_HeaderCombinations(t *testing.T) {
 
 // TestExtractClientIP_XForwardedForMultipleIPs tests extractClientIP with multiple IPs in X-Forwarded-For
 func TestExtractClientIP_XForwardedForMultipleIPs(t *testing.T) {
+	// Configure trusted proxies
+	netutil.SetTrustedProxies([]string{"10.0.0.0/8"})
+	defer netutil.SetTrustedProxies(nil)
+
 	tests := []struct {
 		name       string
 		remoteAddr string
@@ -4072,21 +4081,21 @@ func TestExtractClientIP_XForwardedForMultipleIPs(t *testing.T) {
 	}{
 		{
 			name:       "single IP",
-			remoteAddr: "192.168.1.1:1234",
-			header:     "10.0.0.1",
-			expected:   "10.0.0.1",
+			remoteAddr: "10.0.0.1:1234",
+			header:     "203.0.113.5",
+			expected:   "203.0.113.5",
 		},
 		{
 			name:       "multiple IPs",
-			remoteAddr: "192.168.1.1:1234",
-			header:     "10.0.0.1, 10.0.0.2, 10.0.0.3",
-			expected:   "10.0.0.1",
+			remoteAddr: "10.0.0.1:1234",
+			header:     "203.0.113.5, 10.0.0.2, 10.0.0.3",
+			expected:   "203.0.113.5",
 		},
 		{
-			name:       "IP with port (preserved)",
+			name:       "untrusted remote addr ignores XFF",
 			remoteAddr: "192.168.1.1:1234",
-			header:     "10.0.0.1:8080",
-			expected:   "10.0.0.1:8080", // extractClientIP doesn't strip port from X-Forwarded-For
+			header:     "10.0.0.1",
+			expected:   "192.168.1.1",
 		},
 	}
 

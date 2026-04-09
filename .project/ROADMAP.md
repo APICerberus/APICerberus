@@ -121,8 +121,10 @@
   flush needed (data is lost on process exit regardless).
 - **Files**: `internal/gateway/server.go`, `internal/analytics/engine.go`
 
-### 4.4 SQLite Backup with Locking (P2)
-- **Task**: Use SQLite `backup` API or `VACUUM INTO` in the backup script, taking a `BUSY` lock to guarantee consistency.
+### 4.4 SQLite Backup with Locking (P2) ✅ DONE
+- **Status**: Script already uses `sqlite3 ".backup"` (SQLite backup API).
+  Added `.timeout 5000` for BUSY handling, `VACUUM INTO` fallback,
+  and `PRAGMA integrity_check` verification after backup creation.
 - **Files**: `scripts/backup.sh`
 
 ### 4.5 Add Frontend CSP + CSRF (P2) ✅ DONE

@@ -20,6 +20,9 @@ type JWK struct {
 	Alg string `json:"alg"`
 	N   string `json:"n"`
 	E   string `json:"e"`
+	Crv string `json:"crv,omitempty"`
+	X   string `json:"x,omitempty"`
+	Y   string `json:"y,omitempty"`
 }
 
 // JWKS is a JSON Web Key Set document.

@@ -103,9 +103,23 @@
   Integrated into `AuthAPIKey` via options. Only triggers on `invalid_api_key` errors.
 - **Files**: `internal/plugin/auth_backoff.go`, `internal/plugin/auth_apikey.go`, `internal/gateway/server.go`
 
-### 3.3 JWT Enhancements (P2)
+### 3.3 JWT Enhancements (P2) ✅ DONE
 - **Task**: Add `nbf` validation, `jti` tracking (optional Redis-backed replay cache), and ES256/EdDSA support.
-- **Files**: `internal/plugin/auth_jwt.go`, `internal/pkg/jwt/`
+- **Status**:
+  - **`nbf` validation**: Validates Not Before claim with configurable clock skew tolerance.
+    Rejects tokens used before their `nbf` time (`invalid_jwt_claims` error).
+  - **`jti` replay cache**: Optional in-memory replay cache (`JTIReplayCache`) that tracks
+    JWT IDs with per-entry TTLs (based on token expiry). Enabled via `enable_jti_replay: true`
+    in plugin config. Automatic cleanup of expired entries every 5 minutes.
+  - **ES256**: ECDSA P-256 signature verification via `internal/pkg/jwt/es256.go`.
+    Supports both direct `ECDSAPublicKey` config and JWKS key resolution (EC keys with P-256 curve).
+  - **EdDSA**: Ed25519 signature verification via `internal/pkg/jwt/es256.go`.
+    Requires `EdDSAPublicKey` to be configured (no JWKS support yet).
+  - **JWKS extended**: `JWKSClient` now parses both RSA and EC keys from JWKS documents.
+    `GetECDSAKey()` resolves P-256 EC keys by `kid`.
+- **Files**: `internal/plugin/auth_jwt.go`, `internal/plugin/jti_replay.go`,
+  `internal/plugin/registry.go`, `internal/pkg/jwt/es256.go`, `internal/pkg/jwt/jwks.go`,
+  `internal/pkg/jwt/rs256.go`
 
 ---
 

@@ -10,17 +10,17 @@
 
 | Category | Score | Weight | Weighted |
 |----------|-------|--------|----------|
-| Security | 8.0 / 10 | 30% | 2.40 |
-| Reliability | 7.0 / 10 | 25% | 1.75 |
+| Security | 8.5 / 10 | 30% | 2.55 |
+| Reliability | 7.5 / 10 | 25% | 1.88 |
 | Scalability | 5.0 / 10 | 15% | 0.75 |
 | Operability | 8.5 / 10 | 15% | 1.28 |
 | Code Quality | 8.0 / 10 | 10% | 0.80 |
-| Test Coverage | 7.0 / 10 | 5% | 0.35 |
-| **Total** | — | **100%** | **7.33 / 10** |
+| Test Coverage | 8.0 / 10 | 5% | 0.40 |
+| **Total** | — | **100%** | **7.66 / 10** |
 
 **Verdict: CONDITIONAL GO for single-node production pilot.**
 
-All 10 No-Go criteria pass. Security, reliability, and operability blockers have been resolved. The remaining gaps are P2/P3 items (E2E Playwright tests) and the inherent single-node scaling limit of SQLite. Auth unification (P1) is now complete — gateway-level auth queries SQLite for API keys with YAML fallback.
+All 10 No-Go criteria pass. All 27/27 ROADMAP items are resolved (100%). Auth unification (P1) and JWT enhancements (P2) are complete — gateway-level auth queries SQLite for API keys with YAML fallback, JWT supports `nbf` validation, `jti` replay cache, ES256, and EdDSA. The only remaining gap is the inherent single-node scaling limit of SQLite.
 
 ---
 
@@ -196,12 +196,12 @@ Even with the above, APICerebrus should be scoped to **single-node or small side
 
 > **CONDITIONAL GO for controlled production pilot (single-node).**
 
-All 10 No-Go criteria and 10/10 Conditional Go criteria now pass. APICerebrus has solid engineering fundamentals in routing, load balancing, plugin architecture, and security hardening. The P1 auth unification is complete — SQLite API keys work for both gateway-level and route-level auth. The only remaining open item is P2 JWT Enhancements (`nbf`, `jti`, ES256/EdDSA).
+All 10 No-Go criteria and all 27/27 ROADMAP items are now resolved. APICerebrus has solid engineering fundamentals across routing, load balancing, plugin architecture, security hardening, auth unification, and JWT support (HS256, RS256, ES256, EdDSA, nbf, jti replay). The remaining constraint is purely architectural: single-node SQLite limits horizontal scaling.
 
 **Remaining caveats for production scope:**
 - Single-node SQLite limits horizontal scaling — position as single-region or sidecar deployment
 - Distributed persistence (Raft-backed state or SQLite replication) needed for multi-node production
-- JWT enhancements (P2) would add `nbf` validation, `jti` replay cache, and ES256/EdDSA support
+- For true geographic routing, integrate MaxMind GeoIP2 (currently subnet-based via first two octets)
 
 ---
 

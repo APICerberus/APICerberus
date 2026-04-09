@@ -325,7 +325,7 @@ func buildAuthAPIKeyPlugin(spec config.PluginConfig, ctx BuilderContext) (Pipeli
 
 func buildAuthJWTPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
-	plugin := NewAuthJWT(AuthJWTOptions{
+	opts := AuthJWTOptions{
 		Secret:          asString(cfgMap["secret"]),
 		JWKSURL:         asString(cfgMap["jwks_url"]),
 		JWKSTTL:         asDuration(cfgMap["jwks_ttl"], time.Hour),
@@ -334,7 +334,11 @@ func buildAuthJWTPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlu
 		RequiredClaims:  asStringSlice(cfgMap["required_claims"]),
 		ClaimsToHeaders: asStringMap(cfgMap["claims_to_headers"]),
 		ClockSkew:       asDuration(cfgMap["clock_skew"], 30*time.Second),
-	})
+	}
+	if asBool(cfgMap["enable_jti_replay"], false) {
+		opts.JTIReplayCache = NewJTIReplayCache()
+	}
+	plugin := NewAuthJWT(opts)
 	return PipelinePlugin{
 		name:     plugin.Name(),
 		phase:    plugin.Phase(),

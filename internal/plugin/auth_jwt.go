@@ -2,6 +2,8 @@ package plugin
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/rsa"
 	"fmt"
 	"net/http"
@@ -65,6 +67,9 @@ type AuthJWTOptions struct {
 	RequiredClaims  []string
 	ClaimsToHeaders map[string]string
 	ClockSkew       time.Duration
+	ECDSAPublicKey  *ecdsa.PublicKey
+	EdDSAPublicKey  ed25519.PublicKey
+	JTIReplayCache  *JTIReplayCache
 }
 
 // AuthJWT authenticates bearer JWT tokens.
@@ -78,6 +83,9 @@ type AuthJWT struct {
 	claimsToHeaders map[string]string
 	clockSkew       time.Duration
 	now             func() time.Time
+	ecdsaPublicKey  *ecdsa.PublicKey
+	ed25519Key      ed25519.PublicKey
+	jtiReplayCache  *JTIReplayCache
 }
 
 func NewAuthJWT(opts AuthJWTOptions) *AuthJWT {
@@ -132,6 +140,9 @@ func NewAuthJWT(opts AuthJWTOptions) *AuthJWT {
 		claimsToHeaders: headers,
 		clockSkew:       clockSkew,
 		now:             time.Now,
+		ecdsaPublicKey:  opts.ECDSAPublicKey,
+		ed25519Key:      opts.EdDSAPublicKey,
+		jtiReplayCache:  opts.JTIReplayCache,
 	}
 }
 
@@ -173,6 +184,21 @@ func (a *AuthJWT) Authenticate(req *http.Request) (map[string]any, error) {
 		if !jwt.VerifyRS256(parsed.SigningInput, parsed.Signature, pub) {
 			return nil, ErrInvalidJWTSignature
 		}
+	case "ES256":
+		pub, err := a.resolveECDSAPublicKey(req.Context(), parsed)
+		if err != nil {
+			return nil, err
+		}
+		if !jwt.VerifyES256(parsed.SigningInput, parsed.Signature, pub) {
+			return nil, ErrInvalidJWTSignature
+		}
+	case "EDDSA":
+		if a.ed25519Key == nil {
+			return nil, ErrUnsupportedJWTAlgorithm
+		}
+		if !jwt.VerifyEdDSA(parsed.SigningInput, parsed.Signature, a.ed25519Key) {
+			return nil, ErrInvalidJWTSignature
+		}
 	default:
 		return nil, ErrUnsupportedJWTAlgorithm
 	}
@@ -180,6 +206,12 @@ func (a *AuthJWT) Authenticate(req *http.Request) (map[string]any, error) {
 	if err := a.validateClaims(parsed); err != nil {
 		return nil, err
 	}
+
+	// Check jti replay cache if enabled.
+	if err := a.checkJTIReplay(parsed); err != nil {
+		return nil, err
+	}
+
 	a.applyClaimHeaders(req, parsed.Payload)
 	return parsed.Payload, nil
 }
@@ -200,6 +232,53 @@ func (a *AuthJWT) resolveRSAPublicKey(ctx context.Context, token *jwt.Token) (*r
 	return pub, nil
 }
 
+func (a *AuthJWT) resolveECDSAPublicKey(ctx context.Context, token *jwt.Token) (*ecdsa.PublicKey, error) {
+	if a.ecdsaPublicKey != nil {
+		return a.ecdsaPublicKey, nil
+	}
+	if a.jwksClient == nil {
+		return nil, ErrInvalidJWTSignature
+	}
+
+	kid, _ := token.HeaderString("kid")
+	pub, err := a.jwksClient.GetECDSAKey(ctx, kid)
+	if err != nil {
+		return nil, ErrInvalidJWTSignature
+	}
+	return pub, nil
+}
+
+// checkJTIReplay checks for JWT ID replay attacks when a replay cache is configured.
+func (a *AuthJWT) checkJTIReplay(token *jwt.Token) error {
+	if a.jtiReplayCache == nil {
+		return nil
+	}
+	jti, ok := token.ClaimString("jti")
+	if !ok {
+		return nil // jti is optional — if not present, skip replay check
+	}
+	if a.jtiReplayCache.Seen(jti) {
+		return &JWTAuthError{
+			Code:    "jti_replay",
+			Message: "jwt has already been used (possible replay)",
+			Status:  http.StatusUnauthorized,
+		}
+	}
+	// Register the jti with the token's remaining TTL.
+	expUnix, ok := token.ClaimUnix("exp")
+	if !ok {
+		return nil
+	}
+	ttl := time.Until(time.Unix(expUnix, 0))
+	if ttl <= 0 {
+		// Fallback: if exp is in the past from wall-clock perspective
+		// (e.g., tests with fake time), use a conservative default.
+		ttl = 5 * time.Minute
+	}
+	a.jtiReplayCache.Add(jti, ttl)
+	return nil
+}
+
 func (a *AuthJWT) validateClaims(token *jwt.Token) error {
 	expUnix, ok := token.ClaimUnix("exp")
 	if !ok {
@@ -214,6 +293,18 @@ func (a *AuthJWT) validateClaims(token *jwt.Token) error {
 	exp := time.Unix(expUnix, 0)
 	if now.After(exp.Add(a.clockSkew)) {
 		return ErrExpiredJWT
+	}
+
+	// Validate nbf (Not Before) claim if present.
+	if nbfUnix, ok := token.ClaimUnix("nbf"); ok {
+		nbf := time.Unix(nbfUnix, 0)
+		if now.Before(nbf.Add(-a.clockSkew)) {
+			return &JWTAuthError{
+				Code:    ErrInvalidJWTClaims.Code,
+				Message: "jwt is not yet valid (nbf)",
+				Status:  ErrInvalidJWTClaims.Status,
+			}
+		}
 	}
 
 	if a.issuer != "" {

@@ -2,6 +2,7 @@ package jwt
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
@@ -14,7 +15,7 @@ import (
 
 var ErrJWKSKeyNotFound = errors.New("jwks key not found")
 
-// JWKSClient fetches JWKS documents and caches parsed RSA keys.
+// JWKSClient fetches JWKS documents and caches parsed keys.
 type JWKSClient struct {
 	url        string
 	ttl        time.Duration
@@ -22,15 +23,10 @@ type JWKSClient struct {
 
 	now func() time.Time
 
-	mu       sync.RWMutex
-	keysByID map[string]*rsaKeyRef
-	keys     []*rsaKeyRef
-	fetched  time.Time
-}
-
-type rsaKeyRef struct {
-	kid string
-	key *rsa.PublicKey
+	mu         sync.RWMutex
+	rsaKeys    map[string]*rsa.PublicKey
+	ecKeys     map[string]*ecdsa.PublicKey
+	fetched    time.Time
 }
 
 // NewJWKSClient creates a JWKS client with cache TTL (defaults to 1h).
@@ -43,7 +39,8 @@ func NewJWKSClient(url string, ttl time.Duration) *JWKSClient {
 		ttl:        ttl,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 		now:        time.Now,
-		keysByID:   make(map[string]*rsaKeyRef),
+		rsaKeys:    make(map[string]*rsa.PublicKey),
+		ecKeys:     make(map[string]*ecdsa.PublicKey),
 	}
 }
 
@@ -55,14 +52,33 @@ func (c *JWKSClient) GetRSAKey(ctx context.Context, kid string) (*rsa.PublicKey,
 	kid = strings.TrimSpace(kid)
 	if !c.isFresh() {
 		if err := c.refresh(ctx); err != nil {
-			// Attempt stale fallback.
-			if key, ok := c.lookup(kid); ok {
+			if key, ok := c.lookupRSA(kid); ok {
 				return key, nil
 			}
 			return nil, err
 		}
 	}
-	if key, ok := c.lookup(kid); ok {
+	if key, ok := c.lookupRSA(kid); ok {
+		return key, nil
+	}
+	return nil, ErrJWKSKeyNotFound
+}
+
+// GetECDSAKey resolves an ECDSA public key by kid.
+func (c *JWKSClient) GetECDSAKey(ctx context.Context, kid string) (*ecdsa.PublicKey, error) {
+	if c == nil {
+		return nil, errors.New("jwks client is nil")
+	}
+	kid = strings.TrimSpace(kid)
+	if !c.isFresh() {
+		if err := c.refresh(ctx); err != nil {
+			if key, ok := c.lookupECDSA(kid); ok {
+				return key, nil
+			}
+			return nil, err
+		}
+	}
+	if key, ok := c.lookupECDSA(kid); ok {
 		return key, nil
 	}
 	return nil, ErrJWKSKeyNotFound
@@ -77,19 +93,32 @@ func (c *JWKSClient) isFresh() bool {
 	return c.now().Sub(c.fetched) < c.ttl
 }
 
-func (c *JWKSClient) lookup(kid string) (*rsa.PublicKey, bool) {
+func (c *JWKSClient) lookupRSA(kid string) (*rsa.PublicKey, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-
 	if kid != "" {
-		ref, ok := c.keysByID[kid]
-		if !ok || ref == nil || ref.key == nil {
-			return nil, false
-		}
-		return ref.key, true
+		key, ok := c.rsaKeys[kid]
+		return key, ok
 	}
-	if len(c.keys) == 1 && c.keys[0] != nil && c.keys[0].key != nil {
-		return c.keys[0].key, true
+	if len(c.rsaKeys) == 1 {
+		for _, key := range c.rsaKeys {
+			return key, true
+		}
+	}
+	return nil, false
+}
+
+func (c *JWKSClient) lookupECDSA(kid string) (*ecdsa.PublicKey, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if kid != "" {
+		key, ok := c.ecKeys[kid]
+		return key, ok
+	}
+	if len(c.ecKeys) == 1 {
+		for _, key := range c.ecKeys {
+			return key, true
+		}
 	}
 	return nil, false
 }
@@ -118,29 +147,30 @@ func (c *JWKSClient) refresh(ctx context.Context) error {
 		return err
 	}
 
-	keysByID := make(map[string]*rsaKeyRef)
-	keys := make([]*rsaKeyRef, 0, len(doc.Keys))
+	rsaKeys := make(map[string]*rsa.PublicKey)
+	ecKeys := make(map[string]*ecdsa.PublicKey)
 	for _, jwk := range doc.Keys {
-		pub, err := ParseRSAPublicKeyFromJWK(jwk)
-		if err != nil {
-			continue
-		}
-		ref := &rsaKeyRef{
-			kid: strings.TrimSpace(jwk.Kid),
-			key: pub,
-		}
-		keys = append(keys, ref)
-		if ref.kid != "" {
-			keysByID[ref.kid] = ref
+		kid := strings.TrimSpace(jwk.Kid)
+		switch strings.ToUpper(jwk.Kty) {
+		case "RSA":
+			pub, err := ParseRSAPublicKeyFromJWK(jwk)
+			if err == nil && pub != nil {
+				rsaKeys[kid] = pub
+			}
+		case "EC":
+			pub, err := ParseECDSAPublicKeyFromJWK(jwk)
+			if err == nil && pub != nil {
+				ecKeys[kid] = pub
+			}
 		}
 	}
-	if len(keys) == 0 {
-		return errors.New("jwks has no usable rsa keys")
+	if len(rsaKeys) == 0 && len(ecKeys) == 0 {
+		return errors.New("jwks has no usable keys")
 	}
 
 	c.mu.Lock()
-	c.keysByID = keysByID
-	c.keys = keys
+	c.rsaKeys = rsaKeys
+	c.ecKeys = ecKeys
 	c.fetched = c.now()
 	c.mu.Unlock()
 	return nil

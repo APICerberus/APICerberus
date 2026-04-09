@@ -47,6 +47,17 @@ export function clearAdminAuthenticated() {
   window.sessionStorage.removeItem(API_CONFIG.adminAuthStateKey);
 }
 
+/**
+ * POST to /admin/login using a native HTML form submission.
+ * The admin key is sent directly in the request body (form-encoded)
+ * and never enters JavaScript memory. The server validates it and
+ * sets an HttpOnly, SameSite=Strict session cookie.
+ *
+ * This function is kept for programmatic redirects or external SSO flows
+ * where a raw key exchange is still needed. For normal login, the
+ * Login.tsx page uses a native <form action="/admin/login"> which
+ * completely bypasses JavaScript.
+ */
 export async function exchangeAdminKeyForToken(adminApiKey: string): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_CONFIG.requestTimeoutMs);

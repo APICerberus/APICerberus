@@ -1,31 +1,28 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { exchangeAdminKeyForToken } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield } from "lucide-react";
 
-export function AdminLoginPage() {
-  const navigate = useNavigate();
-  const [key, setKey] = useState("");
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+const ERROR_MESSAGES: Record<string, string> = {
+  missing_key: "Admin key is required.",
+  invalid_key: "Invalid admin key. Please try again.",
+};
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError("");
-    setIsLoading(true);
-    try {
-      await exchangeAdminKeyForToken(key);
-      navigate("/", { replace: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Authentication failed");
-    } finally {
-      setIsLoading(false);
+export function AdminLoginPage() {
+  const [searchParams] = useSearchParams();
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const loginError = searchParams.get("login");
+    if (loginError && loginError in ERROR_MESSAGES) {
+      setError(ERROR_MESSAGES[loginError]);
+    } else {
+      setError("");
     }
-  };
+  }, [searchParams]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -42,21 +39,27 @@ export function AdminLoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {/*
+            Traditional HTML form POST — the admin key goes directly from the
+            browser form to the server without ever entering JavaScript memory.
+            The server validates the key and sets an HttpOnly, SameSite=Strict
+            session cookie. This prevents XSS from exfiltrating the admin key.
+          */}
+          <form action="/admin/login" method="POST" className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="admin-key">Admin API Key</Label>
               <Input
                 id="admin-key"
+                name="admin_key"
                 type="password"
-                value={key}
-                onChange={(e) => setKey(e.target.value)}
                 placeholder="Enter admin API key"
+                autoComplete="current-password"
                 autoFocus
               />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full" disabled={isLoading || !key.trim()}>
-              {isLoading ? "Authenticating..." : "Continue"}
+            <Button type="submit" className="w-full">
+              Continue
             </Button>
           </form>
         </CardContent>

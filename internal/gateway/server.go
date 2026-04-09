@@ -203,18 +203,28 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer analyticsEngine.DecActiveConns()
 	}
 
-	// Enforce MaxBodyBytes limit
-	if g.config.Gateway.MaxBodyBytes > 0 && r.Body != nil {
-		body, err := io.ReadAll(io.LimitReader(r.Body, g.config.Gateway.MaxBodyBytes+1))
-		if err != nil {
-			http.Error(w, "Failed to read request body", http.StatusInternalServerError)
-			return
-		}
-		if int64(len(body)) > g.config.Gateway.MaxBodyBytes {
+	// Enforce MaxBodyBytes: check Content-Length first (fast path, no buffering).
+	// For chunked bodies (ContentLength == -1), read up to limit+1 and reject if over.
+	maxBody := g.config.Gateway.MaxBodyBytes
+	if maxBody > 0 && r.Body != nil {
+		if r.ContentLength > maxBody {
 			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
 			return
 		}
-		r.Body = io.NopCloser(bytes.NewReader(body))
+		if r.ContentLength < 0 {
+			// Chunked transfer: must read to enforce limit.
+			// Buffer the body (up to limit+1) to prevent unbounded memory growth.
+			body, err := io.ReadAll(io.LimitReader(r.Body, maxBody+1))
+			if err != nil {
+				http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+				return
+			}
+			if int64(len(body)) > maxBody {
+				http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(body))
+		}
 	}
 
 	// Add security headers to all responses

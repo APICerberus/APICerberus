@@ -2763,3 +2763,157 @@ func TestGateway_ServeHTTP_UpstreamNotFound(t *testing.T) {
 func boolPtr(b bool) *bool {
 	return &b
 }
+
+// TestGateway_MaxBodyBytes_Enforced verifies that MaxBodyBytes is enforced
+// via Content-Length check (fast path) and buffered read for chunked bodies.
+func TestGateway_MaxBodyBytes_Enforced(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	}))
+	defer upstream.Close()
+
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			HTTPAddr:       "127.0.0.1:0",
+			ReadTimeout:    5 * time.Second,
+			WriteTimeout:   5 * time.Second,
+			MaxBodyBytes:   1024, // 1 KB limit
+			MaxHeaderBytes: 1 << 20,
+		},
+		Services: []config.Service{
+			{ID: "test-svc", Name: "test", Protocol: "http", Upstream: "test-up"},
+		},
+		Routes: []config.Route{
+			{ID: "test-route", Name: "test", Service: "test-svc", Paths: []string{"/test"}, Methods: []string{"POST"}},
+		},
+		Upstreams: []config.Upstream{
+			{
+				ID:   "test-up",
+				Name: "test",
+				Targets: []config.UpstreamTarget{
+					{Address: upstream.Listener.Addr().String(), Weight: 1},
+				},
+			},
+		},
+		Store: config.StoreConfig{Path: t.TempDir() + "/test.db"},
+	}
+
+	gw, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- gw.Start(ctx) }()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Send a body with Content-Length that exceeds the 1 KB limit
+	largeBody := bytes.NewReader(make([]byte, 2048))
+	req, _ := http.NewRequest("POST", "http://"+gw.Addr()+"/test", largeBody)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Request error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Should get 413 Payload Too Large
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Errorf("Expected status 413, got %d", resp.StatusCode)
+	}
+
+	// Small body should succeed
+	smallBody := bytes.NewReader([]byte("small"))
+	req, _ = http.NewRequest("POST", "http://"+gw.Addr()+"/test", smallBody)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Small body request error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200 for small body, got %d", resp.StatusCode)
+	}
+}
+
+// TestGateway_MaxBodyBytes_ChunkedTransfer verifies that chunked transfer
+// encoding bodies are also subject to the body size limit.
+func TestGateway_MaxBodyBytes_ChunkedTransfer(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Logf("Upstream read error: %v", err)
+		} else {
+			t.Logf("Upstream read %d bytes", len(body))
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	}))
+	defer upstream.Close()
+
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			HTTPAddr:       "127.0.0.1:0",
+			ReadTimeout:    5 * time.Second,
+			WriteTimeout:   5 * time.Second,
+			MaxBodyBytes:   512, // 512 byte limit
+			MaxHeaderBytes: 1 << 20,
+		},
+		Services: []config.Service{
+			{ID: "test-svc", Name: "test", Protocol: "http", Upstream: "test-up"},
+		},
+		Routes: []config.Route{
+			{ID: "test-route", Name: "test", Service: "test-svc", Paths: []string{"/chunked"}, Methods: []string{"POST"}},
+		},
+		Upstreams: []config.Upstream{
+			{
+				ID:   "test-up",
+				Name: "test",
+				Targets: []config.UpstreamTarget{
+					{Address: upstream.Listener.Addr().String(), Weight: 1},
+				},
+			},
+		},
+		Store: config.StoreConfig{Path: t.TempDir() + "/test.db"},
+	}
+
+	gw, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- gw.Start(ctx) }()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Send a chunked request (no Content-Length) with a body that exceeds the limit
+	pr, pw := io.Pipe()
+	go func() {
+		// Write more than 512 bytes in chunks
+		for i := 0; i < 10; i++ {
+			pw.Write(make([]byte, 100))
+		}
+		pw.Close()
+	}()
+
+	req, _ := http.NewRequest("POST", "http://"+gw.Addr()+"/chunked", pr)
+	// Don't set Content-Length to force chunked transfer
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Request error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Errorf("Expected status 413 for chunked oversized body, got %d", resp.StatusCode)
+	}
+}

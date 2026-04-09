@@ -394,6 +394,22 @@ Bidirectional WebSocket proxying in `internal/gateway/`:
 - Automatic reconnection with exponential backoff
 - Client-side in `web/src/lib/ws.ts`
 
+### Trusted Proxy / Client IP Extraction
+
+Client IP extraction in `internal/pkg/netutil/clientip.go`:
+- **Secure by default**: When `gateway.trusted_proxies` is empty, `X-Forwarded-For` and `X-Real-IP` are **ignored** — `RemoteAddr` is used
+- **Right-to-left parsing**: When trusted proxies are configured, walks XFF from right to left, skipping trusted IPs, returning the rightmost untrusted IP
+- **CIDR support**: Trusted proxies support individual IPs (`10.0.0.1`) and CIDR ranges (`10.0.0.0/8`)
+- **Anti-spoofing**: Prevents attackers from bypassing rate limits, IP whitelists, or audit logging by forging headers
+
+```yaml
+gateway:
+  trusted_proxies:
+    - "10.0.0.0/8"       # Load balancer network
+    - "172.16.0.0/12"
+    - "203.0.113.10"     # Specific proxy IP
+```
+
 ### Admin API Authentication
 
 All Admin API endpoints require `X-Admin-Key` header:

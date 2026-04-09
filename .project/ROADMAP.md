@@ -53,11 +53,9 @@
   - If the `+1` byte is read, return `413 Payload Too Large` immediately.
 - **Files**: `internal/gateway/server.go`
 
-### 2.2 Cap Analytics Latency Buffer (P0)
-- **Task**: Bound the `latencies` slice in `bucketAggregate`.
-- **Approach**:
-  - Reservoir sampling (e.g. Vitter's Algorithm R) to maintain ~10k samples per minute max.
-  - Or switch to a streaming percentile algorithm (e.g. T-Digest).
+### 2.2 Cap Analytics Latency Buffer (P0) ✅ DONE
+- **Status**: Reservoir sampling (Vitter's Algorithm R) with `maxLatencySamples = 10_000` per bucket is already implemented in `engine.go` lines 288-295.
+- **Verification**: `defaultBucketRetention = 24h` caps total buckets. Worst case: 1,440 × 10,000 × 8 bytes ≈ 115 MB.
 - **Files**: `internal/analytics/engine.go`
 
 ### 2.3 Fix Request Coalescing Memory Risk (P1)

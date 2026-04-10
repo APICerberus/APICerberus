@@ -50,8 +50,17 @@ make coverage  # Opens coverage/coverage.html
 # Integration tests (require full environment)
 make integration
 
-# E2E tests
+# E2E tests (Go, require full environment)
 make e2e
+
+# Frontend E2E tests (Playwright, requires running admin server)
+cd web && npx playwright test
+
+# Frontend E2E tests with UI
+cd web && npx playwright test --ui
+
+# Frontend E2E tests headed (visible browser)
+cd web && npx playwright test --headed
 
 # Benchmarks
 make benchmark

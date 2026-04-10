@@ -62,6 +62,15 @@ integration:
 e2e:
 	go test -tags=e2e ./test/...
 
+e2e-web:
+	cd $(WEB_DIR) && npx playwright test
+
+e2e-web-ui:
+	cd $(WEB_DIR) && npx playwright test --ui
+
+e2e-web-headed:
+	cd $(WEB_DIR) && npx playwright test --headed
+
 lint: web-build
 	go vet ./...
 	@if command -v golangci-lint >/dev/null; then golangci-lint run; fi

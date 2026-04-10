@@ -100,6 +100,9 @@ func NewServer(cfg *config.Config, gw *gateway.Gateway) (*Server, error) {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	s.mux.ServeHTTP(w, r)
 }
 

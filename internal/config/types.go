@@ -13,6 +13,7 @@ type Config struct {
 	Audit         AuditConfig      `yaml:"audit" json:"audit"`
 	Cluster       ClusterConfig    `yaml:"cluster" json:"cluster"`
 	Federation    FederationConfig `yaml:"federation" json:"federation"`
+	Branding      BrandingConfig   `yaml:"branding" json:"branding"`
 	ACME          ACMEConfig       `yaml:"acme" json:"acme"`
 	Services      []Service        `yaml:"services" json:"services"`
 	Routes        []Route          `yaml:"routes" json:"routes"`
@@ -21,8 +22,23 @@ type Config struct {
 	Auth          AuthConfig       `yaml:"auth" json:"auth"`
 	GlobalPlugins []PluginConfig   `yaml:"global_plugins" json:"global_plugins"`
 	Tracing       TracingConfig    `yaml:"tracing" json:"tracing"`
-	Redis         RedisConfig      `yaml:"redis" json:"redis"`
-	Kafka         KafkaConfig      `yaml:"kafka" json:"kafka"`
+	Redis         RedisConfig            `yaml:"redis" json:"redis"`
+	Kafka         KafkaConfig            `yaml:"kafka" json:"kafka"`
+	PluginMarketplace PluginMarketplaceConfig `yaml:"plugin_marketplace" json:"plugin_marketplace"`
+}
+
+// PluginMarketplaceConfig holds marketplace plugin configuration.
+type PluginMarketplaceConfig struct {
+	Enabled          bool          `yaml:"enabled" json:"enabled"`
+	DataDir          string        `yaml:"data_dir" json:"data_dir"`
+	RegistryURL      string        `yaml:"registry_url" json:"registry_url"`
+	TrustedSigners   []string      `yaml:"trusted_signers" json:"trusted_signers"`
+	TrustedSignerKeys map[string]string `yaml:"trusted_signer_keys" json:"trusted_signer_keys"`
+	AutoUpdate       bool          `yaml:"auto_update" json:"auto_update"`
+	UpdateInterval   time.Duration `yaml:"update_interval" json:"update_interval"`
+	VerifySignatures bool          `yaml:"verify_signatures" json:"verify_signatures"`
+	MaxPluginSize    int64         `yaml:"max_plugin_size" json:"max_plugin_size"`
+	AllowedPhases    []string      `yaml:"allowed_phases" json:"allowed_phases"`
 }
 
 // ACMEConfig holds ACME/Let's Encrypt configuration.
@@ -127,6 +143,7 @@ type GatewayConfig struct {
 	MaxHeaderBytes int           `yaml:"max_header_bytes" json:"max_header_bytes"`
 	MaxBodyBytes   int64         `yaml:"max_body_bytes" json:"max_body_bytes"`
 	TrustedProxies []string      `yaml:"trusted_proxies" json:"trusted_proxies"`
+	HTMLErrors     bool          `yaml:"html_errors" json:"html_errors"` // Global HTML error page toggle
 }
 
 type GRPCConfig struct {
@@ -150,14 +167,28 @@ type TLSConfig struct {
 }
 
 type AdminConfig struct {
-	Addr          string        `yaml:"addr" json:"addr"`
-	APIKey        string        `yaml:"api_key" json:"api_key"`
-	AllowedIPs    []string      `yaml:"allowed_ips" json:"allowed_ips"`
-	AllowedOrigins []string     `yaml:"allowed_origins" json:"allowed_origins"`
-	TokenSecret   string        `yaml:"token_secret" json:"token_secret"`
-	TokenTTL      time.Duration `yaml:"token_ttl" json:"token_ttl"`
-	UIEnabled     bool          `yaml:"ui_enabled" json:"ui_enabled"`
-	UIPath        string        `yaml:"ui_path" json:"ui_path"`
+	Addr            string        `yaml:"addr" json:"addr"`
+	APIKey          string        `yaml:"api_key" json:"api_key"`
+	AllowedIPs      []string      `yaml:"allowed_ips" json:"allowed_ips"`
+	AllowedOrigins  []string      `yaml:"allowed_origins" json:"allowed_origins"`
+	TokenSecret     string        `yaml:"token_secret" json:"token_secret"`
+	TokenTTL        time.Duration `yaml:"token_ttl" json:"token_ttl"`
+	UIEnabled       bool          `yaml:"ui_enabled" json:"ui_enabled"`
+	UIPath          string        `yaml:"ui_path" json:"ui_path"`
+	OIDC            OIDCConfig    `yaml:"oidc" json:"oidc"`
+}
+
+// OIDCConfig holds OpenID Connect SSO configuration.
+type OIDCConfig struct {
+	Enabled         bool              `yaml:"enabled" json:"enabled"`
+	IssuerURL       string            `yaml:"issuer_url" json:"issuer_url"`
+	ClientID        string            `yaml:"client_id" json:"client_id"`
+	ClientSecret    string            `yaml:"client_secret" json:"client_secret"`
+	RedirectURL     string            `yaml:"redirect_url" json:"redirect_url"`
+	Scopes          []string          `yaml:"scopes" json:"scopes"`
+	ClaimMapping    map[string]string `yaml:"claim_mapping" json:"claim_mapping"`
+	AutoProvision   bool              `yaml:"auto_provision" json:"auto_provision"`
+	DefaultRole     string            `yaml:"default_role" json:"default_role"`
 }
 
 type PortalConfig struct {
@@ -217,6 +248,7 @@ type Route struct {
 	PreserveHost bool           `yaml:"preserve_host" json:"preserve_host"`
 	Priority     int            `yaml:"priority" json:"priority"`
 	Plugins      []PluginConfig `yaml:"plugins" json:"plugins"`
+	HTMLErrors   bool           `yaml:"html_errors" json:"html_errors"` // Use HTML error pages instead of JSON
 }
 
 type PluginConfig struct {
@@ -331,4 +363,14 @@ type RedisConfig struct {
 	KeyPrefix       string        `yaml:"key_prefix" json:"key_prefix"`
 	FallbackToLocal bool          `yaml:"fallback_to_local" json:"fallback_to_local"`
 	SyncLocalOnMiss bool          `yaml:"sync_local_on_miss" json:"sync_local_on_miss"`
+}
+
+// BrandingConfig holds white-label branding customization settings.
+type BrandingConfig struct {
+	AppName      string `yaml:"app_name" json:"app_name"`
+	LogoURL      string `yaml:"logo_url" json:"logo_url"`
+	FaviconURL   string `yaml:"favicon_url" json:"favicon_url"`
+	PrimaryColor string `yaml:"primary_color" json:"primary_color"`
+	AccentColor  string `yaml:"accent_color" json:"accent_color"`
+	ThemeMode    string `yaml:"theme_mode" json:"theme_mode"` // "light", "dark", "system"
 }

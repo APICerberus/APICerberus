@@ -308,7 +308,7 @@ func TestDecodePermissionPayload_Coverage(t *testing.T) {
 	})
 }
 
-// Test for clonePluginConfigs function (15.4% coverage)
+// Test for config.ClonePluginConfigs function (15.4% coverage)
 func TestClonePluginConfigs_Coverage(t *testing.T) {
 	t.Run("with configs", func(t *testing.T) {
 		enabled := true
@@ -318,16 +318,16 @@ func TestClonePluginConfigs_Coverage(t *testing.T) {
 				Config:  map[string]any{"key": "value"},
 			},
 		}
-		cloned := clonePluginConfigs(configs)
+		cloned := config.ClonePluginConfigs(configs)
 		if len(cloned) != len(configs) {
 			t.Errorf("len(cloned) = %d, want %d", len(cloned), len(configs))
 		}
 	})
 
 	t.Run("nil input", func(t *testing.T) {
-		cloned := clonePluginConfigs(nil)
+		cloned := config.ClonePluginConfigs(nil)
 		if cloned != nil {
-			t.Error("clonePluginConfigs(nil) should return nil")
+			t.Error("config.ClonePluginConfigs(nil) should return nil")
 		}
 	})
 }

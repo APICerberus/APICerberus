@@ -2719,3 +2719,110 @@ func TestExecutor_ExecuteOptimized_MultipleGroups(t *testing.T) {
 	}
 	mu.Unlock()
 }
+func TestComposer_AuthorizedDirective(t *testing.T) {
+	t.Parallel()
+
+	composer := NewComposer()
+
+	// Create a subgraph with @authorized directives
+	subgraph := &Subgraph{
+		ID:   "users",
+		Name: "Users Service",
+		URL:  "http://localhost:4001",
+		Schema: &Schema{
+			Types: map[string]*Type{
+				"User": {
+					Name: "User",
+					Kind: "OBJECT",
+					Directives: []TypeDirective{
+						{Name: "authorized", Args: map[string]string{"roles": "admin"}},
+					},
+					Fields: map[string]*Field{
+						"id": {
+							Name: "id",
+							Type: "ID!",
+						},
+						"email": {
+							Name: "email",
+							Type: "String!",
+							Directives: []TypeDirective{
+								{Name: "authorized", Args: map[string]string{"roles": "admin self"}},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := composer.Compose([]*Subgraph{subgraph})
+	if err != nil {
+		t.Fatalf("Compose failed: %v", err)
+	}
+
+	// Check that @authorized directive is registered
+	if _, ok := composer.supergraph.Directives["authorized"]; !ok {
+		t.Error("@authorized directive should be registered")
+	}
+
+	// Check authorized fields extraction
+	auth := composer.GetAuthorizedFields()
+
+	// Type-level authorization
+	if roles, ok := auth["User.*"]; !ok {
+		t.Error("expected User.* in authorized fields")
+	} else if len(roles) != 1 || roles[0] != "admin" {
+		t.Errorf("User.* roles = %v, want [admin]", roles)
+	}
+
+	// Field-level authorization
+	if roles, ok := auth["User.email"]; !ok {
+		t.Error("expected User.email in authorized fields")
+	} else if len(roles) != 2 {
+		t.Errorf("User.email roles = %v, want [admin self]", roles)
+	}
+}
+
+func TestExecutionAuthChecker(t *testing.T) {
+	t.Parallel()
+
+	authFields := map[string][]string{
+		"User.*":     {"admin"},
+		"User.email": {"admin", "self"},
+		"Post.title": {"reader"},
+	}
+
+	tests := []struct {
+		name     string
+		userRoles []string
+		typeName  string
+		fieldName string
+		allowed   bool
+	}{
+		{"admin_access_all", []string{"admin"}, "User", "name", true},
+		{"admin_access_email", []string{"admin"}, "User", "email", true},
+		{"self_blocked_by_type", []string{"self"}, "User", "email", false}, // blocked by User.* requiring admin
+		{"self_blocked_type", []string{"self"}, "User", "name", false},
+		{"no_roles_blocked", []string{}, "User", "email", false},
+		{"no_auth_field", []string{}, "Post", "body", true},
+		{"reader_access", []string{"reader"}, "Post", "title", true},
+		{"nil_checker", nil, "User", "email", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var checker *ExecutionAuthChecker
+			if tt.userRoles != nil {
+				checker = &ExecutionAuthChecker{
+					authorizedFields: authFields,
+					userRoles:        tt.userRoles,
+				}
+			}
+			allowed, _ := checker.CheckFieldAuth(tt.typeName, tt.fieldName)
+			if allowed != tt.allowed {
+				t.Errorf("CheckFieldAuth(%q, %q) = %v, want %v", tt.typeName, tt.fieldName, allowed, tt.allowed)
+			}
+		})
+	}
+}

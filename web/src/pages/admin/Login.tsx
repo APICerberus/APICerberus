@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield } from "lucide-react";
+import { useBranding } from "@/components/layout/BrandingProvider";
 
 const ERROR_MESSAGES: Record<string, string> = {
   missing_key: "Admin key is required.",
@@ -14,6 +15,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 export function AdminLoginPage() {
   const [searchParams] = useSearchParams();
   const [error, setError] = useState("");
+  const branding = useBranding();
 
   useEffect(() => {
     const loginError = searchParams.get("login");
@@ -29,11 +31,15 @@ export function AdminLoginPage() {
       <Card className="w-full max-w-sm">
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center mb-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20">
-              <Shield className="h-5 w-5 text-primary" />
-            </div>
+            {branding.logo_url ? (
+              <img src={branding.logo_url} alt="Logo" className="h-10 w-10 rounded-xl object-contain" />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20">
+                <Shield className="h-5 w-5 text-primary" />
+              </div>
+            )}
           </div>
-          <CardTitle className="text-center text-2xl">Admin Login</CardTitle>
+          <CardTitle className="text-center text-2xl">{branding.app_name} Admin</CardTitle>
           <CardDescription className="text-center">
             Enter your admin API key to access the dashboard.
           </CardDescription>

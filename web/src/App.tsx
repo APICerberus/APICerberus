@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
+import { BrandingProvider } from "@/components/layout/BrandingProvider";
 import { NAV_ITEMS } from "@/components/layout/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -240,5 +241,5 @@ export function App() {
   const location = useLocation();
   const portalMode = location.pathname === PORTAL_ROUTES.base || location.pathname.startsWith(`${PORTAL_ROUTES.base}/`);
 
-  return <ThemeProvider>{portalMode ? <PortalRoutesView /> : <AdminRoutesView />}</ThemeProvider>;
+  return <BrandingProvider><ThemeProvider>{portalMode ? <PortalRoutesView /> : <AdminRoutesView />}</ThemeProvider></BrandingProvider>;
 }

@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -28,8 +29,8 @@ func extractAdminTokenFromCookie(r *http.Request) string {
 	return ""
 }
 
-// issueAdminToken generates a scoped HS256 admin JWT.
-func issueAdminToken(secret string, ttl time.Duration) (string, error) {
+// issueAdminToken generates a scoped HS256 admin JWT with optional role and permissions.
+func issueAdminToken(secret string, ttl time.Duration, role string, permissions []string) (string, error) {
 	if secret == "" {
 		return "", errors.New("admin token secret is not configured")
 	}
@@ -46,6 +47,12 @@ func issueAdminToken(secret string, ttl time.Duration) (string, error) {
 		"sub": "admin",
 		"iat": now.Unix(),
 		"exp": now.Add(ttl).Unix(),
+	}
+	if role != "" {
+		payload["role"] = role
+	}
+	if len(permissions) > 0 {
+		payload["permissions"] = permissions
 	}
 
 	headerBytes, err := json.Marshal(header)
@@ -99,7 +106,8 @@ func extractBearerToken(r *http.Request) string {
 	return ""
 }
 
-// withAdminBearerAuth restricts endpoints to valid Bearer tokens only.
+// withAdminBearerAuth restricts endpoints to valid Bearer tokens only,
+// then chains to RBAC for permission checking.
 func (s *Server) withAdminBearerAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		clientIP := extractClientIP(r)
@@ -135,7 +143,17 @@ func (s *Server) withAdminBearerAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		s.clearFailedAuth(clientIP)
-		next(w, r)
+
+		// Extract role and permissions from the verified JWT
+		role, perms := extractRoleFromJWT(token)
+		ctx := r.Context()
+		if role != "" {
+			ctx = context.WithValue(ctx, ctxUserRole, role)
+			ctx = context.WithValue(ctx, ctxUserPerms, perms)
+		}
+
+		// Chain to RBAC middleware
+		s.withRBAC(next)(w, r.WithContext(ctx))
 	}
 }
 
@@ -177,7 +195,7 @@ func (s *Server) handleTokenIssue(w http.ResponseWriter, _ *http.Request) {
 	cfg := s.cfg.Admin
 	s.mu.RUnlock()
 
-	token, err := issueAdminToken(cfg.TokenSecret, cfg.TokenTTL)
+	token, err := issueAdminToken(cfg.TokenSecret, cfg.TokenTTL, string(RoleAdmin), RolePermissions[RoleAdmin])
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "token_issue_failed", err.Error())
 		return
@@ -234,7 +252,7 @@ func (s *Server) handleFormLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := issueAdminToken(cfg.TokenSecret, cfg.TokenTTL)
+	token, err := issueAdminToken(cfg.TokenSecret, cfg.TokenTTL, string(RoleAdmin), RolePermissions[RoleAdmin])
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "token_issue_failed", err.Error())
 		return

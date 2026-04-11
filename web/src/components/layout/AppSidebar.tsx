@@ -1,8 +1,8 @@
 import { Shield } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
-import { APP_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { useBranding } from "@/components/layout/BrandingProvider";
 import {
   Sidebar,
   SidebarContent,
@@ -27,16 +27,21 @@ function isPathActive(currentPath: string, routePath: string) {
 
 export function AppSidebar() {
   const location = useLocation();
+  const branding = useBranding();
 
   return (
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader className="border-sidebar-border/80 border-b p-3">
         <div className="flex items-center gap-2 px-1">
-          <span className="inline-flex size-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
-            <Shield className="size-4" />
-          </span>
+          {branding.logo_url ? (
+            <img src={branding.logo_url} alt="Logo" className="size-8 rounded-lg object-contain" />
+          ) : (
+            <span className="inline-flex size-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
+              <Shield className="size-4" />
+            </span>
+          )}
           <div className="group-data-[collapsible=icon]:hidden">
-            <p className="text-sm font-semibold leading-none">{APP_NAME}</p>
+            <p className="text-sm font-semibold leading-none">{branding.app_name}</p>
             <p className="mt-1 text-xs text-muted-foreground">Admin Panel</p>
           </div>
         </div>

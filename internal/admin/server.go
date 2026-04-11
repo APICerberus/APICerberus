@@ -18,6 +18,7 @@ import (
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/pkg/uuid"
 	yamlpkg "github.com/APICerberus/APICerebrus/internal/pkg/yaml"
+	"github.com/APICerberus/APICerebrus/internal/plugin"
 	"github.com/APICerberus/APICerebrus/internal/store"
 	"github.com/APICerberus/APICerebrus/internal/version"
 )
@@ -52,6 +53,9 @@ type Server struct {
 	// Lifecycle
 	closeOnce sync.Once
 	closed    bool
+
+	// Plugin Marketplace (lazily initialized)
+	marketplace *plugin.Marketplace
 }
 
 type adminAuthAttempts struct {
@@ -124,10 +128,16 @@ func (s *Server) Close() error {
 func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("POST /admin/api/v1/auth/token", s.withAdminStaticAuth(s.handleTokenIssue))
 	s.mux.HandleFunc("POST /admin/api/v1/auth/logout", s.withAdminBearerAuth(s.handleTokenLogout))
+	s.mux.HandleFunc("GET /admin/api/v1/auth/sso/login", s.handleOIDCLogin)
+	s.mux.HandleFunc("GET /admin/api/v1/auth/sso/callback", s.handleOIDCCallback)
+	s.mux.HandleFunc("POST /admin/api/v1/auth/sso/logout", s.withAdminBearerAuth(s.handleOIDCLogout))
+	s.mux.HandleFunc("GET /admin/api/v1/auth/sso/status", s.withAdminBearerAuth(s.handleOIDCStatus))
 	s.mux.HandleFunc("POST /admin/login", s.handleFormLogin)
 	s.mux.HandleFunc("POST /admin/logout", s.handleFormLogout)
 	s.handle("GET /admin/api/v1/status", s.handleStatus)
 	s.handle("GET /admin/api/v1/info", s.handleInfo)
+	s.handle("GET /admin/api/v1/branding", s.handleBranding)
+	s.mux.HandleFunc("GET /admin/api/v1/branding/public", s.handleBrandingPublic)
 	s.handle("GET /admin/api/v1/config/export", s.handleConfigExport)
 	s.handle("POST /admin/api/v1/config/import", s.handleConfigImport)
 	s.handle("POST /admin/api/v1/config/reload", s.handleConfigReload)
@@ -161,6 +171,7 @@ func (s *Server) registerRoutes() {
 	s.handle("POST /admin/api/v1/users/{id}/suspend", s.suspendUser)
 	s.handle("POST /admin/api/v1/users/{id}/activate", s.activateUser)
 	s.handle("PUT /admin/api/v1/users/{id}/status", s.updateUserStatusUnified)
+	s.handle("PUT /admin/api/v1/users/{id}/role", s.updateUserRole)
 	s.handle("POST /admin/api/v1/users/{id}/reset-password", s.resetUserPassword)
 
 	s.handle("GET /admin/api/v1/users/{id}/api-keys", s.listUserAPIKeys)
@@ -278,9 +289,47 @@ func (s *Server) handleInfo(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+func (s *Server) handleBranding(w http.ResponseWriter, _ *http.Request) {
+	s.mu.RLock()
+	b := s.cfg.Branding
+	s.mu.RUnlock()
+
+	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+		"app_name":      orDefault(b.AppName, "API Cerberus"),
+		"logo_url":      b.LogoURL,
+		"favicon_url":   b.FaviconURL,
+		"primary_color": orDefault(b.PrimaryColor, "rgb(109 40 217)"),
+		"accent_color":  b.AccentColor,
+		"theme_mode":    orDefault(b.ThemeMode, "system"),
+	})
+}
+
+// handleBrandingPublic returns branding config without authentication (for login page).
+func (s *Server) handleBrandingPublic(w http.ResponseWriter, _ *http.Request) {
+	s.mu.RLock()
+	b := s.cfg.Branding
+	s.mu.RUnlock()
+
+	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+		"app_name":      orDefault(b.AppName, "API Cerberus"),
+		"logo_url":      b.LogoURL,
+		"favicon_url":   b.FaviconURL,
+		"primary_color": orDefault(b.PrimaryColor, "rgb(109 40 217)"),
+		"accent_color":  b.AccentColor,
+		"theme_mode":    orDefault(b.ThemeMode, "system"),
+	})
+}
+
+func orDefault(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
 func (s *Server) handleConfigReload(w http.ResponseWriter, _ *http.Request) {
 	s.mu.RLock()
-	next := cloneConfig(s.cfg)
+	next := config.CloneConfig(s.cfg)
 	s.mu.RUnlock()
 
 	if err := s.gateway.Reload(next); err != nil {
@@ -292,7 +341,7 @@ func (s *Server) handleConfigReload(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleConfigExport(w http.ResponseWriter, _ *http.Request) {
 	s.mu.RLock()
-	cfg := cloneConfig(s.cfg)
+	cfg := config.CloneConfig(s.cfg)
 	s.mu.RUnlock()
 
 	// Redact all secrets from the config before exporting
@@ -381,7 +430,7 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cleanupImportedConfigSentinel(loaded, emptyMapImportSentinel)
-	next := cloneConfig(loaded)
+	next := config.CloneConfig(loaded)
 	if err := s.mutateConfig(func(cfg *config.Config) error {
 		*cfg = *next
 		return nil
@@ -450,7 +499,7 @@ func cleanupImportedConfigSentinel(cfg *config.Config, sentinel string) {
 
 func (s *Server) mutateConfig(mutator func(*config.Config) error) error {
 	s.mu.RLock()
-	next := cloneConfig(s.cfg)
+	next := config.CloneConfig(s.cfg)
 	s.mu.RUnlock()
 
 	if err := mutator(next); err != nil {
@@ -468,7 +517,7 @@ func (s *Server) mutateConfig(mutator func(*config.Config) error) error {
 
 func (s *Server) openStore() (*store.Store, error) {
 	s.mu.RLock()
-	cfg := cloneConfig(s.cfg)
+	cfg := config.CloneConfig(s.cfg)
 	s.mu.RUnlock()
 	return store.Open(cfg)
 }

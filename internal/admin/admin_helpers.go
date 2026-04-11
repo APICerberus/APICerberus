@@ -279,68 +279,6 @@ func validateUpstreamInput(up config.Upstream) error {
 	return nil
 }
 
-func cloneConfig(src *config.Config) *config.Config {
-	if src == nil {
-		return &config.Config{}
-	}
-	out := *src
-	if len(src.Audit.RouteRetentionDays) > 0 {
-		out.Audit.RouteRetentionDays = make(map[string]int, len(src.Audit.RouteRetentionDays))
-		for route, days := range src.Audit.RouteRetentionDays {
-			out.Audit.RouteRetentionDays[route] = days
-		}
-	}
-	out.Billing = cloneBillingConfig(src.Billing)
-	out.Services = append([]config.Service(nil), src.Services...)
-	out.Routes = append([]config.Route(nil), src.Routes...)
-	out.GlobalPlugins = clonePluginConfigs(src.GlobalPlugins)
-	for i := range out.Routes {
-		out.Routes[i].Plugins = clonePluginConfigs(src.Routes[i].Plugins)
-	}
-
-	out.Upstreams = append([]config.Upstream(nil), src.Upstreams...)
-	for i := range out.Upstreams {
-		out.Upstreams[i].Targets = append([]config.UpstreamTarget(nil), src.Upstreams[i].Targets...)
-	}
-
-	out.Consumers = append([]config.Consumer(nil), src.Consumers...)
-	for i := range out.Consumers {
-		out.Consumers[i].APIKeys = append([]config.ConsumerAPIKey(nil), src.Consumers[i].APIKeys...)
-		out.Consumers[i].ACLGroups = append([]string(nil), src.Consumers[i].ACLGroups...)
-		if src.Consumers[i].Metadata != nil {
-			out.Consumers[i].Metadata = make(map[string]any, len(src.Consumers[i].Metadata))
-			for k, v := range src.Consumers[i].Metadata {
-				out.Consumers[i].Metadata[k] = v
-			}
-		}
-	}
-	out.Auth.APIKey.KeyNames = append([]string(nil), src.Auth.APIKey.KeyNames...)
-	out.Auth.APIKey.QueryNames = append([]string(nil), src.Auth.APIKey.QueryNames...)
-	out.Auth.APIKey.CookieNames = append([]string(nil), src.Auth.APIKey.CookieNames...)
-	return &out
-}
-
-func clonePluginConfigs(in []config.PluginConfig) []config.PluginConfig {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]config.PluginConfig, len(in))
-	for i := range in {
-		out[i] = in[i]
-		if in[i].Enabled != nil {
-			v := *in[i].Enabled
-			out[i].Enabled = &v
-		}
-		if in[i].Config != nil {
-			out[i].Config = make(map[string]any, len(in[i].Config))
-			for k, v := range in[i].Config {
-				out[i].Config[k] = v
-			}
-		}
-	}
-	return out
-}
-
 func serviceByID(cfg *config.Config, id string) *config.Service {
 	for i := range cfg.Services {
 		if cfg.Services[i].ID == id {

@@ -13,11 +13,16 @@ import (
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	coerce "github.com/APICerberus/APICerebrus/internal/pkg/coerce"
+	"github.com/tetratelabs/wazero"
+	"github.com/tetratelabs/wazero/api"
+	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 )
 
 const (
 	maxWASMModuleSize = 100 * 1024 * 1024 // 100MB hard cap
 	wasmMagicHeader   = "\x00asm"
+	wasmExportName    = "handle_request"  // expected WASM export for request handling
 )
 
 // WASMConfig holds configuration for WASM plugins.
@@ -66,16 +71,20 @@ type WASMModule struct {
 	size     int64
 	config   map[string]any
 
-	// Runtime state
-	runtime  *WASMRuntime
-	mu       sync.RWMutex
-	loaded   bool
-	loadTime time.Time
+	// wazero runtime state
+	runtime   *WASMRuntime
+	mu        sync.RWMutex
+	compiled  wazero.CompiledModule
+	module    api.Module
+	loaded    bool
+	loadTime  time.Time
 }
 
 // WASMRuntime is the interface for WASM runtime implementations.
 type WASMRuntime struct {
-	config WASMConfig
+	config  WASMConfig
+	runtime wazero.Runtime
+	mu      sync.Mutex
 }
 
 // NewWASMRuntime creates a new WASM runtime.
@@ -86,14 +95,34 @@ func NewWASMRuntime(cfg WASMConfig) (*WASMRuntime, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid wasm config: %w", err)
 	}
+
+	ctx := context.Background()
+	rt := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig().
+		WithCoreFeatures(api.CoreFeaturesV2).
+		WithMemoryLimitPages(uint32(cfg.MaxMemory)/65536))
+
+	// Instantiate WASI (required by most WASM compilers)
+	wasi_snapshot_preview1.MustInstantiate(ctx, rt)
+
 	return &WASMRuntime{
-		config: cfg,
+		config:  cfg,
+		runtime: rt,
 	}, nil
 }
 
 // IsEnabled returns true if WASM is enabled.
 func (r *WASMRuntime) IsEnabled() bool {
 	return r != nil && r.config.Enabled
+}
+
+// Close closes the wazero runtime and all compiled modules.
+func (r *WASMRuntime) Close() error {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.runtime.Close(context.Background())
 }
 
 // validateWASMModule checks that a WASM file exists, is within bounds,
@@ -153,7 +182,7 @@ func (r *WASMRuntime) safeResolvePath(path string) (string, error) {
 	return path, nil
 }
 
-// LoadModule loads a WASM module from file.
+// LoadModule compiles and loads a WASM module from file.
 func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (*WASMModule, error) {
 	if !r.IsEnabled() {
 		return nil, fmt.Errorf("wasm runtime is disabled")
@@ -171,6 +200,10 @@ func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (
 	}
 
 	info, _ := os.Stat(resolved)
+	wasmBytes, err := os.ReadFile(resolved)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read wasm module: %w", err)
+	}
 
 	// Read module metadata from config
 	name := id
@@ -193,25 +226,45 @@ func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (
 		priority = pr
 	}
 
+	// Compile the module (AOT compilation, done once)
+	ctx := context.Background()
+	compiled, err := r.runtime.CompileModule(ctx, wasmBytes)
+	if err != nil {
+		return nil, fmt.Errorf("wasm compile failed: %w", err)
+	}
+
+	// Instantiate the module (creates memory, globals, etc.)
+	// Memory is limited by the runtime's WithMemoryLimitPages config.
+	inst, err := r.runtime.InstantiateModule(ctx, compiled, wazero.NewModuleConfig().
+		WithName(id).
+		WithStartFunctions("_start"))
+	if err != nil {
+		compiled.Close(ctx)
+		return nil, fmt.Errorf("wasm instantiate failed: %w", err)
+	}
+
 	module := &WASMModule{
-		id:       id,
-		name:     name,
-		version:  version,
-		phase:    phase,
-		priority: priority,
-		path:     resolved,
-		size:     info.Size(),
-		config:   pluginConfig,
-		runtime:  r,
-		loaded:   true,
-		loadTime: time.Now(),
+		id:        id,
+		name:      name,
+		version:   version,
+		phase:     phase,
+		priority:  priority,
+		path:      resolved,
+		size:      info.Size(),
+		config:    pluginConfig,
+		runtime:   r,
+		compiled:  compiled,
+		module:    inst,
+		loaded:    true,
+		loadTime:  time.Now(),
 	}
 
 	return module, nil
 }
 
-// Execute runs the WASM module with the given context.
-// Enforces MaxExecution timeout via context.
+// Execute runs the WASM module with the given pipeline context.
+// It serializes the context to JSON, calls the WASM export, and deserializes the result.
+// Enforces MaxExecution timeout and MaxMemory limits via wazero.
 func (m *WASMModule) Execute(ctx *PipelineContext) (handled bool, err error) {
 	if m == nil || !m.loaded {
 		return false, fmt.Errorf("wasm module not loaded")
@@ -219,23 +272,131 @@ func (m *WASMModule) Execute(ctx *PipelineContext) (handled bool, err error) {
 
 	m.mu.RLock()
 	timeout := m.runtime.config.MaxExecution
+	mod := m.module
 	m.mu.RUnlock()
 
 	// Create a context with the configured timeout
 	execCtx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// In a real implementation, this would:
-	// 1. Instantiate the WASM module with memory limits (config.MaxMemory)
-	// 2. Set up host functions with capability restrictions
-	// 3. Serialize the PipelineContext
-	// 4. Call the WASM entry point with execCtx for timeout enforcement
-	// 5. Deserialize the result
+	// Serialize pipeline context to JSON
+	wasmCtx := ToWASMContext(ctx)
+	reqBytes, err := json.Marshal(WASMGuestRequest{
+		Type:    "request",
+		Context: wasmCtx,
+		Config:  m.config,
+	})
+	if err != nil {
+		return false, fmt.Errorf("wasm context marshal failed: %w", err)
+	}
 
-	// Check context to satisfy the linter (real impl would use execCtx in WASM call)
-	_ = execCtx.Done()
+	// Find the exported handle_request function
+	fn := mod.ExportedFunction(wasmExportName)
+	if fn == nil {
+		// Fallback: try _start (some modules only run initialization)
+		fn = mod.ExportedFunction("_start")
+		if fn == nil {
+			return false, fmt.Errorf("wasm module exports neither %q nor _start", wasmExportName)
+		}
+	}
 
-	return false, nil
+	// Allocate memory in the WASM module for the input
+	ptr, size, err := writeToWASMMemory(mod, reqBytes)
+	if err != nil {
+		return false, fmt.Errorf("wasm memory write failed: %w", err)
+	}
+
+	// Call the WASM function with (ptr, len) arguments
+	// The WASM module should return (result_ptr, result_len)
+	results, err := fn.Call(execCtx, uint64(ptr), uint64(size))
+	if err != nil {
+		return false, fmt.Errorf("wasm execution failed: %w", err)
+	}
+
+	// If the function doesn't return values, treat as no-op
+	if len(results) < 2 {
+		return false, nil
+	}
+
+	// Read the result from WASM memory
+	resultPtr := uint32(results[0])
+	resultLen := uint32(results[1])
+	resultBytes, err := readFromWASMMemory(mod, resultPtr, resultLen)
+	if err != nil {
+		return false, fmt.Errorf("wasm memory read failed: %w", err)
+	}
+
+	// Parse the WASM response
+	var resp WASMGuestResponse
+	if err := json.Unmarshal(resultBytes, &resp); err != nil {
+		return false, fmt.Errorf("wasm response parse failed: %w", err)
+	}
+
+	// Apply any changes the WASM module made back to the pipeline context
+	if resp.Context != nil {
+		resp.Context.ApplyToContext(ctx)
+	}
+
+	if resp.Error != "" {
+		return resp.Handled, fmt.Errorf("wasm plugin error: %s", resp.Error)
+	}
+
+	return resp.Handled, nil
+}
+
+// writeToWASMMemory allocates memory in the WASM module and writes data.
+func writeToWASMMemory(mod api.Module, data []byte) (uint32, uint32, error) {
+	mem := mod.Memory()
+	if mem == nil {
+		return 0, 0, fmt.Errorf("wasm module has no memory")
+	}
+
+	// Use the module's alloc function if available, otherwise use a simple approach
+	allocFn := mod.ExportedFunction("alloc")
+	if allocFn != nil {
+		results, err := allocFn.Call(context.Background(), uint64(len(data)))
+		if err != nil {
+			return 0, 0, fmt.Errorf("wasm alloc failed: %w", err)
+		}
+		ptr := uint32(results[0])
+		if !mem.Write(ptr, data) {
+			return 0, 0, fmt.Errorf("wasm memory write out of bounds")
+		}
+		return ptr, uint32(len(data)), nil
+	}
+
+	// Fallback: use a fixed offset (the module should have enough memory)
+	// This is only for simple test modules
+	freePtr := mod.ExportedGlobal("__data_end")
+	var offset uint32
+	if freePtr != nil {
+		offset = uint32(freePtr.Get())
+	} else {
+		offset = 0 // Start at beginning if no __data_end
+	}
+	// Align to 16 bytes
+	offset = (offset + 15) &^ 15
+	if !mem.Write(offset, data) {
+		return 0, 0, fmt.Errorf("wasm memory write out of bounds at offset %d", offset)
+	}
+	return offset, uint32(len(data)), nil
+}
+
+// readFromWASMMemory reads data from the WASM module's memory.
+func readFromWASMMemory(mod api.Module, ptr, length uint32) ([]byte, error) {
+	mem := mod.Memory()
+	if mem == nil {
+		return nil, fmt.Errorf("wasm module has no memory")
+	}
+
+	data, ok := mem.Read(ptr, length)
+	if !ok {
+		return nil, fmt.Errorf("wasm memory read out of bounds at ptr=%d len=%d", ptr, length)
+	}
+
+	result := make([]byte, length)
+	copy(result, data)
+	return result, nil
 }
 
 // Close unloads the WASM module.
@@ -247,6 +408,13 @@ func (m *WASMModule) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	ctx := context.Background()
+	if m.compiled != nil {
+		_ = m.compiled.Close(ctx)
+	}
+	if m.module != nil {
+		_ = m.module.Close(ctx)
+	}
 	m.loaded = false
 	return nil
 }
@@ -419,6 +587,10 @@ func (m *WASMPluginManager) Close() error {
 		_ = module.Close()
 	}
 	m.modules = make(map[string]*WASMModule)
+
+	if m.runtime != nil {
+		_ = m.runtime.Close()
+	}
 
 	return nil
 }
@@ -635,22 +807,22 @@ func ValidateWASMModule(path string) error {
 func buildWASMPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
 
-	moduleID := asString(cfgMap["module_id"])
+	moduleID := coerce.AsString(cfgMap["module_id"])
 	if moduleID == "" {
 		return PipelinePlugin{}, fmt.Errorf("wasm module_id is required")
 	}
 
-	modulePath := asString(cfgMap["module_path"])
+	modulePath := coerce.AsString(cfgMap["module_path"])
 	if modulePath == "" {
 		modulePath = moduleID + ".wasm"
 	}
 
-	phase := Phase(asString(cfgMap["phase"]))
+	phase := Phase(coerce.AsString(cfgMap["phase"]))
 	if phase == "" {
 		phase = PhasePreProxy
 	}
 
-	priority := asInt(cfgMap["priority"], 100)
+	priority := coerce.AsInt(cfgMap["priority"], 100)
 
 	// Validate module exists
 	if err := ValidateWASMModule(modulePath); err != nil {

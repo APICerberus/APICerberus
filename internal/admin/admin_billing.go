@@ -261,7 +261,7 @@ func (s *Server) userCreditOverview(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getBillingConfig(w http.ResponseWriter, _ *http.Request) {
 	s.mu.RLock()
-	billing := cloneBillingConfig(s.cfg.Billing)
+	billing := config.CloneBillingConfig(s.cfg.Billing)
 	s.mu.RUnlock()
 	_ = jsonutil.WriteJSON(w, http.StatusOK, billing)
 }
@@ -275,7 +275,7 @@ func (s *Server) updateBillingConfig(w http.ResponseWriter, r *http.Request) {
 
 	var updated config.BillingConfig
 	if err := s.mutateConfig(func(cfg *config.Config) error {
-		next := cloneBillingConfig(cfg.Billing)
+		next := config.CloneBillingConfig(cfg.Billing)
 
 		if value, ok := payload["enabled"]; ok {
 			next.Enabled = asBool(value, next.Enabled)
@@ -307,7 +307,7 @@ func (s *Server) updateBillingConfig(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		cfg.Billing = next
-		updated = cloneBillingConfig(next)
+		updated = config.CloneBillingConfig(next)
 		return nil
 	}); err != nil {
 		writeError(w, http.StatusBadRequest, "update_billing_config_failed", err.Error())
@@ -319,7 +319,7 @@ func (s *Server) updateBillingConfig(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getBillingRouteCosts(w http.ResponseWriter, _ *http.Request) {
 	s.mu.RLock()
-	routeCosts := cloneBillingRouteCosts(s.cfg.Billing.RouteCosts)
+	routeCosts := config.CloneInt64Map(s.cfg.Billing.RouteCosts)
 	s.mu.RUnlock()
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
 		"route_costs": routeCosts,
@@ -335,7 +335,7 @@ func (s *Server) updateBillingRouteCosts(w http.ResponseWriter, r *http.Request)
 
 	var updated map[string]int64
 	if err := s.mutateConfig(func(cfg *config.Config) error {
-		next := cloneBillingConfig(cfg.Billing)
+		next := config.CloneBillingConfig(cfg.Billing)
 		if value, ok := payload["route_costs"]; ok {
 			routeCosts, err := parseBillingRouteCosts(value)
 			if err != nil {
@@ -360,7 +360,7 @@ func (s *Server) updateBillingRouteCosts(w http.ResponseWriter, r *http.Request)
 			return err
 		}
 		cfg.Billing = next
-		updated = cloneBillingRouteCosts(next.RouteCosts)
+		updated = config.CloneInt64Map(next.RouteCosts)
 		return nil
 	}); err != nil {
 		writeError(w, http.StatusBadRequest, "update_route_costs_failed", err.Error())
@@ -403,7 +403,7 @@ func validateBillingConfig(cfg config.BillingConfig) error {
 func parseBillingRouteCosts(value any) (map[string]int64, error) {
 	switch v := value.(type) {
 	case map[string]int64:
-		return cloneBillingRouteCosts(v), nil
+		return config.CloneInt64Map(v), nil
 	case map[string]any:
 		out := make(map[string]int64, len(v))
 		for rawKey, rawCost := range v {
@@ -426,7 +426,7 @@ func parseBillingRouteCosts(value any) (map[string]int64, error) {
 func parseBillingMethodMultipliers(value any) (map[string]float64, error) {
 	switch v := value.(type) {
 	case map[string]float64:
-		return cloneBillingMethodMultipliers(v), nil
+		return config.CloneFloat64Map(v), nil
 	case map[string]any:
 		out := make(map[string]float64, len(v))
 		for rawKey, rawValue := range v {
@@ -447,34 +447,4 @@ func parseBillingMethodMultipliers(value any) (map[string]float64, error) {
 	default:
 		return nil, errors.New("method_multipliers must be an object")
 	}
-}
-
-
-func cloneBillingConfig(in config.BillingConfig) config.BillingConfig {
-	out := in
-	out.RouteCosts = cloneBillingRouteCosts(in.RouteCosts)
-	out.MethodMultipliers = cloneBillingMethodMultipliers(in.MethodMultipliers)
-	return out
-}
-
-func cloneBillingRouteCosts(in map[string]int64) map[string]int64 {
-	if len(in) == 0 {
-		return map[string]int64{}
-	}
-	out := make(map[string]int64, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
-}
-
-func cloneBillingMethodMultipliers(in map[string]float64) map[string]float64 {
-	if len(in) == 0 {
-		return map[string]float64{}
-	}
-	out := make(map[string]float64, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
 }

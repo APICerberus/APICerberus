@@ -456,11 +456,11 @@ func (s *Server) handleBulkPlugins(w http.ResponseWriter, r *http.Request) {
 			switch req.Mode {
 			case "replace":
 				// Replace all plugins
-				route.Plugins = clonePluginConfigsBulk(req.Plugins)
+				route.Plugins = config.ClonePluginConfigs(req.Plugins)
 
 			case "append":
 				// Append new plugins
-				route.Plugins = append(route.Plugins, clonePluginConfigsBulk(req.Plugins)...)
+				route.Plugins = append(route.Plugins, config.ClonePluginConfigs(req.Plugins)...)
 
 			case "merge":
 				// Merge by plugin name (update existing, add new)
@@ -849,28 +849,6 @@ func (s *Server) handleBulkImport(w http.ResponseWriter, r *http.Request) {
 
 	result.Success = true
 	_ = jsonutil.WriteJSON(w, http.StatusOK, result)
-}
-
-// clonePluginConfigsBulk creates a deep copy of plugin configs
-func clonePluginConfigsBulk(in []config.PluginConfig) []config.PluginConfig {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]config.PluginConfig, len(in))
-	for i := range in {
-		out[i] = in[i]
-		if in[i].Enabled != nil {
-			v := *in[i].Enabled
-			out[i].Enabled = &v
-		}
-		if in[i].Config != nil {
-			out[i].Config = make(map[string]any, len(in[i].Config))
-			for k, v := range in[i].Config {
-				out[i].Config[k] = v
-			}
-		}
-	}
-	return out
 }
 
 // RegisterBulkImportRoute registers the bulk import endpoint

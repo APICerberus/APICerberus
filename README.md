@@ -5,10 +5,10 @@
 </p>
 
 <p align="center">
-  <a href="https://go.dev/"><img src="https://img.shields.io/badge/go-1.25%2B-00ADD8.svg?style=flat-square&logo=go" alt="Go Version"></a>
+  <a href="https://go.dev/"><img src="https://img.shields.io/badge/go-1.26%2B-00ADD8.svg?style=flat-square&logo=go" alt="Go Version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License"></a>
-  <a href="#"><img src="https://img.shields.io/badge/coverage-81.2%25-brightgreen.svg?style=flat-square" alt="Coverage"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-162%20files-blue.svg?style=flat-square" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/coverage-85%25-brightgreen.svg?style=flat-square" alt="Coverage"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-399%20files-blue.svg?style=flat-square" alt="Tests"></a>
   <a href="#"><img src="https://img.shields.io/badge/status-v1.0.0--rc.1-yellow.svg?style=flat-square" alt="Status"></a>
 </p>
 
@@ -40,11 +40,11 @@ APICerebrus is a high-performance, production-ready API Gateway built in Go. It 
 
 | Metric | Value |
 |--------|-------|
-| Go Source Files | 137 |
-| Test Files | 162 |
+| Go Source Files | 233 |
+| Test Files | 399 |
 | Test Coverage | 85%+ |
-| Packages | 29 |
-| Lines of Code | ~100,000+ |
+| Packages | 37 |
+| Lines of Code | ~184,000+ |
 | CLI Commands | 40+ |
 | Admin API Endpoints | 70+ |
 
@@ -59,7 +59,7 @@ APICerebrus is a high-performance, production-ready API Gateway built in Go. It 
 | HTTP/HTTPS Reverse Proxy | High-performance request forwarding with keep-alive | ✅ |
 | WebSocket Support | Full bidirectional WebSocket proxying | ✅ |
 | Radix Tree Router | O(k) path matching with parameter extraction | ✅ |
-| 10 Load Balancing Algorithms | Round Robin, Weighted, Least Connections, IP Hash, Consistent Hash, Adaptive, Least Latency, Health Weighted, Random | ✅ |
+| 11 Load Balancing Algorithms | Round Robin, Weighted, Least Connections, IP Hash, Consistent Hash, Adaptive, Least Latency, Health Weighted, SubnetAware, Weighted Least Connections, Random | ✅ |
 | Health Checks | Active and passive health monitoring | ✅ |
 | Circuit Breaker | Automatic failure detection and recovery | ✅ |
 | Request/Response Transforms | Header/body modification and validation | ✅ |
@@ -113,7 +113,7 @@ APICerebrus is a high-performance, production-ready API Gateway built in Go. It 
 | User Portal | API Playground and self-service (port 9877) | ✅ |
 | WebSocket Real-time | Live updates and notifications | ✅ |
 | CLI Tool | 40+ commands for administration | ✅ |
-| MCP Tools | 25+ tools for AI integration | ✅ |
+| MCP Tools | 39 tools for AI integration | ✅ |
 
 ---
 
@@ -144,7 +144,7 @@ APICerebrus is a high-performance, production-ready API Gateway built in Go. It 
 │                                  │                                          │
 │                         ┌────────▼────────┐                                 │
 │                         │ Load Balancer   │                                 │
-│                         │ (10 algorithms) │                                 │
+│                         │ (11 algorithms) │                                 │
 │                         └────────┬────────┘                                 │
 │                                  │                                          │
 │                         ┌────────▼────────┐                                 │
@@ -179,7 +179,7 @@ Client Request
        │
        ▼
 ┌─────────────┐
-│ Load Balancer│◄─── Health Checks, 10 Algorithms
+│ Load Balancer│◄─── Health Checks, 11 Algorithms
 └──────┬──────┘
        │
        ▼
@@ -195,7 +195,7 @@ Client Request
 
 ### Prerequisites
 
-- Go 1.25+
+- Go 1.26+
 - Node.js 20+ (for web dashboard build)
 - Make (optional, for convenience)
 

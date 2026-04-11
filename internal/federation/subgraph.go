@@ -83,6 +83,7 @@ type Field struct {
 	Args              map[string]*Argument `json:"args,omitempty"`
 	IsDeprecated      bool                 `json:"is_deprecated"`
 	DeprecationReason string               `json:"deprecation_reason,omitempty"`
+	Directives        []TypeDirective      `json:"directives,omitempty"`
 }
 
 // InputField represents a GraphQL input field.

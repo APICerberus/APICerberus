@@ -242,6 +242,55 @@ func (e *Executor) getCircuitBreaker(subgraphID string) *CircuitBreaker {
 	return cb
 }
 
+// ExecutionAuthChecker provides role-based authorization for federated queries.
+type ExecutionAuthChecker struct {
+	authorizedFields map[string][]string // type.field -> required roles
+	userRoles        []string           // roles the current user has
+}
+
+// NewExecutionAuthChecker creates an authorization checker.
+func NewExecutionAuthChecker(authorizedFields map[string][]string, userRoles []string) *ExecutionAuthChecker {
+	return &ExecutionAuthChecker{
+		authorizedFields: authorizedFields,
+		userRoles:        userRoles,
+	}
+}
+
+// CheckFieldAuth checks if a user has the required roles to access a field.
+func (ac *ExecutionAuthChecker) CheckFieldAuth(typeName, fieldName string) (allowed bool, required []string) {
+	if ac == nil || len(ac.authorizedFields) == 0 {
+		return true, nil
+	}
+
+	// Check type-level restriction
+	if roles, ok := ac.authorizedFields[typeName+".*"]; ok {
+		if !ac.hasAnyRole(roles) {
+			return false, roles
+		}
+	}
+
+	// Check field-level restriction
+	key := typeName + "." + fieldName
+	if roles, ok := ac.authorizedFields[key]; ok {
+		if !ac.hasAnyRole(roles) {
+			return false, roles
+		}
+	}
+
+	return true, nil
+}
+
+func (ac *ExecutionAuthChecker) hasAnyRole(roles []string) bool {
+	for _, r := range roles {
+		for _, userRole := range ac.userRoles {
+			if r == userRole {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Execute executes a plan.
 func (e *Executor) Execute(ctx context.Context, plan *Plan) (*ExecutionResult, error) {
 	result := &ExecutionResult{

@@ -39,6 +39,14 @@ APICerebrus is a production-ready API Gateway built in Go with a React-based adm
 | Format | `make fmt` or `go fmt ./...` |
 | Security scan | `make security` |
 | CI pipeline | `make ci` (fmt + lint + test-race + security + coverage) |
+| Full CI | `make ci-full` (ci + integration + e2e) |
+| Web E2E | `make e2e-web` (Playwright), `make e2e-web-ui`, `make e2e-web-headed` |
+| Docker | `make docker`, `make docker-push` |
+| K8s deploy | `make deploy-k8s-dev`, `make deploy-k8s-staging`, `make deploy-k8s-prod` |
+| Docker Swarm | `make deploy-swarm` |
+| Backup/Restore | `make backup`, `make restore BACKUP_FILE=path` |
+| Health/Metrics | `make health`, `make metrics` |
+| Release | `make release VERSION=v1.0.0`, `make release-dry-run VERSION=v1.0.0` |
 
 **Web Dashboard** (React + Vite + Tailwind v4 + shadcn/ui):
 - Location: `web/`
@@ -52,20 +60,22 @@ APICerebrus is a production-ready API Gateway built in Go with a React-based adm
 
 | Module | Purpose |
 |--------|---------|
-| `gateway/` | HTTP/gRPC/WebSocket servers, radix tree router, proxy engine, 10 load balancing algorithms |
-| `plugin/` | 5-phase pipeline (PRE_AUTH→AUTH→PRE_PROXY→PROXY→POST_PROXY), 20+ plugins |
+| `gateway/` | HTTP/gRPC/WebSocket servers, radix tree router, proxy engine, 11 load balancing algorithms |
+| `plugin/` | 5-phase pipeline (PRE_AUTH→AUTH→PRE_PROXY→PROXY→POST_PROXY), 20+ plugins, WASM support |
 | `ratelimit/` | Token bucket, fixed/sliding window, leaky bucket; Redis-backed for distributed |
-| `billing/` | Credit system with atomic SQLite transactions |
+| `billing/` | Credit system with atomic SQLite transactions, per-route costs, test key bypass |
 | `store/` | SQLite repositories (WAL mode): users, API keys, sessions, audit logs |
-| `admin/` | REST API for management (default port 9876) |
+| `admin/` | REST API for management (default port 9876), webhook system |
 | `portal/` | User-facing web portal (default port 9877) |
-| `mcp/` | Model Context Protocol server (stdio + SSE transports) |
-| `raft/` | Distributed consensus for clustering |
+| `mcp/` | Model Context Protocol server (stdio + SSE transports, 25+ tools) |
+| `raft/` | Distributed consensus for clustering with mTLS cert sync |
 | `federation/` | GraphQL Federation (Apollo-compatible schema composition, query planning) |
 | `graphql/` | GraphQL query parsing, execution, subscriptions |
 | `grpc/` | gRPC server, HTTP transcoding, gRPC-Web |
 | `analytics/` | Metrics collection with ring buffers and time-series aggregation |
-| `audit/` | Request/response logging with field masking, GZIP compression |
+| `audit/` | Request/response logging with field masking, GZIP compression, Kafka export |
+| `tracing/` | OpenTelemetry distributed tracing with multiple exporters |
+| `certmanager/` | ACME/Let's Encrypt auto-provisioning, cert renewal scheduler |
 | `cli/` | 40+ CLI commands for administration |
 
 ### Plugin Architecture
@@ -84,6 +94,17 @@ Each plugin implements the `Plugin` interface and registers for specific phases:
 - **POST_PROXY**: Response transforms, compression
 
 Plugins are chained in `internal/plugin/pipeline.go` and executed sequentially per phase.
+
+### Service Ports
+
+| Service | Port |
+|---------|------|
+| Gateway HTTP | 8080 |
+| Gateway HTTPS | 8443 |
+| Admin API | 9876 |
+| User Portal | 9877 |
+| gRPC | 50051 |
+| Raft | 12000 |
 
 ### Request Flow
 
@@ -177,6 +198,23 @@ The Go binary embeds `web/dist/` via `embed.go` and serves at `/dashboard` (conf
 - Local: In-memory implementations (token bucket, sliding window, etc.)
 - Distributed: Redis-backed with fallback to local on connection failure
 - Configured per-route or per-user in `ratelimit/` package
+
+### Billing & Credits
+
+Credit-based billing in `internal/billing/`:
+- **Atomic transactions**: All credit operations use SQLite transactions for consistency
+- **Per-route costs**: Different routes can have different credit costs (`route_cost` table)
+- **Test key bypass**: `ck_test_*` keys skip credit deduction; `ck_live_*` keys enforce it
+- **Pre-check**: Credits are deducted before proxying; insufficient credits return 402
+- **Post-proxy**: Adjusts cost based on actual upstream response if route cost is dynamic
+
+### WebAssembly Plugins
+
+WASM plugin support in `internal/plugin/wasm.go`:
+- Load `.wasm` modules as plugins for custom logic in any pipeline phase
+- Plugins implement the WASI interface for host function calls
+- Sandboxed execution with configurable memory limits
+- Hot-reloadable without gateway restart
 
 ### GraphQL Federation
 
@@ -305,13 +343,8 @@ Default shutdown sequence (from `cmd/apicerberus/main.go`):
 5. Close database connections
 6. Stop audit logging
 7. Shutdown tracing
-| Service | Port |
-|---------|------|
-| Gateway HTTP | 8080 |
-| Admin API | 9876 |
-| User Portal | 9877 |
-| gRPC | 50051 |
-| Raft | 12000 |
+
+See **Service Ports** section above for default port assignments.
 
 ### CLI Reference
 
@@ -513,23 +546,39 @@ Connection pooling in `internal/gateway/optimized_proxy.go`:
 - Max idle connections per host: 100
 - Connection reuse reduces latency significantly
 
-### Run a specific test
-```bash
-go test -run TestCreditDeduction ./internal/billing/...
+### Tracing
+
+OpenTelemetry tracing in `internal/tracing/`:
+- **Multiple exporters**: Jaeger, Zipkin, OTLP, stdout
+- **Sampling**: Configurable sampling rate
+- **Propagation**: W3C TraceContext and Baggage
+- **Spans**: Auto-instrumented for HTTP requests, plugin execution, database queries
+
+Configuration in `apicerberus.example.yaml`:
+```yaml
+tracing:
+  enabled: true
+  service_name: "apicerberus"
+  exporter: "otlp"  # jaeger, zipkin, otlp, stdout
+  endpoint: "http://localhost:4317"
+  sampling_rate: 0.1
 ```
 
-### Run tests with verbose output
+### Project Management
+
+- **Roadmap**: `.project/ROADMAP.md` — phased development roadmap
+- **Tasks**: `.project/TASKS.md` — detailed task tracking
+- **Directives**: `AGENT_DIRECTIVES.md` — mandatory agent behavior rules (loaded at top of this file)
+
+### Running a Single Test
+
 ```bash
+go test -run TestName ./path/to/package
 go test -v ./internal/gateway/...
 ```
 
-### Build and run locally
-```bash
-make build
-./bin/apicerberus start --config apicerberus.yaml
-```
+### Checking Test Coverage
 
-### Check test coverage for a package
 ```bash
 go test -coverprofile=coverage.out ./internal/billing
 go tool cover -func=coverage.out

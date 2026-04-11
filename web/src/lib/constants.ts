@@ -1,3 +1,4 @@
+// Fallback defaults — overridden by server branding config at runtime.
 export const APP_NAME = "API Cerberus";
 
 export const ROUTES = {

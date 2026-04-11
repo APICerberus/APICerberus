@@ -3,10 +3,10 @@ package admin
 import (
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	coerce "github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/pkg/uuid"
 	"github.com/APICerberus/APICerebrus/internal/store"
@@ -502,12 +502,12 @@ func (h *GraphQLHandler) resolveCreateService(p graphql.ResolveParams) (any, err
 	input, _ := p.Args["input"].(map[string]any)
 
 	svc := config.Service{
-		Name:     getString(input, "name"),
-		Protocol: getString(input, "protocol"),
-		Upstream: getString(input, "upstream"),
+		Name:     coerce.GetString(input, "name"),
+		Protocol: coerce.GetString(input, "protocol"),
+		Upstream: coerce.GetString(input, "upstream"),
 	}
 
-	if id := getString(input, "id"); id != "" {
+	if id := coerce.GetString(input, "id"); id != "" {
 		svc.ID = id
 	} else {
 		id, err := uuid.NewString()
@@ -546,9 +546,9 @@ func (h *GraphQLHandler) resolveUpdateService(p graphql.ResolveParams) (any, err
 
 	svc := config.Service{
 		ID:       id,
-		Name:     getString(input, "name"),
-		Protocol: getString(input, "protocol"),
-		Upstream: getString(input, "upstream"),
+		Name:     coerce.GetString(input, "name"),
+		Protocol: coerce.GetString(input, "protocol"),
+		Upstream: coerce.GetString(input, "upstream"),
 	}
 
 	if err := validateServiceInput(svc); err != nil {
@@ -604,17 +604,17 @@ func (h *GraphQLHandler) resolveCreateRoute(p graphql.ResolveParams) (any, error
 	input, _ := p.Args["input"].(map[string]any)
 
 	route := config.Route{
-		Name:         getString(input, "name"),
-		Service:      getString(input, "service"),
-		Hosts:        getStringSlice(input, "hosts"),
-		Paths:        getStringSlice(input, "paths"),
-		Methods:      getStringSlice(input, "methods"),
-		StripPath:    getBool(input, "stripPath"),
-		PreserveHost: getBool(input, "preserveHost"),
-		Priority:     getInt(input, "priority"),
+		Name:         coerce.GetString(input, "name"),
+		Service:      coerce.GetString(input, "service"),
+		Hosts:        coerce.GetStringSlice(input, "hosts"),
+		Paths:        coerce.GetStringSlice(input, "paths"),
+		Methods:      coerce.GetStringSlice(input, "methods"),
+		StripPath:    coerce.GetBool(input, "stripPath", false),
+		PreserveHost: coerce.GetBool(input, "preserveHost", false),
+		Priority:     coerce.GetInt(input, "priority", 0),
 	}
 
-	if id := getString(input, "id"); id != "" {
+	if id := coerce.GetString(input, "id"); id != "" {
 		route.ID = id
 	} else {
 		id, err := uuid.NewString()
@@ -653,14 +653,14 @@ func (h *GraphQLHandler) resolveUpdateRoute(p graphql.ResolveParams) (any, error
 
 	route := config.Route{
 		ID:           id,
-		Name:         getString(input, "name"),
-		Service:      getString(input, "service"),
-		Hosts:        getStringSlice(input, "hosts"),
-		Paths:        getStringSlice(input, "paths"),
-		Methods:      getStringSlice(input, "methods"),
-		StripPath:    getBool(input, "stripPath"),
-		PreserveHost: getBool(input, "preserveHost"),
-		Priority:     getInt(input, "priority"),
+		Name:         coerce.GetString(input, "name"),
+		Service:      coerce.GetString(input, "service"),
+		Hosts:        coerce.GetStringSlice(input, "hosts"),
+		Paths:        coerce.GetStringSlice(input, "paths"),
+		Methods:      coerce.GetStringSlice(input, "methods"),
+		StripPath:    coerce.GetBool(input, "stripPath", false),
+		PreserveHost: coerce.GetBool(input, "preserveHost", false),
+		Priority:     coerce.GetInt(input, "priority", 0),
 	}
 
 	if err := validateRouteInput(route); err != nil {
@@ -710,11 +710,11 @@ func (h *GraphQLHandler) resolveCreateUpstream(p graphql.ResolveParams) (any, er
 	input, _ := p.Args["input"].(map[string]any)
 
 	up := config.Upstream{
-		Name:      getString(input, "name"),
-		Algorithm: getString(input, "algorithm"),
+		Name:      coerce.GetString(input, "name"),
+		Algorithm: coerce.GetString(input, "algorithm"),
 	}
 
-	if id := getString(input, "id"); id != "" {
+	if id := coerce.GetString(input, "id"); id != "" {
 		up.ID = id
 	} else {
 		id, err := uuid.NewString()
@@ -729,10 +729,10 @@ func (h *GraphQLHandler) resolveCreateUpstream(p graphql.ResolveParams) (any, er
 		for _, t := range targetsRaw {
 			if targetMap, ok := t.(map[string]any); ok {
 				target := config.UpstreamTarget{
-					Address: getString(targetMap, "address"),
-					Weight:  getInt(targetMap, "weight"),
+					Address: coerce.GetString(targetMap, "address"),
+					Weight:  coerce.GetInt(targetMap, "weight", 0),
 				}
-				if tid := getString(targetMap, "id"); tid != "" {
+				if tid := coerce.GetString(targetMap, "id"); tid != "" {
 					target.ID = tid
 				} else {
 					tid, err := uuid.NewString()
@@ -772,8 +772,8 @@ func (h *GraphQLHandler) resolveUpdateUpstream(p graphql.ResolveParams) (any, er
 
 	up := config.Upstream{
 		ID:        id,
-		Name:      getString(input, "name"),
-		Algorithm: getString(input, "algorithm"),
+		Name:      coerce.GetString(input, "name"),
+		Algorithm: coerce.GetString(input, "algorithm"),
 	}
 
 	// Parse targets
@@ -781,9 +781,9 @@ func (h *GraphQLHandler) resolveUpdateUpstream(p graphql.ResolveParams) (any, er
 		for _, t := range targetsRaw {
 			if targetMap, ok := t.(map[string]any); ok {
 				target := config.UpstreamTarget{
-					ID:      getString(targetMap, "id"),
-					Address: getString(targetMap, "address"),
-					Weight:  getInt(targetMap, "weight"),
+					ID:      coerce.GetString(targetMap, "id"),
+					Address: coerce.GetString(targetMap, "address"),
+					Weight:  coerce.GetInt(targetMap, "weight", 0),
 				}
 				if target.ID == "" {
 					tid, err := uuid.NewString()
@@ -841,50 +841,6 @@ func (h *GraphQLHandler) resolveDeleteUpstream(p graphql.ResolveParams) (any, er
 	}
 
 	return true, nil
-}
-
-// Helper functions for GraphQL input parsing
-func getString(m map[string]any, key string) string {
-	if v, ok := m[key].(string); ok {
-		return v
-	}
-	return ""
-}
-
-func getStringSlice(m map[string]any, key string) []string {
-	if v, ok := m[key].([]any); ok {
-		result := make([]string, 0, len(v))
-		for _, item := range v {
-			if s, ok := item.(string); ok {
-				result = append(result, s)
-			}
-		}
-		return result
-	}
-	return nil
-}
-
-func getBool(m map[string]any, key string) bool {
-	if v, ok := m[key].(bool); ok {
-		return v
-	}
-	return false
-}
-
-func getInt(m map[string]any, key string) int {
-	switch v := m[key].(type) {
-	case int:
-		return v
-	case int64:
-		return int(v)
-	case float64:
-		return int(v)
-	case string:
-		i, _ := strconv.Atoi(v)
-		return i
-	default:
-		return 0
-	}
 }
 
 // handleGraphQL is the HTTP handler for GraphQL endpoint

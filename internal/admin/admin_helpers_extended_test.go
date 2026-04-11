@@ -53,7 +53,7 @@ func TestCloneConfig(t *testing.T) {
 				},
 			},
 		}
-		cloned := cloneConfig(src)
+		cloned := config.CloneConfig(src)
 
 		if cloned == src {
 			t.Error("cloned config should be a different pointer")
@@ -89,7 +89,7 @@ func TestCloneConfig(t *testing.T) {
 
 	t.Run("clone empty config", func(t *testing.T) {
 		src := &config.Config{}
-		cloned := cloneConfig(src)
+		cloned := config.CloneConfig(src)
 		if cloned == nil {
 			t.Error("expected non-nil cloned config")
 		}
@@ -99,7 +99,7 @@ func TestCloneConfig(t *testing.T) {
 		src := &config.Config{
 			Consumers: []config.Consumer{{ID: "c-1", Metadata: nil}},
 		}
-		cloned := cloneConfig(src)
+		cloned := config.CloneConfig(src)
 		if cloned.Consumers[0].Metadata != nil {
 			t.Error("expected nil metadata for nil source")
 		}
@@ -109,7 +109,7 @@ func TestCloneConfig(t *testing.T) {
 		src := &config.Config{
 			Audit: config.AuditConfig{RouteRetentionDays: nil},
 		}
-		cloned := cloneConfig(src)
+		cloned := config.CloneConfig(src)
 		if cloned.Audit.RouteRetentionDays != nil {
 			t.Error("expected nil route retention map")
 		}

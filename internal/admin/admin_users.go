@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -240,6 +241,52 @@ func (s *Server) suspendUser(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) activateUser(w http.ResponseWriter, r *http.Request) {
 	s.updateUserStatus(w, r, "active")
+}
+
+// updateUserRole handles PUT /users/{id}/role — updates a user's RBAC role.
+func (s *Server) updateUserRole(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "invalid_id", "user id is required")
+		return
+	}
+
+	var body struct {
+		Role string `json:"role"`
+	}
+	if err := jsonutil.ReadJSON(r, &body, 1<<10); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+		return
+	}
+	role := strings.TrimSpace(strings.ToLower(body.Role))
+	if role == "" {
+		writeError(w, http.StatusBadRequest, "invalid_role", "role is required")
+		return
+	}
+	if !slices.Contains(ValidRoles, role) {
+		writeError(w, http.StatusBadRequest, "invalid_role",
+			"role must be one of: "+strings.Join(ValidRoles, ", "))
+		return
+	}
+
+	st, err := s.openStore()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+	if err := st.Users().UpdateRole(id, role); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "user_not_found", "user not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "role_update_failed", err.Error())
+		return
+	}
+
+	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+		"updated": true,
+		"role":    role,
+	})
 }
 
 // updateUserStatusUnified handles PUT /users/{id}/status — reads status from request body.

@@ -298,10 +298,10 @@ func TestExistsFunctions(t *testing.T) {
 	}
 }
 
-// --- cloneConfig nil ---
+// --- config.CloneConfig nil ---
 
 func TestCloneConfigNil(t *testing.T) {
-	cloned := cloneConfig(nil)
+	cloned := config.CloneConfig(nil)
 	if cloned == nil {
 		t.Error("expected non-nil cloned config for nil input")
 	}

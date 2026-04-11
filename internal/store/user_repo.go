@@ -390,6 +390,30 @@ func (r *UserRepo) UpdateStatus(id, status string) error {
 	return nil
 }
 
+func (r *UserRepo) UpdateRole(id, role string) error {
+	if r == nil || r.db == nil {
+		return errors.New("user repo is not initialized")
+	}
+	id = strings.TrimSpace(id)
+	role = strings.TrimSpace(strings.ToLower(role))
+	if id == "" {
+		return errors.New("user id is required")
+	}
+	if role == "" {
+		return errors.New("role is required")
+	}
+
+	result, err := r.db.Exec(`UPDATE users SET role = ?, updated_at = ? WHERE id = ?`, role, r.now().UTC().Format(time.RFC3339Nano), id)
+	if err != nil {
+		return fmt.Errorf("update user role: %w", err)
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *UserRepo) UpdateCreditBalance(userID string, delta int64) (int64, error) {
 	if r == nil || r.db == nil {
 		return 0, errors.New("user repo is not initialized")

@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { usePortalLogin, usePortalMe } from "@/hooks/use-portal";
 import { PORTAL_ROUTES } from "@/lib/portal-routes";
+import { useBranding } from "@/components/layout/BrandingProvider";
 
 export function PortalLoginPage() {
   const navigate = useNavigate();
   const meQuery = usePortalMe();
   const loginMutation = usePortalLogin();
+  const branding = useBranding();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,7 +41,7 @@ export function PortalLoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_hsl(var(--primary)/0.15),_transparent_50%),linear-gradient(hsl(var(--background)),hsl(var(--muted)/0.4))] p-4">
       <Card className="w-full max-w-md border-primary/20 shadow-xl">
         <CardHeader>
-          <CardTitle>User Portal Login</CardTitle>
+          <CardTitle>{branding.app_name} Portal</CardTitle>
           <CardDescription>Sign in with your portal credentials.</CardDescription>
         </CardHeader>
         <CardContent>

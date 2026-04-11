@@ -207,6 +207,23 @@ func (c *Composer) addFederationDirectives() {
 			},
 		},
 	}
+
+	// Add @authorized directive for field-level authorization
+	c.supergraph.Directives["authorized"] = &Directive{
+		Name:        "authorized",
+		Description: "Restricts access to a field or type based on roles or permissions",
+		Locations:   []string{"FIELD_DEFINITION", "OBJECT"},
+		Args: map[string]*Argument{
+			"roles": {
+				Name: "roles",
+				Type: "[String!]",
+			},
+			"requiresAuth": {
+				Name: "requiresAuth",
+				Type: "Boolean",
+			},
+		},
+	}
 }
 
 // buildSDL builds the SDL string from the schema.
@@ -256,6 +273,37 @@ func (c *Composer) buildSDL() string {
 	}
 
 	return sb.String()
+}
+
+// GetAuthorizedFields returns a map of type.field -> required roles from @authorized directives.
+func (c *Composer) GetAuthorizedFields() map[string][]string {
+	auth := make(map[string][]string)
+	for _, t := range c.supergraph.Types {
+		if strings.HasPrefix(t.Name, "__") {
+			continue
+		}
+		// Check type-level @authorized
+		for _, dir := range t.Directives {
+			if dir.Name == "authorized" {
+				if roles, ok := dir.Args["roles"]; ok && roles != "" {
+					key := t.Name + ".*"
+					auth[key] = strings.Split(roles, " ")
+				}
+			}
+		}
+		// Check field-level @authorized
+		for fieldName, field := range t.Fields {
+			for _, dir := range field.Directives {
+				if dir.Name == "authorized" {
+					if roles, ok := dir.Args["roles"]; ok && roles != "" {
+						key := t.Name + "." + fieldName
+						auth[key] = strings.Split(roles, " ")
+					}
+				}
+			}
+		}
+	}
+	return auth
 }
 
 // buildObjectSDL builds SDL for an object type.
@@ -363,17 +411,22 @@ func (c *Composer) buildScalarSDL(t *Type) string {
 
 // copyType creates a copy of a type.
 func (c *Composer) copyType(t *Type) *Type {
-	return &Type{
+	out := &Type{
 		Kind:          t.Kind,
 		Name:          t.Name,
 		Description:   t.Description,
-		Fields:        make(map[string]*Field),
+		Fields:        make(map[string]*Field, len(t.Fields)),
 		Interfaces:    append([]string(nil), t.Interfaces...),
 		PossibleTypes: append([]string(nil), t.PossibleTypes...),
 		EnumValues:    append([]string(nil), t.EnumValues...),
 		InputFields:   make(map[string]*InputField),
 		OfType:        t.OfType,
+		Directives:    append([]TypeDirective(nil), t.Directives...),
 	}
+	for name, field := range t.Fields {
+		out.Fields[name] = c.copyField(field)
+	}
+	return out
 }
 
 // copyField creates a copy of a field.
@@ -385,6 +438,7 @@ func (c *Composer) copyField(f *Field) *Field {
 		Args:              make(map[string]*Argument),
 		IsDeprecated:      f.IsDeprecated,
 		DeprecationReason: f.DeprecationReason,
+		Directives:        append([]TypeDirective(nil), f.Directives...),
 	}
 }
 

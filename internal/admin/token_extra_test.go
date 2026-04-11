@@ -83,7 +83,7 @@ func TestVerifyAdminToken_InvalidFormat(t *testing.T) {
 }
 
 func TestVerifyAdminToken_WrongSignature(t *testing.T) {
-	token, _ := issueAdminToken("secret-one-secret-at-least-32-chars!", 1*time.Hour)
+	token, _ := issueAdminToken("secret-one-secret-at-least-32-chars!", 1*time.Hour, "", nil)
 	err := verifyAdminToken(token, "secret-two-secret-at-least-32-chars!!")
 	if err == nil {
 		t.Error("expected error for wrong signature")
@@ -91,14 +91,14 @@ func TestVerifyAdminToken_WrongSignature(t *testing.T) {
 }
 
 func TestIssueAdminToken_EmptySecret(t *testing.T) {
-	_, err := issueAdminToken("", 0)
+	_, err := issueAdminToken("", 0, "", nil)
 	if err == nil {
 		t.Error("expected error for empty secret")
 	}
 }
 
 func TestIssueAdminToken_DefaultTTL(t *testing.T) {
-	token, err := issueAdminToken("secret-at-least-32-chars-long!!!", -1)
+	token, err := issueAdminToken("secret-at-least-32-chars-long!!!", -1, "", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -544,7 +544,7 @@ func newFederationEnabledServer(t *testing.T) (adminBaseURL string, cleanup func
 		_ = gw.Shutdown(context.Background())
 	}
 
-	token, _ = issueAdminToken(cfg.Admin.TokenSecret, cfg.Admin.TokenTTL)
+	token, _ = issueAdminToken(cfg.Admin.TokenSecret, cfg.Admin.TokenTTL, "", nil)
 	return httpSrv.URL, cleanup, token
 }
 

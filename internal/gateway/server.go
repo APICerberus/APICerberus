@@ -10,7 +10,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -209,7 +208,6 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Enforce MaxBodyBytes: check Content-Length first (fast path, no buffering).
-	// For chunked bodies (ContentLength == -1), read up to limit+1 and reject if over.
 	maxBody := g.config.Gateway.MaxBodyBytes
 	if maxBody > 0 && r.Body != nil {
 		if r.ContentLength > maxBody {
@@ -217,8 +215,6 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if r.ContentLength < 0 {
-			// Chunked transfer: must read to enforce limit.
-			// Buffer the body (up to limit+1) to prevent unbounded memory growth.
 			body, err := io.ReadAll(io.LimitReader(r.Body, maxBody+1))
 			if err != nil {
 				http.Error(w, "Failed to read request body", http.StatusInternalServerError)
@@ -240,360 +236,85 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requestStartedAt := time.Now()
-	var (
-		route               *config.Route
-		service             *config.Service
-		consumer            *config.Consumer
-		requestBodySnapshot []byte
-		proxyErrForAudit    error
-		blocked             bool
-		blockReason         string
-		auditWriter         *audit.ResponseCaptureWriter
-		responseWriter      *audit.ResponseCaptureWriter
-		pipelineCtx         *plugin.PipelineContext
-	)
-	if auditLogger != nil || analyticsEngine != nil {
-		maxResponseBodyBytes := int64(0)
-		if auditLogger != nil {
-			maxResponseBodyBytes = auditLogger.MaxResponseBodyBytes()
-		}
-		responseWriter = audit.NewResponseCaptureWriter(w, maxResponseBodyBytes)
-		w = responseWriter
-	}
-	if auditLogger != nil {
-		if body, captureErr := audit.CaptureRequestBody(r, auditLogger.MaxRequestBodyBytes()); captureErr == nil {
-			requestBodySnapshot = body
-		}
-		auditWriter = responseWriter
-	}
-	defer func() {
-		if auditLogger != nil && auditWriter != nil {
-			auditLogger.Log(audit.LogInput{
-				Request:        r,
-				ResponseWriter: auditWriter,
-				Route:          route,
-				Service:        service,
-				Consumer:       consumer,
-				RequestBody:    requestBodySnapshot,
-				StartedAt:      requestStartedAt,
-				Blocked:        blocked,
-				BlockReason:    blockReason,
-				ProxyErr:       proxyErrForAudit,
-			})
-		}
-
-		if analyticsEngine == nil {
-			return
-		}
-
-		statusCode := 0
-		bytesOut := int64(0)
-		if responseWriter != nil {
-			statusCode = responseWriter.StatusCode()
-			bytesOut = responseWriter.BytesWritten()
-		}
-		bytesIn := r.ContentLength
-		if bytesIn < 0 {
-			bytesIn = 0
-		}
-		if bytesIn == 0 && len(requestBodySnapshot) > 0 {
-			bytesIn = int64(len(requestBodySnapshot))
-		}
-
-		routeID := ""
-		routeName := ""
-		serviceName := ""
-		userID := ""
-		method := ""
-		path := ""
-		if route != nil {
-			routeID = strings.TrimSpace(route.ID)
-			routeName = strings.TrimSpace(route.Name)
-		}
-		if service != nil {
-			serviceName = strings.TrimSpace(service.Name)
-		}
-		if consumer != nil {
-			userID = strings.TrimSpace(consumer.ID)
-		}
-		if r != nil {
-			method = strings.TrimSpace(strings.ToUpper(r.Method))
-			if r.URL != nil {
-				path = strings.TrimSpace(r.URL.Path)
-			}
-		}
-		creditsConsumed := metadataInt64(pipelineCtx, "credits_deducted")
-
-		analyticsEngine.Record(analytics.RequestMetric{
-			Timestamp:       requestStartedAt.UTC(),
-			RouteID:         routeID,
-			RouteName:       routeName,
-			ServiceName:     serviceName,
-			UserID:          userID,
-			Method:          method,
-			Path:            path,
-			StatusCode:      statusCode,
-			LatencyMS:       time.Since(requestStartedAt).Milliseconds(),
-			BytesIn:         bytesIn,
-			BytesOut:        bytesOut,
-			CreditsConsumed: creditsConsumed,
-			Blocked:         blocked,
-			Error:           blocked || proxyErrForAudit != nil || statusCode >= http.StatusInternalServerError,
-		})
-	}()
-
-	var err error
-	route, service, err = router.Match(r)
-	if err != nil {
-		blocked = true
-		blockReason = "route_not_found"
-		g.writeError(w, http.StatusNotFound, "route_not_found", "No matching route")
+	// GraphQL Federation batch endpoint (bypass routing).
+	if g.federationEnabled && r.URL.Path == "/graphql/batch" {
+		g.serveFederationBatch(w, r)
 		return
 	}
 
-	routeKey := routePipelineKey(route)
+	// Setup request state with response capture for audit/analytics.
+	rs := newRequestState()
+	w, rs.responseWriter = newResponseCaptureWriter(w, auditLogger, analyticsEngine)
+	rs.auditWriter = rs.responseWriter
+	rs.requestBodySnapshot = captureRequestBody(r, auditLogger)
+
+	// Defer audit logging and analytics recording.
+	defer func() {
+		logRequestAudit(auditLogger, r, rs)
+		recordAnalytics(analyticsEngine, r, rs)
+	}()
+	defer rs.runPipelineCleanup()
+
+	// Route matching.
+	var err error
+	rs.route, rs.service, err = router.Match(r)
+	if err != nil {
+		rs.markBlocked("route_not_found")
+		g.writeError(rs.responseWriter, http.StatusNotFound, "route_not_found", "No matching route")
+		return
+	}
+
+	// Plugin pipeline (PRE_AUTH → AUTH → PRE_PROXY).
+	routeKey := rs.routePipelineKey()
 	chain := routePipelines[routeKey]
-	pipeline := plugin.NewPipeline(chain)
-	pipelineCtx = &plugin.PipelineContext{
+	rs.pipeline = plugin.NewPipeline(chain)
+	rs.pipelineCtx = &plugin.PipelineContext{
 		Request:        r,
 		ResponseWriter: w,
-		Route:          route,
-		Service:        service,
-		Consumer:       consumer,
+		Route:          rs.route,
+		Service:        rs.service,
+		Consumer:       rs.consumer,
 		Metadata:       map[string]any{},
 	}
-	defer runPipelineCleanup(pipelineCtx)
-	handled, err := pipeline.Execute(pipelineCtx)
+	handled, err := rs.pipeline.Execute(rs.pipelineCtx)
 	if err != nil {
-		blocked = true
-		blockReason = "plugin_error"
-		g.writePluginError(w, err)
+		rs.markBlocked("plugin_error")
+		g.writePluginError(rs.responseWriter, err)
 		return
 	}
-	consumer = pipelineCtx.Consumer
-	if pipelineCtx.Request != nil {
-		r = pipelineCtx.Request
+	rs.consumer = rs.pipelineCtx.Consumer
+	if rs.pipelineCtx.Request != nil {
+		r = rs.pipelineCtx.Request
 	}
-	if handled || pipelineCtx.Aborted {
-		if pipelineCtx.Aborted {
-			reason := strings.TrimSpace(pipelineCtx.AbortReason)
+	if handled || rs.pipelineCtx.Aborted {
+		if rs.pipelineCtx.Aborted {
+			reason := strings.TrimSpace(rs.pipelineCtx.AbortReason)
 			if reason != "" && !strings.Contains(reason, ": handled response") {
-				blocked = true
-				blockReason = reason
+				rs.markBlocked(reason)
 			}
 		}
-		if consumer != nil {
-			setRequestConsumer(r, consumer)
-		}
+		rs.writeResponseConsumer(r)
 		return
 	}
 
-	if authRequired && !routeHasAuth[routeKey] {
-		if authAPIKey == nil {
-			blocked = true
-			blockReason = "auth_unavailable"
-			g.writeError(w, http.StatusInternalServerError, "auth_unavailable", "Authentication module is unavailable")
-			return
-		}
-		resolved, err := authAPIKey.Authenticate(r)
-		if err != nil {
-			blocked = true
-			blockReason = "auth_failed"
-			g.writeAuthError(w, err)
-			return
-		}
-		consumer = resolved
-	}
-	if consumer != nil {
-		setRequestConsumer(r, consumer)
-	}
-	billingState, err := applyBillingPreProxy(billingEngine, r, route, consumer, pipelineCtx)
-	if err != nil {
-		blocked = true
-		blockReason = "billing_precheck_failed"
-		g.writeBillingError(w, err)
+	// Auth chain.
+	if g.executeAuthChain(r, rs, authRequired, authAPIKey, routePipelines, routeHasAuth) {
 		return
 	}
-	// GraphQL Federation: route through the federation executor when the
-	// matched service uses protocol "graphql" and federation is enabled.
-	if service.Protocol == "graphql" && fedEnabled {
+
+	// Billing pre-proxy.
+	if g.executeBillingPreProxy(r, rs, billingEngine, rs.route, rs.consumer) {
+		return
+	}
+
+	// GraphQL Federation: route through the federation executor.
+	if rs.service.Protocol == "graphql" && fedEnabled {
 		g.serveFederation(w, r)
 		return
 	}
 
-	retryPolicy := pipelineCtx.Retry
-
-	pool := findUpstreamPool(upstreamPools, service.Upstream)
-	if pool == nil {
-		blocked = true
-		blockReason = "upstream_not_found"
-		g.writeError(w, http.StatusBadGateway, "upstream_not_found", "Service upstream is not configured")
-		return
-	}
-
-	maxAttempts := 1
-	if retryPolicy != nil {
-		maxAttempts = retryPolicy.MaxAttempts(r.Method)
-	}
-	if maxAttempts <= 0 {
-		maxAttempts = 1
-	}
-
-	runAfterProxy := func(proxyErr error) {
-		pipelineCtx.Consumer = consumer
-		pipeline.ExecutePostProxy(pipelineCtx, proxyErr)
-		if capture, ok := pipelineCtx.ResponseWriter.(*plugin.TransformCaptureWriter); ok && capture.HasCaptured() && !capture.IsFlushed() {
-			_ = capture.Flush()
-		}
-		if capture, ok := pipelineCtx.ResponseWriter.(*plugin.CaptureResponseWriter); ok && !capture.IsFlushed() {
-			_ = capture.Flush()
-		}
-		consumer = pipelineCtx.Consumer
-	}
-
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		downstreamWriter := pipelineCtx.ResponseWriter
-		if downstreamWriter == nil {
-			downstreamWriter = w
-		}
-
-		target, err := pool.Next(&RequestContext{
-			Request:        r,
-			ResponseWriter: downstreamWriter,
-			Route:          route,
-			Consumer:       consumer,
-		})
-		if err != nil {
-			if errors.Is(err, ErrNoHealthyTargets) {
-				blocked = true
-				blockReason = "no_healthy_target"
-				g.writeError(w, http.StatusBadGateway, "no_healthy_target", "No healthy upstream target available")
-				return
-			}
-			blocked = true
-			blockReason = "target_selection_failed"
-			g.writeError(w, http.StatusBadGateway, "target_selection_failed", "Failed to select upstream target")
-			return
-		}
-		targetID := targetKey(*target)
-
-		if retryPolicy == nil {
-			pipelineCtx.Response = nil
-			proxyErr := g.proxy.Forward(&RequestContext{
-				Request:        r,
-				ResponseWriter: downstreamWriter,
-				Route:          route,
-				Consumer:       consumer,
-				UpstreamTimeout: service.ReadTimeout,
-			}, target)
-
-			runAfterProxy(proxyErr)
-
-			pool.Done(targetID)
-			if proxyErr != nil {
-				blocked = true
-				blockReason = "proxy_error"
-				proxyErrForAudit = proxyErr
-				if checker != nil {
-					checker.ReportError(pool.Name(), targetID)
-				}
-				// Proxy already wrote status/body for transport failures.
-				return
-			}
-			applyBillingPostProxy(billingEngine, billingState, pipelineCtx, nil)
-			if checker != nil {
-				checker.ReportSuccess(pool.Name(), targetID)
-			}
-			return
-		}
-
-		resp, proxyErr := g.proxy.Do(&RequestContext{
-			Request:        r,
-			ResponseWriter: downstreamWriter,
-			Route:          route,
-			Consumer:       consumer,
-			UpstreamTimeout: service.ReadTimeout,
-		}, target)
-		pipelineCtx.Response = resp
-
-		shouldRetry := false
-		statusCode := 0
-		if resp != nil {
-			statusCode = resp.StatusCode
-		}
-		if retryPolicy.ShouldRetry(r.Method, attempt, statusCode, proxyErr) {
-			shouldRetry = true
-		}
-
-		if proxyErr != nil {
-			if checker != nil {
-				checker.ReportError(pool.Name(), targetID)
-			}
-			if shouldRetry {
-				runAfterProxy(proxyErr)
-				pool.Done(targetID)
-				select {
-				case <-r.Context().Done():
-					return
-				case <-time.After(retryPolicy.Backoff(attempt)):
-				}
-				continue
-			}
-			blocked = true
-			blockReason = "proxy_error"
-			proxyErrForAudit = proxyErr
-			writeProxyError(downstreamWriter, proxyErrorStatus(proxyErr))
-			runAfterProxy(proxyErr)
-			pool.Done(targetID)
-			return
-		}
-
-		if shouldRetry {
-			if checker != nil {
-				checker.ReportError(pool.Name(), targetID)
-			}
-			if resp != nil {
-				_ = resp.Body.Close()
-			}
-			runAfterProxy(nil)
-			pool.Done(targetID)
-			// Respect context cancellation during retry backoff (CWE-400)
-			select {
-			case <-r.Context().Done():
-				return
-			case <-time.After(retryPolicy.Backoff(attempt)):
-			}
-			continue
-		}
-
-		if checker != nil {
-			if statusCode >= 500 {
-				checker.ReportError(pool.Name(), targetID)
-			} else {
-				checker.ReportSuccess(pool.Name(), targetID)
-			}
-		}
-		var writeErr error
-		if resp != nil {
-			writeErr = g.proxy.WriteResponse(downstreamWriter, resp)
-			_ = resp.Body.Close()
-		}
-		runAfterProxy(writeErr)
-		applyBillingPostProxy(billingEngine, billingState, pipelineCtx, writeErr)
-		pool.Done(targetID)
-		if writeErr != nil {
-			blocked = true
-			blockReason = "response_write_error"
-			proxyErrForAudit = writeErr
-			return
-		}
-		return
-	}
-
-	blocked = true
-	blockReason = "retries_exhausted"
-	writeProxyError(w, http.StatusBadGateway)
+	// Proxy chain (upstream selection, forwarding, retry, post-proxy).
+	g.executeProxyChain(r, rs, upstreamPools, checker, billingEngine)
 }
 
 func (g *Gateway) serveHTTPS(server *http.Server, tlsManager *TLSManager) error {
@@ -963,6 +684,17 @@ func (g *Gateway) writeError(w http.ResponseWriter, status int, code, message st
 	_ = jsonutil.WriteJSON(w, status, resp)
 }
 
+// writeErrorRoute writes an error using the route's configured error format
+// (HTML if route or global html_errors is enabled, otherwise JSON).
+func (g *Gateway) writeErrorRoute(w http.ResponseWriter, status int, code, message string, route *config.Route) {
+	htmlEnabled := g.config.Gateway.HTMLErrors || (route != nil && route.HTMLErrors)
+	if htmlEnabled {
+		htmlErrorPage(w, status, code, message)
+		return
+	}
+	g.writeError(w, status, code, message)
+}
+
 // writeErrorWithID includes a request_id in the error response for audit trail correlation.
 func (g *Gateway) writeErrorWithID(w http.ResponseWriter, r *http.Request, status int, code, message string) {
 	resp := errorResponse{
@@ -1032,173 +764,6 @@ func (g *Gateway) writeBillingError(w http.ResponseWriter, err error) {
 		return
 	}
 	g.writeError(w, http.StatusInternalServerError, "billing_error", "Billing check failed")
-}
-
-func applyBillingPreProxy(engine *billing.Engine, req *http.Request, route *config.Route, consumer *config.Consumer, ctx *plugin.PipelineContext) (*billingRequestState, error) {
-	if engine == nil || !engine.Enabled() || req == nil {
-		return nil, nil
-	}
-	result, err := engine.PreCheck(billing.RequestMeta{
-		Consumer:     consumer,
-		Route:        route,
-		Method:       req.Method,
-		RawAPIKey:    extractAPIKey(req),
-		CostOverride: extractPermissionCreditCost(ctx),
-	})
-	if err != nil {
-		return nil, err
-	}
-	if result == nil {
-		return nil, nil
-	}
-
-	state := &billingRequestState{
-		result:    result,
-		routeID:   billingRouteID(route),
-		requestID: billingRequestID(req, ctx),
-	}
-	if ctx != nil {
-		if ctx.Metadata == nil {
-			ctx.Metadata = map[string]any{}
-		}
-		if result.Cost > 0 {
-			ctx.Metadata["credit_cost"] = result.Cost
-		}
-		if result.ZeroBalance {
-			ctx.Metadata["zero_balance"] = true
-		}
-	}
-	return state, nil
-}
-
-func applyBillingPostProxy(engine *billing.Engine, state *billingRequestState, ctx *plugin.PipelineContext, proxyErr error) {
-	if engine == nil || !engine.Enabled() || state == nil || state.applied {
-		return
-	}
-	if proxyErr != nil || state.result == nil || !state.result.ShouldDeduct {
-		return
-	}
-
-	requestID := state.requestID
-	routeID := state.routeID
-	if ctx != nil {
-		if requestID == "" {
-			requestID = billingRequestID(ctx.Request, ctx)
-		}
-		if routeID == "" {
-			routeID = billingRouteID(ctx.Route)
-		}
-	}
-
-	// Retry on SQLITE_BUSY (database is locked) — can happen under parallel
-	// load or when another connection holds a write lock.
-	var newBalance int64
-	var err error
-	for retries := 0; retries < 3; retries++ {
-		newBalance, err = engine.Deduct(state.result, requestID, routeID)
-		if err == nil {
-			break
-		}
-		if !strings.Contains(err.Error(), "database is locked") && !strings.Contains(err.Error(), "SQLITE_BUSY") {
-			return // non-retryable error
-		}
-		time.Sleep(100 * time.Millisecond * (1 << retries))
-	}
-	if err != nil {
-		return
-	}
-	state.applied = true
-
-	if ctx == nil {
-		return
-	}
-	if ctx.Metadata == nil {
-		ctx.Metadata = map[string]any{}
-	}
-	ctx.Metadata["credit_balance_after"] = newBalance
-	ctx.Metadata["credits_deducted"] = state.result.Cost
-}
-
-func billingRouteID(route *config.Route) string {
-	if route == nil {
-		return ""
-	}
-	if value := strings.TrimSpace(route.ID); value != "" {
-		return value
-	}
-	return strings.TrimSpace(route.Name)
-}
-
-func billingRequestID(req *http.Request, ctx *plugin.PipelineContext) string {
-	if ctx != nil {
-		if value := strings.TrimSpace(ctx.CorrelationID); value != "" {
-			return value
-		}
-	}
-	if req == nil {
-		return ""
-	}
-	return strings.TrimSpace(req.Header.Get("X-Request-ID"))
-}
-
-func extractPermissionCreditCost(ctx *plugin.PipelineContext) *int64 {
-	if ctx == nil || len(ctx.Metadata) == 0 {
-		return nil
-	}
-	raw, ok := ctx.Metadata["permission_credit_cost"]
-	if !ok || raw == nil {
-		return nil
-	}
-	switch value := raw.(type) {
-	case int64:
-		v := value
-		return &v
-	case int:
-		v := int64(value)
-		return &v
-	case float64:
-		v := int64(value)
-		return &v
-	case float32:
-		v := int64(value)
-		return &v
-	case string:
-		parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
-		if err != nil {
-			return nil
-		}
-		return &parsed
-	default:
-		return nil
-	}
-}
-
-func metadataInt64(ctx *plugin.PipelineContext, key string) int64 {
-	if ctx == nil || len(ctx.Metadata) == 0 {
-		return 0
-	}
-	raw, ok := ctx.Metadata[key]
-	if !ok || raw == nil {
-		return 0
-	}
-	switch value := raw.(type) {
-	case int64:
-		return value
-	case int:
-		return int64(value)
-	case float64:
-		return int64(value)
-	case float32:
-		return int64(value)
-	case string:
-		parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
-		if err != nil {
-			return 0
-		}
-		return parsed
-	default:
-		return 0
-	}
 }
 
 func newAuthAPIKey(cfg *config.Config, consumers []config.Consumer, lookup plugin.APIKeyLookupFunc, backoff *plugin.AuthBackoff) *plugin.AuthAPIKey {
@@ -1295,7 +860,7 @@ func buildEndpointPermissionLookup(st *store.Store) plugin.EndpointPermissionLoo
 			RouteID:      permission.RouteID,
 			Methods:      append([]string(nil), permission.Methods...),
 			Allowed:      permission.Allowed,
-			RateLimits:   cloneAnyMap(permission.RateLimits),
+			RateLimits:   config.CloneAnyMap(permission.RateLimits),
 			CreditCost:   permission.CreditCost,
 			ValidFrom:    permission.ValidFrom,
 			ValidUntil:   permission.ValidUntil,
@@ -1331,7 +896,7 @@ func userToConsumer(user *store.User) *config.Consumer {
 	// and "burst" keys (matching the plugin config schema).
 	var rateLimit config.ConsumerRateLimit
 	if len(user.RateLimits) > 0 {
-		metadata["rate_limits"] = cloneAnyMap(user.RateLimits)
+		metadata["rate_limits"] = config.CloneAnyMap(user.RateLimits)
 		if v, ok := user.RateLimits["requests_per_second"]; ok {
 			switch n := v.(type) {
 			case float64:
@@ -1388,38 +953,6 @@ func userToConsumer(user *store.User) *config.Consumer {
 		RateLimit: rateLimit,
 		ACLGroups: aclGroups,
 		Metadata:  metadata,
-	}
-}
-
-func cloneAnyMap(in map[string]any) map[string]any {
-	if len(in) == 0 {
-		return map[string]any{}
-	}
-	out := make(map[string]any, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
-}
-
-func routePipelineKey(route *config.Route) string {
-	if route == nil {
-		return ""
-	}
-	if value := strings.TrimSpace(route.ID); value != "" {
-		return value
-	}
-	return strings.TrimSpace(route.Name)
-}
-
-func runPipelineCleanup(ctx *plugin.PipelineContext) {
-	if ctx == nil || len(ctx.Cleanup) == 0 {
-		return
-	}
-	for i := len(ctx.Cleanup) - 1; i >= 0; i-- {
-		if ctx.Cleanup[i] != nil {
-			ctx.Cleanup[i]()
-		}
 	}
 }
 
@@ -1532,9 +1065,80 @@ func (g *Gateway) handleHealth(w http.ResponseWriter, r *http.Request) bool {
 		}
 		_ = jsonutil.WriteJSON(w, code, resp)
 		return true
+	case "/health/audit-drops":
+		g.mu.RLock()
+		logger := g.auditLogger
+		g.mu.RUnlock()
+
+		var dropped int64
+		if logger != nil {
+			dropped = logger.Dropped()
+		}
+		_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+			"dropped_entries": dropped,
+			"audit_enabled":   logger != nil,
+		})
+		return true
 	default:
 		return false
 	}
+}
+
+// handleMetrics serves Prometheus-format metrics at /metrics.
+// Returns true when the request was handled (response written).
+func (g *Gateway) handleMetrics(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodGet || r.URL.Path != "/metrics" {
+		return false
+	}
+
+	g.mu.RLock()
+	eng := g.analytics
+	st := g.store
+	startedAt := g.startedAt
+	g.mu.RUnlock()
+
+	var totalReqs, activeConns, totalErrs int64
+	if eng != nil {
+		ov := eng.Overview()
+		totalReqs = ov.TotalRequests
+		activeConns = ov.ActiveConns
+		totalErrs = ov.TotalErrors
+	}
+
+	dbReady := 0
+	if st != nil {
+		if err := st.DB().Ping(); err == nil {
+			dbReady = 1
+		}
+	}
+
+	uptime := time.Since(startedAt).Seconds()
+
+	var buf strings.Builder
+	buf.WriteString("# HELP gateway_requests_total Total number of requests processed.\n")
+	buf.WriteString("# TYPE gateway_requests_total counter\n")
+	buf.WriteString(fmt.Sprintf("gateway_requests_total %d\n", totalReqs))
+
+	buf.WriteString("# HELP gateway_active_connections Number of currently active connections.\n")
+	buf.WriteString("# TYPE gateway_active_connections gauge\n")
+	buf.WriteString(fmt.Sprintf("gateway_active_connections %d\n", activeConns))
+
+	buf.WriteString("# HELP gateway_audit_dropped_total Total number of audit log entries dropped.\n")
+	buf.WriteString("# TYPE gateway_audit_dropped_total counter\n")
+	buf.WriteString(fmt.Sprintf("gateway_audit_dropped_total %d\n", totalErrs))
+
+	buf.WriteString("# HELP gateway_database_ready Database connectivity status (1=ready, 0=not ready).\n")
+	buf.WriteString("# TYPE gateway_database_ready gauge\n")
+	buf.WriteString(fmt.Sprintf("gateway_database_ready %d\n", dbReady))
+
+	buf.WriteString("# HELP gateway_uptime_seconds Time since gateway started in seconds.\n")
+	buf.WriteString("# TYPE gateway_uptime_seconds gauge\n")
+	buf.WriteString(fmt.Sprintf("gateway_uptime_seconds %.0f\n", uptime))
+
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(buf.String()))
+	return true
 }
 
 // FederationComposer returns the federation Composer (nil when federation is disabled).
@@ -1599,6 +1203,80 @@ func (g *Gateway) serveFederation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = jsonutil.WriteJSON(w, http.StatusOK, result)
+}
+
+// batchGraphQLRequest represents a single request within a batch.
+type batchGraphQLRequest struct {
+	Query     string         `json:"query"`
+	Variables map[string]any `json:"variables"`
+}
+
+// serveFederationBatch handles batched GraphQL requests through the federation executor.
+// Accepts an array of GraphQL requests and returns an array of results, executing
+// each query in parallel.
+func (g *Gateway) serveFederationBatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		g.writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Batch endpoint requires POST")
+		return
+	}
+
+	var batch []batchGraphQLRequest
+	if err := jsonutil.ReadJSON(r, &batch, 1<<22); err != nil {
+		g.writeError(w, http.StatusBadRequest, "invalid_batch_request", err.Error())
+		return
+	}
+	if len(batch) == 0 {
+		g.writeError(w, http.StatusBadRequest, "empty_batch", "Batch must contain at least one request")
+		return
+	}
+
+	g.mu.RLock()
+	planner := g.federationPlanner
+	executor := g.federationExecutor
+	g.mu.RUnlock()
+
+	if planner == nil || executor == nil {
+		g.writeError(w, http.StatusServiceUnavailable, "federation_not_ready", "Schema has not been composed yet")
+		return
+	}
+
+	// Execute all queries in parallel.
+	results := make([]any, len(batch))
+	var wg sync.WaitGroup
+	for i, req := range batch {
+		wg.Add(1)
+		go func(idx int, gqlReq batchGraphQLRequest) {
+			defer wg.Done()
+
+			if strings.TrimSpace(gqlReq.Query) == "" {
+				results[idx] = map[string]any{
+					"errors": []map[string]string{{"message": "query is required"}},
+				}
+				return
+			}
+
+			plan, err := planner.Plan(gqlReq.Query, gqlReq.Variables)
+			if err != nil {
+				results[idx] = map[string]any{
+					"errors": []map[string]string{{"message": fmt.Sprintf("query planning failed: %v", err)}},
+				}
+				return
+			}
+
+			result, err := executor.Execute(r.Context(), plan)
+			if err != nil {
+				results[idx] = map[string]any{
+					"errors": []map[string]string{{"message": fmt.Sprintf("execution failed: %v", err)}},
+				}
+				return
+			}
+
+			results[idx] = result
+		}(i, req)
+	}
+	wg.Wait()
+
+	_ = jsonutil.WriteJSON(w, http.StatusOK, results)
 }
 
 // RebuildFederationPlanner rebuilds the federation planner from the current

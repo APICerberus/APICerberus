@@ -33,20 +33,29 @@ func DefaultConnectionPoolConfig() ConnectionPoolConfig {
 	}
 }
 
-// HTTPClientPool manages a pool of reusable HTTP clients
-type HTTPClientPool struct {
-	config ConnectionPoolConfig
-	pool   sync.Pool
-	stats  PoolStats
-}
-
-// PoolStats holds pool statistics
-type PoolStats struct {
+// poolAtomicStats holds atomic counters for the pool.
+type poolAtomicStats struct {
 	Gets      atomic.Uint64
 	Puts      atomic.Uint64
 	Misses    atomic.Uint64
 	Active    atomic.Int64
 	TotalIdle atomic.Int64
+}
+
+// HTTPClientPool manages a pool of reusable HTTP clients
+type HTTPClientPool struct {
+	config ConnectionPoolConfig
+	pool   sync.Pool
+	stats  poolAtomicStats
+}
+
+// PoolStatsSnapshot holds a snapshot of pool statistics (plain values, no atomics).
+type PoolStatsSnapshot struct {
+	Gets      uint64
+	Puts      uint64
+	Misses    uint64
+	Active    int64
+	TotalIdle int64
 }
 
 // NewHTTPClientPool creates a new HTTP client pool
@@ -120,14 +129,14 @@ func (p *HTTPClientPool) Put(client *http.Client) {
 }
 
 // GetStats returns a snapshot of pool statistics.
-func (p *HTTPClientPool) GetStats() PoolStats {
-	var stats PoolStats
-	stats.Gets.Store(p.stats.Gets.Load())
-	stats.Puts.Store(p.stats.Puts.Load())
-	stats.Misses.Store(p.stats.Misses.Load())
-	stats.Active.Store(p.stats.Active.Load())
-	stats.TotalIdle.Store(p.stats.TotalIdle.Load())
-	return stats
+func (p *HTTPClientPool) GetStats() PoolStatsSnapshot {
+	return PoolStatsSnapshot{
+		Gets:      p.stats.Gets.Load(),
+		Puts:      p.stats.Puts.Load(),
+		Misses:    p.stats.Misses.Load(),
+		Active:    p.stats.Active.Load(),
+		TotalIdle: p.stats.TotalIdle.Load(),
+	}
 }
 
 // StatsSnapshot returns current stats as plain values.

@@ -225,7 +225,7 @@ func TestAsString(t *testing.T) {
 		{float32(2.5), "2.5"},
 		{true, "true"},
 		{false, "false"},
-		{time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), "2024-01-01 00:00:00 +0000 UTC"},
+		{time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), "2024-01-01T00:00:00Z"},
 		{map[string]int{"a": 1}, `{"a":1}`},
 		{[]int{1, 2, 3}, "[1,2,3]"},
 	}

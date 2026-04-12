@@ -1094,15 +1094,18 @@ func (g *Gateway) handleMetrics(w http.ResponseWriter, r *http.Request) bool {
 	g.mu.RLock()
 	eng := g.analytics
 	st := g.store
+	auditLogger := g.auditLogger
 	startedAt := g.startedAt
 	g.mu.RUnlock()
 
-	var totalReqs, activeConns, totalErrs int64
+	var totalReqs, activeConns, auditDropped int64
 	if eng != nil {
 		ov := eng.Overview()
 		totalReqs = ov.TotalRequests
 		activeConns = ov.ActiveConns
-		totalErrs = ov.TotalErrors
+	}
+	if auditLogger != nil {
+		auditDropped = auditLogger.Dropped()
 	}
 
 	dbReady := 0
@@ -1125,7 +1128,7 @@ func (g *Gateway) handleMetrics(w http.ResponseWriter, r *http.Request) bool {
 
 	buf.WriteString("# HELP gateway_audit_dropped_total Total number of audit log entries dropped.\n")
 	buf.WriteString("# TYPE gateway_audit_dropped_total counter\n")
-	buf.WriteString(fmt.Sprintf("gateway_audit_dropped_total %d\n", totalErrs))
+	buf.WriteString(fmt.Sprintf("gateway_audit_dropped_total %d\n", auditDropped))
 
 	buf.WriteString("# HELP gateway_database_ready Database connectivity status (1=ready, 0=not ready).\n")
 	buf.WriteString("# TYPE gateway_database_ready gauge\n")

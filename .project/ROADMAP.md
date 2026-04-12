@@ -33,6 +33,10 @@ APICerebrus is a **feature-complete** API Gateway at v1.0.0-rc.1 with:
 2. **Type coercion cleanup** — Some duplication remains despite `pkg/coerce` package
 3. **Audit monitoring** — Expose dropped audit entries counter to `/metrics` endpoint ✅
 
+### Lint Cleanup
+- **gateway lint** — Cleaned up 3 lint issues: removed dead `writeErrorWithID`, fixed 5 `fmt.Fprintf` patterns, replaced manual map loop with `maps.Copy`
+- **gateway test lint** — Fixed nil context and tautological nil check in tests
+
 ### Medium Priority
 4. **Error type standardization** — Mix of custom error structs and `fmt.Errorf` across packages
 5. **Load testing validation** — No production-scale load testing performed yet

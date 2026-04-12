@@ -859,7 +859,7 @@ func TestResponseCaptureWriter_Write_NilInner(t *testing.T) {
 		inner: nil,
 	}
 
-	n, err := _, _ = capture.Write([]byte("test"))
+	n, err := capture.Write([]byte("test"))
 	if n != 0 {
 		t.Errorf("expected n=0, got %d", n)
 	}

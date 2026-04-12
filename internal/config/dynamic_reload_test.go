@@ -474,8 +474,7 @@ func TestDynamicConfigManager_UpdateConfig(t *testing.T) {
 	manager, _ := NewDynamicConfigManager(config, reloader)
 
 	newConfig := &Config{Gateway: GatewayConfig{HTTPAddr: ":9090"}}
-	_ = manager.UpdateConfig(newConfig, "user1")
-	if err != nil {
+	if err := manager.UpdateConfig(newConfig, "user1"); err != nil {
 		t.Errorf("UpdateConfig() error = %v", err)
 	}
 

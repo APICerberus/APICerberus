@@ -49,7 +49,7 @@ func TestProxyTracer_Enabled(t *testing.T) {
 	tracer, _ := New(cfg)
 	defer func() {
 		if tracer != nil {
-			tracer.Shutdown(nil)
+			_ = tracer.Shutdown(nil)
 		}
 	}()
 
@@ -82,7 +82,7 @@ func TestProxyTracer_WithError(t *testing.T) {
 	tracer, _ := New(cfg)
 	defer func() {
 		if tracer != nil {
-			tracer.Shutdown(nil)
+			_ = tracer.Shutdown(nil)
 		}
 	}()
 
@@ -106,7 +106,7 @@ func TestProxyTracer_WithServerError(t *testing.T) {
 	tracer, _ := New(cfg)
 	defer func() {
 		if tracer != nil {
-			tracer.Shutdown(nil)
+			_ = tracer.Shutdown(nil)
 		}
 	}()
 
@@ -161,7 +161,7 @@ func TestProxyTracer_TraceRoundTripper_Enabled(t *testing.T) {
 	tracer, _ := New(cfg)
 	defer func() {
 		if tracer != nil {
-			tracer.Shutdown(nil)
+			_ = tracer.Shutdown(nil)
 		}
 	}()
 
@@ -170,7 +170,7 @@ func TestProxyTracer_TraceRoundTripper_Enabled(t *testing.T) {
 	// Create a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	}))
 	defer server.Close()
 
@@ -202,7 +202,7 @@ func TestTracedRoundTripper_WithError(t *testing.T) {
 	tracer, _ := New(cfg)
 	defer func() {
 		if tracer != nil {
-			tracer.Shutdown(nil)
+			_ = tracer.Shutdown(nil)
 		}
 	}()
 
@@ -236,7 +236,7 @@ func TestTracedRoundTripper_WithServerError(t *testing.T) {
 	tracer, _ := New(cfg)
 	defer func() {
 		if tracer != nil {
-			tracer.Shutdown(nil)
+			_ = tracer.Shutdown(nil)
 		}
 	}()
 
@@ -286,7 +286,7 @@ func TestEndUpstreamSpan_NilSpan(t *testing.T) {
 	tracer, _ := New(cfg)
 	defer func() {
 		if tracer != nil {
-			tracer.Shutdown(nil)
+			_ = tracer.Shutdown(nil)
 		}
 	}()
 

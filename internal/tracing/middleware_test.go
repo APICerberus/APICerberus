@@ -24,7 +24,7 @@ func TestMiddleware_Disabled(t *testing.T) {
 
 	handler := middleware.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -56,7 +56,7 @@ func TestMiddleware_Enabled(t *testing.T) {
 	}
 	defer func() {
 		if tracer != nil {
-			tracer.Shutdown(nil)
+			_ = tracer.Shutdown(nil)
 		}
 	}()
 
@@ -64,7 +64,7 @@ func TestMiddleware_Enabled(t *testing.T) {
 
 	handler := middleware.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -92,7 +92,7 @@ func TestMiddleware_ErrorStatus(t *testing.T) {
 	}
 	defer func() {
 		if tracer != nil {
-			tracer.Shutdown(nil)
+			_ = tracer.Shutdown(nil)
 		}
 	}()
 
@@ -100,7 +100,7 @@ func TestMiddleware_ErrorStatus(t *testing.T) {
 
 	handler := middleware.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Error"))
+		_, _ = w.Write([]byte("Error"))
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -127,7 +127,7 @@ func TestMiddleware_ClientError(t *testing.T) {
 	}
 	defer func() {
 		if tracer != nil {
-			tracer.Shutdown(nil)
+			_ = tracer.Shutdown(nil)
 		}
 	}()
 
@@ -135,7 +135,7 @@ func TestMiddleware_ClientError(t *testing.T) {
 
 	handler := middleware.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Bad Request"))
+		_, _ = w.Write([]byte("Bad Request"))
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -162,7 +162,7 @@ func TestMiddleware_WithXForwardedHeaders(t *testing.T) {
 	}
 	defer func() {
 		if tracer != nil {
-			tracer.Shutdown(nil)
+			_ = tracer.Shutdown(nil)
 		}
 	}()
 
@@ -345,7 +345,7 @@ func TestResponseWriter_AutoWriteHeader(t *testing.T) {
 
 	// Write without calling WriteHeader first
 	content := []byte("Test")
-	rw.Write(content)
+	_, _ = rw.Write(content)
 
 	if !rw.wroteHeader {
 		t.Error("Expected wroteHeader to be true after Write")

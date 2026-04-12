@@ -107,7 +107,7 @@ func TestTracer_InjectExtract(t *testing.T) {
 	}
 	defer func() {
 		if tracer != nil {
-			tracer.Shutdown(context.Background())
+			_ = tracer.Shutdown(context.Background())
 		}
 	}()
 
@@ -190,7 +190,7 @@ func TestTracer_SpanFromContext(t *testing.T) {
 	}
 	defer func() {
 		if tracer != nil {
-			tracer.Shutdown(context.Background())
+			_ = tracer.Shutdown(context.Background())
 		}
 	}()
 

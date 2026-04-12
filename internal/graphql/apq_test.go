@@ -140,7 +140,7 @@ func TestInMemoryAPQCache_Stats(t *testing.T) {
 	// Add entry and get it
 	query := "{ users { id } }"
 	hash := ComputeQueryHash(query)
-	cache.Set(query, hash)
+	_ = cache.Set(query, hash)
 	cache.Get(hash)
 	cache.Get(hash)
 
@@ -165,7 +165,7 @@ func TestInMemoryAPQCache_Eviction(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		query := strings.Repeat("a", i+1)
 		hash := ComputeQueryHash(query)
-		cache.Set(query, hash)
+		_ = cache.Set(query, hash)
 	}
 
 	if cache.Len() != 2 {
@@ -210,7 +210,7 @@ func TestInMemoryAPQCache_Clear(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		query := strings.Repeat("a", i+1)
 		hash := ComputeQueryHash(query)
-		cache.Set(query, hash)
+		_ = cache.Set(query, hash)
 	}
 
 	if cache.Len() != 5 {
@@ -550,17 +550,17 @@ func TestAPQMiddleware_APQHTTPMiddleware(t *testing.T) {
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Read body and verify query was resolved
 		body := make([]byte, r.ContentLength)
-		r.Body.Read(body)
+		_, _ = r.Body.Read(body)
 
 		var req Request
-		json.Unmarshal(body, &req)
+		_ = json.Unmarshal(body, &req)
 
 		if req.Query == "" {
 			t.Error("expected query to be resolved")
 		}
 
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"data":{"users":[]}}`))
+		_, _ = w.Write([]byte(`{"data":{"users":[]}}`))
 	})
 
 	handler := middleware.APQHTTPMiddleware(testHandler)

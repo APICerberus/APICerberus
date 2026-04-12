@@ -83,7 +83,7 @@ func TestProxy_Forward(t *testing.T) {
 			Data: json.RawMessage(`{"users":[{"id":"1","name":"Alice"}]}`),
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer upstream.Close()
 
@@ -172,7 +172,7 @@ func TestProxy_Forward_WithVariables(t *testing.T) {
 		resp := Response{
 			Data: json.RawMessage(`{"user":{"id":"1"}}`),
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer upstream.Close()
 
@@ -207,7 +207,7 @@ func TestProxy_Forward_WithOperationName(t *testing.T) {
 		resp := Response{
 			Data: json.RawMessage(`{"user":{"id":"1"}}`),
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer upstream.Close()
 
@@ -233,7 +233,7 @@ func TestProxy_Forward_WithOperationName(t *testing.T) {
 func TestProxy_Forward_ErrorResponse(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`invalid json`))
+		_, _ = w.Write([]byte(`invalid json`))
 	}))
 	defer upstream.Close()
 
@@ -273,7 +273,7 @@ func TestProxy_Forward_Mutation(t *testing.T) {
 		resp := Response{
 			Data: json.RawMessage(`{"createUser":{"id":"123"}}`),
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer upstream.Close()
 

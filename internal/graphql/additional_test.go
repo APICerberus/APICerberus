@@ -836,7 +836,7 @@ func TestDialUpstream_Non101Response(t *testing.T) {
 	// Create a test server that returns 200 instead of 101
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Not a WebSocket upgrade"))
+		_, _ = w.Write([]byte("Not a WebSocket upgrade"))
 	}))
 	defer upstream.Close()
 
@@ -905,12 +905,12 @@ func TestRelay_MessageForwarding(t *testing.T) {
 	go func() {
 		// Write a text frame
 		frame := []byte{0x81, 0x05, 0x68, 0x65, 0x6c, 0x6c, 0x6f} // "hello"
-		client1.Write(frame)
+		_, _ = client1.Write(frame)
 	}()
 
 	// Read from upstream side
 	buf := make([]byte, 100)
-	upstream1.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	_ = upstream1.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 	n, err := upstream1.Read(buf)
 	if err != nil && !errors.Is(err, net.ErrClosed) {
 		// Expected to receive the frame or connection closed

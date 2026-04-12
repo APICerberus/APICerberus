@@ -105,6 +105,7 @@ func runStart(args []string) error {
 	var (
 		raftNode   *raft.Node
 		clusterMgr *raft.ClusterManager
+		raftStore  *store.Store
 	)
 	if cfg.Cluster.Enabled {
 		raftCfg := &raft.Config{
@@ -129,18 +130,35 @@ func runStart(args []string) error {
 			return fmt.Errorf("initialize raft node: %w", raftErr)
 		}
 
+		// Open separate store for raft persistence
+		raftStore, raftErr = store.Open(cfg)
+		if raftErr != nil {
+			_ = raftNode.Stop()
+			return fmt.Errorf("open raft store: %w", raftErr)
+		}
+		raftStorage, raftErr := raft.NewSQLiteStorage(raftStore.DB())
+		if raftErr != nil {
+			_ = raftStore.Close()
+			_ = raftNode.Stop()
+			return fmt.Errorf("initialize raft storage: %w", raftErr)
+		}
+		raftNode.SetStorage(raftStorage)
+
 		for _, peer := range cfg.Cluster.Peers {
 			raftNode.AddPeer(peer.ID, peer.Address)
 			transport.SetPeer(peer.ID, peer.Address)
 		}
 
 		if raftErr = raftNode.Start(); raftErr != nil {
+			_ = raftStore.Close()
+			_ = raftNode.Stop()
 			return fmt.Errorf("start raft node: %w", raftErr)
 		}
 
 		clusterMgr = raft.NewClusterManager(raftNode, gatewayFSM, cfg.Admin.Addr, cfg.Admin.APIKey)
 		if raftErr = clusterMgr.Start(); raftErr != nil {
 			_ = raftNode.Stop()
+			_ = raftStore.Close()
 			return fmt.Errorf("start cluster manager: %w", raftErr)
 		}
 	}
@@ -187,6 +205,9 @@ func runStart(args []string) error {
 		}
 		if raftNode != nil {
 			_ = raftNode.Stop()
+		}
+		if raftStore != nil {
+			_ = raftStore.Close()
 		}
 	}()
 
@@ -342,6 +363,7 @@ func runMCP(args []string) error {
 	defer server.Close()
 
 	var raftNode *raft.Node
+	var raftStore *store.Store
 	if cfg.Cluster.Enabled {
 		raftCfg := &raft.Config{
 			NodeID:             cfg.Cluster.NodeID,
@@ -359,15 +381,39 @@ func runMCP(args []string) error {
 		if err != nil {
 			return fmt.Errorf("initialize raft node: %w", err)
 		}
+
+		raftStore, err = store.Open(cfg)
+		if err != nil {
+			_ = raftNode.Stop()
+			return fmt.Errorf("open raft store: %w", err)
+		}
+		raftStorage, err := raft.NewSQLiteStorage(raftStore.DB())
+		if err != nil {
+			_ = raftStore.Close()
+			_ = raftNode.Stop()
+			return fmt.Errorf("initialize raft storage: %w", err)
+		}
+		raftNode.SetStorage(raftStorage)
+
 		for _, peer := range cfg.Cluster.Peers {
 			raftNode.AddPeer(peer.ID, peer.Address)
 			t.SetPeer(peer.ID, peer.Address)
 		}
 		if err = raftNode.Start(); err != nil {
+			_ = raftStore.Close()
+			_ = raftNode.Stop()
 			return fmt.Errorf("start raft node: %w", err)
 		}
 		server.SetRaftNode(raftNode)
 	}
+	defer func() {
+		if raftNode != nil {
+			_ = raftNode.Stop()
+		}
+		if raftStore != nil {
+			_ = raftStore.Close()
+		}
+	}()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

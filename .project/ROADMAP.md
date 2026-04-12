@@ -36,6 +36,7 @@ APICerebrus is a **feature-complete** API Gateway at v1.0.0-rc.1 with:
 ### Lint Cleanup
 - **gateway lint** — Cleaned up 3 lint issues: removed dead `writeErrorWithID`, fixed 5 `fmt.Fprintf` patterns, replaced manual map loop with `maps.Copy`
 - **gateway test lint** — Fixed nil context and tautological nil check in tests
+- **dead code removal** — Removed 255 lines of dead code: unused `analyticsDone`, `getPipelineResponse`, `QueryOptimizer.enabled`, `batchTimer`, `DynamicConfigManager.reloader`, entire `marketplace_handlers.go` (11 unused handlers) + unused `Server.marketplace` field and `plugin` import
 
 ### Medium Priority
 4. **Error type standardization** — Mix of custom error structs and `fmt.Errorf` across packages

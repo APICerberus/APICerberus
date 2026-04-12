@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  apicerberus-node1:
+    image: apicerberus/apicerberus:v1.0.0
+    container_name: apicerberus-node1
+    hostname: node1
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+      - "12000:12000"
+    volumes:
+      - ./config/node1.yaml:/etc/apicerberus/apicerberus.yaml
+      - node1-data:/data
+    environment:
+      - APICERBERUS_NODE_ID=node1
+      - APICERBERUS_RAFT_BIND_ADDRESS=0.0.0.0:12000
+      - APICERBERUS_RAFT_PEERS=node2:12000,node3:12000
+    networks:
+      - apicerberus-cluster
+
+  apicerberus-node2:
+    image: apicerberus/apicerberus:v1.0.0
+    container_name: apicerberus-node2
+    hostname: node2
+    ports:
+      - "8082:8080"
+      - "8083:8081"
+      - "12001:12000"
+    volumes:
+      - ./config/node2.yaml:/etc/apicerberus/apicerberus.yaml
+      - node2-data:/data
+    environment:
+      - APICERBERUS_NODE_ID=node2
+      - APICERBERUS_RAFT_BIND_ADDRESS=0.0.0.0:12000
+      - APICERBERUS_RAFT_PEERS=node1:12000,node3:12000
+    networks:
+      - apicerberus-cluster
+
+  apicerberus-node3:
+    image: apicerberus/apicerberus:v1.0.0
+    container_name: apicerberus-node3
+    hostname: node3
+    ports:
+      - "8084:8080"
+      - "8085:8081"
+      - "12002:12000"
+    volumes:
+      - ./config/node3.yaml:/etc/apicerberus/apicerberus.yaml
+      - node3-data:/data
+    environment:
+      - APICERBERUS_NODE_ID=node3
+      - APICERBERUS_RAFT_BIND_ADDRESS=0.0.0.0:12000
+      - APICERBERUS_RAFT_PEERS=node1:12000,node2:12000
+    networks:
+      - apicerberus-cluster
+
+  # Load balancer for the cluster
+  nginx:
+    image: nginx:alpine
+    container_name: apicerberus-lb
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - apicerberus-node1
+      - apicerberus-node2
+      - apicerberus-node3
+    networks:
+      - apicerberus-cluster
+
+volumes:
+  node1-data:
+  node2-data:
+  node3-data:
+
+networks:
+  apicerberus-cluster:
+    driver: bridge

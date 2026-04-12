@@ -1,0 +1,1107 @@
+openapi: 3.0.0
+info:
+  title: API Cerberus Admin API
+  description: |
+    Administrative API for API Cerberus Gateway.
+
+    ## Authentication
+
+    All endpoints require authentication using one of:
+    - **JWT Bearer Token**: `Authorization: Bearer <jwt_token>`
+    - **API Key**: `X-API-Key: <api_key>`
+    - **Admin API Key**: `Authorization: Bearer <admin_api_key>`
+
+    ## Rate Limiting
+
+    The Admin API has rate limiting applied. Default limits:
+    - 100 requests per second per IP
+    - 1000 requests per minute per user
+
+    ## Response Format
+
+    All responses are JSON with the following structure:
+
+    **Success (2xx)**:
+    ```json
+    {
+      "data": { ... },
+      "meta": {
+        "request_id": "uuid",
+        "timestamp": "2024-01-01T00:00:00Z"
+      }
+    }
+    ```
+
+    **Error (4xx/5xx)**:
+    ```json
+    {
+      "error": {
+        "code": "ERROR_CODE",
+        "message": "Human readable message",
+        "details": { ... }
+      },
+      "meta": {
+        "request_id": "uuid",
+        "timestamp": "2024-01-01T00:00:00Z"
+      }
+    }
+    ```
+  version: 1.0.0
+  contact:
+    name: API Cerberus Team
+    email: maintainers@apicerberus.com
+    url: https://apicerberus.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8081
+    description: Local development server
+  - url: https://api.apicerberus.com
+    description: Production server
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Gateway
+    description: Gateway management
+  - name: Services
+    description: Backend service management
+  - name: Routes
+    description: Route configuration
+  - name: Upstreams
+    description: Upstream and load balancer management
+  - name: Users
+    description: User management
+  - name: Cluster
+    description: Raft cluster management
+  - name: Federation
+    description: GraphQL federation management
+  - name: Analytics
+    description: Metrics and analytics
+
+paths:
+  # Health Endpoints
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Returns the health status of the gateway
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /ready:
+    get:
+      tags:
+        - Health
+      summary: Readiness check
+      description: Returns whether the gateway is ready to serve requests
+      security: []
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadyResponse'
+        '503':
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Gateway Management
+  /admin/api/v1/gateway/config:
+    get:
+      tags:
+        - Gateway
+      summary: Get gateway configuration
+      description: Returns the current gateway configuration
+      responses:
+        '200':
+          description: Configuration retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayConfig'
+
+    put:
+      tags:
+        - Gateway
+      summary: Update gateway configuration
+      description: Updates the gateway configuration (requires restart for some changes)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GatewayConfig'
+      responses:
+        '200':
+          description: Configuration updated successfully
+        '400':
+          description: Invalid configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/gateway/reload:
+    post:
+      tags:
+        - Gateway
+      summary: Reload configuration
+      description: Reloads the gateway configuration without restarting
+      responses:
+        '200':
+          description: Configuration reloaded successfully
+        '500':
+          description: Failed to reload configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/gateway/stats:
+    get:
+      tags:
+        - Gateway
+      summary: Get gateway statistics
+      description: Returns runtime statistics about the gateway
+      responses:
+        '200':
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayStats'
+
+  # Service Management
+  /admin/api/v1/services:
+    get:
+      tags:
+        - Services
+      summary: List services
+      description: Returns a list of all configured services
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Services retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceList'
+
+    post:
+      tags:
+        - Services
+      summary: Create service
+      description: Creates a new backend service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceCreateRequest'
+      responses:
+        '201':
+          description: Service created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+        '400':
+          description: Invalid service configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/services/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ServiceId'
+
+    get:
+      tags:
+        - Services
+      summary: Get service
+      description: Returns a specific service by ID
+      responses:
+        '200':
+          description: Service retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+        '404':
+          description: Service not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - Services
+      summary: Update service
+      description: Updates a service configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceUpdateRequest'
+      responses:
+        '200':
+          description: Service updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+        '404':
+          description: Service not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - Services
+      summary: Delete service
+      description: Deletes a service
+      responses:
+        '204':
+          description: Service deleted successfully
+        '404':
+          description: Service not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Route Management
+  /admin/api/v1/routes:
+    get:
+      tags:
+        - Routes
+      summary: List routes
+      description: Returns a list of all configured routes
+      responses:
+        '200':
+          description: Routes retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteList'
+
+    post:
+      tags:
+        - Routes
+      summary: Create route
+      description: Creates a new route
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteCreateRequest'
+      responses:
+        '201':
+          description: Route created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Route'
+
+  /admin/api/v1/routes/{id}:
+    parameters:
+      - $ref: '#/components/parameters/RouteId'
+
+    get:
+      tags:
+        - Routes
+      summary: Get route
+      description: Returns a specific route by ID
+      responses:
+        '200':
+          description: Route retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Route'
+
+    put:
+      tags:
+        - Routes
+      summary: Update route
+      description: Updates a route
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteUpdateRequest'
+      responses:
+        '200':
+          description: Route updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Route'
+
+    delete:
+      tags:
+        - Routes
+      summary: Delete route
+      description: Deletes a route
+      responses:
+        '204':
+          description: Route deleted successfully
+
+  # User Management
+  /admin/api/v1/users:
+    get:
+      tags:
+        - Users
+      summary: List users
+      description: Returns a list of all users
+      responses:
+        '200':
+          description: Users retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserList'
+
+    post:
+      tags:
+        - Users
+      summary: Create user
+      description: Creates a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreateRequest'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /admin/api/v1/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+
+    get:
+      tags:
+        - Users
+      summary: Get user
+      description: Returns a specific user by ID
+      responses:
+        '200':
+          description: User retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+    put:
+      tags:
+        - Users
+      summary: Update user
+      description: Updates a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+    delete:
+      tags:
+        - Users
+      summary: Delete user
+      description: Deletes a user
+      responses:
+        '204':
+          description: User deleted successfully
+
+  # Cluster Management
+  /admin/api/v1/cluster/status:
+    get:
+      tags:
+        - Cluster
+      summary: Get cluster status
+      description: Returns the Raft cluster status
+      responses:
+        '200':
+          description: Cluster status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterStatus'
+
+  /admin/api/v1/cluster/nodes:
+    get:
+      tags:
+        - Cluster
+      summary: List cluster nodes
+      description: Returns a list of all cluster nodes
+      responses:
+        '200':
+          description: Nodes retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeList'
+
+  /admin/api/v1/cluster/join:
+    post:
+      tags:
+        - Cluster
+      summary: Join cluster
+      description: Joins a node to the cluster
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinRequest'
+      responses:
+        '200':
+          description: Node joined successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinResponse'
+
+  /admin/api/v1/cluster/leave:
+    post:
+      tags:
+        - Cluster
+      summary: Leave cluster
+      description: Removes a node from the cluster
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeaveRequest'
+      responses:
+        '200':
+          description: Node left successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveResponse'
+
+  # Federation Management
+  /admin/api/v1/subgraphs:
+    get:
+      tags:
+        - Federation
+      summary: List subgraphs
+      description: Returns a list of all GraphQL subgraphs
+      responses:
+        '200':
+          description: Subgraphs retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubgraphList'
+
+    post:
+      tags:
+        - Federation
+      summary: Register subgraph
+      description: Registers a new GraphQL subgraph
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubgraphCreateRequest'
+      responses:
+        '201':
+          description: Subgraph registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subgraph'
+
+  /admin/api/v1/supergraph/sdl:
+    get:
+      tags:
+        - Federation
+      summary: Get supergraph SDL
+      description: Returns the composed supergraph schema
+      responses:
+        '200':
+          description: SDL retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupergraphSDL'
+
+  # Analytics
+  /admin/api/v1/metrics:
+    get:
+      tags:
+        - Analytics
+      summary: Get metrics
+      description: Returns Prometheus-compatible metrics
+      responses:
+        '200':
+          description: Metrics retrieved successfully
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /admin/api/v1/raft/stats:
+    get:
+      tags:
+        - Analytics
+      summary: Get Raft statistics
+      description: Returns detailed Raft statistics
+      responses:
+        '200':
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RaftStats'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Bearer token authentication
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API Key authentication
+
+  parameters:
+    ServiceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Service ID
+    RouteId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Route ID
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: User ID
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+      description: Page number
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+      description: Items per page
+
+  schemas:
+    # Health schemas
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        version:
+          type: string
+        uptime:
+          type: string
+
+    ReadyResponse:
+      type: object
+      properties:
+        ready:
+          type: boolean
+
+    # Error schema
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+        meta:
+          type: object
+          properties:
+            request_id:
+              type: string
+            timestamp:
+              type: string
+              format: date-time
+
+    # Gateway schemas
+    GatewayConfig:
+      type: object
+      properties:
+        server:
+          type: object
+        auth:
+          type: object
+        rate_limiting:
+          type: object
+        cache:
+          type: object
+
+    GatewayStats:
+      type: object
+      properties:
+        requests_total:
+          type: integer
+        requests_per_second:
+          type: number
+        active_connections:
+          type: integer
+        uptime:
+          type: string
+
+    # Service schemas
+    Service:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        protocol:
+          type: string
+          enum: [http, https, grpc]
+        upstream:
+          $ref: '#/components/schemas/Upstream'
+        timeout:
+          type: integer
+        retries:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ServiceCreateRequest:
+      type: object
+      required:
+        - name
+        - protocol
+      properties:
+        name:
+          type: string
+        protocol:
+          type: string
+        upstream:
+          $ref: '#/components/schemas/Upstream'
+        timeout:
+          type: integer
+          default: 30000
+        retries:
+          type: integer
+          default: 3
+
+    ServiceUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        protocol:
+          type: string
+        upstream:
+          $ref: '#/components/schemas/Upstream'
+        timeout:
+          type: integer
+        retries:
+          type: integer
+
+    ServiceList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Service'
+        meta:
+          type: object
+          properties:
+            total:
+              type: integer
+            page:
+              type: integer
+            limit:
+              type: integer
+
+    Upstream:
+      type: object
+      properties:
+        targets:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              address:
+                type: string
+              weight:
+                type: integer
+
+    # Route schemas
+    Route:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        service_id:
+          type: string
+        hosts:
+          type: array
+          items:
+            type: string
+        paths:
+          type: array
+          items:
+            type: string
+        methods:
+          type: array
+          items:
+            type: string
+            enum: [GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS]
+        strip_path:
+          type: boolean
+        priority:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RouteCreateRequest:
+      type: object
+      required:
+        - name
+        - service_id
+        - paths
+      properties:
+        name:
+          type: string
+        service_id:
+          type: string
+        hosts:
+          type: array
+          items:
+            type: string
+        paths:
+          type: array
+          items:
+            type: string
+        methods:
+          type: array
+          items:
+            type: string
+        strip_path:
+          type: boolean
+          default: false
+        priority:
+          type: integer
+          default: 0
+
+    RouteUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        hosts:
+          type: array
+          items:
+            type: string
+        paths:
+          type: array
+          items:
+            type: string
+        methods:
+          type: array
+          items:
+            type: string
+        strip_path:
+          type: boolean
+        priority:
+          type: integer
+
+    RouteList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Route'
+
+    # User schemas
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, user, readonly]
+        credits:
+          type: integer
+        rate_limit:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UserCreateRequest:
+      type: object
+      required:
+        - username
+        - email
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          default: user
+        credits:
+          type: integer
+          default: 1000
+        rate_limit:
+          type: integer
+          default: 100
+
+    UserUpdateRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        role:
+          type: string
+        credits:
+          type: integer
+        rate_limit:
+          type: integer
+
+    UserList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+
+    # Cluster schemas
+    ClusterStatus:
+      type: object
+      properties:
+        node_id:
+          type: string
+        state:
+          type: string
+          enum: [Leader, Follower, Candidate]
+        term:
+          type: integer
+        commit_index:
+          type: integer
+        last_applied:
+          type: integer
+        log_size:
+          type: integer
+        peers:
+          type: integer
+
+    NodeList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              address:
+                type: string
+              state:
+                type: string
+              is_leader:
+                type: boolean
+              is_healthy:
+                type: boolean
+
+    JoinRequest:
+      type: object
+      required:
+        - node_id
+        - address
+      properties:
+        node_id:
+          type: string
+        address:
+          type: string
+
+    JoinResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        peers:
+          type: object
+
+    LeaveRequest:
+      type: object
+      required:
+        - node_id
+      properties:
+        node_id:
+          type: string
+
+    LeaveResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+
+    # Federation schemas
+    Subgraph:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        url:
+          type: string
+        health:
+          type: string
+          enum: [healthy, unhealthy, unknown]
+        last_updated:
+          type: string
+          format: date-time
+
+    SubgraphCreateRequest:
+      type: object
+      required:
+        - name
+        - url
+      properties:
+        name:
+          type: string
+        url:
+          type: string
+        headers:
+          type: object
+
+    SubgraphList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Subgraph'
+
+    SupergraphSDL:
+      type: object
+      properties:
+        sdl:
+          type: string
+        entities:
+          type: array
+          items:
+            type: string
+
+    # Analytics schemas
+    RaftStats:
+      type: object
+      properties:
+        log_size:
+          type: integer
+        commit_index:
+          type: integer
+        last_applied:
+          type: integer
+        current_term:
+          type: integer
+        state:
+          type: string
+        peer_count:
+          type: integer

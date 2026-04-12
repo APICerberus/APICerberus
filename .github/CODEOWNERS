@@ -1,0 +1,27 @@
+# Global code owners
+* @APICerberus/maintainers
+
+# Core components
+/internal/auth/ @APICerberus/security-team
+/internal/proxy/ @APICerberus/core-team
+/internal/router/ @APICerberus/core-team
+
+# Protocol support
+/internal/grpc/ @APICerberus/protocol-team
+/internal/graphql/ @APICerberus/protocol-team
+/internal/federation/ @APICerberus/protocol-team
+
+# Clustering
+/internal/raft/ @APICerberus/distributed-team
+
+# Web UI
+/web/ @APICerberus/frontend-team
+
+# Deployments
+/deployments/ @APICerberus/devops-team
+
+# Documentation
+/docs/ @APICerberus/docs-team
+
+# CI/CD
+/.github/workflows/ @APICerberus/devops-team

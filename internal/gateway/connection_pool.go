@@ -1,0 +1,181 @@
+package gateway
+
+import (
+	"context"
+	"net"
+	"net/http"
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+// ConnectionPoolConfig holds connection pool settings
+type ConnectionPoolConfig struct {
+	MaxIdleConns        int           `yaml:"max_idle_conns" json:"max_idle_conns"`
+	MaxIdleConnsPerHost int           `yaml:"max_idle_conns_per_host" json:"max_idle_conns_per_host"`
+	MaxConnsPerHost     int           `yaml:"max_conns_per_host" json:"max_conns_per_host"`
+	IdleConnTimeout     time.Duration `yaml:"idle_conn_timeout" json:"idle_conn_timeout"`
+	TLSHandshakeTimeout time.Duration `yaml:"tls_handshake_timeout" json:"tls_handshake_timeout"`
+	DisableKeepAlives   bool          `yaml:"disable_keep_alives" json:"disable_keep_alives"`
+	DisableCompression  bool          `yaml:"disable_compression" json:"disable_compression"`
+}
+
+// DefaultConnectionPoolConfig returns sensible defaults
+func DefaultConnectionPoolConfig() ConnectionPoolConfig {
+	return ConnectionPoolConfig{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		MaxConnsPerHost:     100,
+		IdleConnTimeout:     90 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+		DisableKeepAlives:   false,
+		DisableCompression:  false,
+	}
+}
+
+// poolAtomicStats holds atomic counters for the pool.
+type poolAtomicStats struct {
+	Gets      atomic.Uint64
+	Puts      atomic.Uint64
+	Misses    atomic.Uint64
+	Active    atomic.Int64
+	TotalIdle atomic.Int64
+}
+
+// HTTPClientPool manages a pool of reusable HTTP clients
+type HTTPClientPool struct {
+	config ConnectionPoolConfig
+	pool   sync.Pool
+	stats  poolAtomicStats
+}
+
+// PoolStatsSnapshot holds a snapshot of pool statistics (plain values, no atomics).
+type PoolStatsSnapshot struct {
+	Gets      uint64
+	Puts      uint64
+	Misses    uint64
+	Active    int64
+	TotalIdle int64
+}
+
+// NewHTTPClientPool creates a new HTTP client pool
+func NewHTTPClientPool(config ConnectionPoolConfig) *HTTPClientPool {
+	pool := &HTTPClientPool{
+		config: config,
+	}
+
+	pool.pool = sync.Pool{
+		New: func() any {
+			pool.stats.Misses.Add(1)
+			return pool.createClient()
+		},
+	}
+
+	return pool
+}
+
+// createClient creates a new HTTP client with optimized transport
+func (p *HTTPClientPool) createClient() *http.Client {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          p.config.MaxIdleConns,
+		MaxIdleConnsPerHost:   p.config.MaxIdleConnsPerHost,
+		MaxConnsPerHost:       p.config.MaxConnsPerHost,
+		IdleConnTimeout:       p.config.IdleConnTimeout,
+		TLSHandshakeTimeout:   p.config.TLSHandshakeTimeout,
+		ExpectContinueTimeout: 1 * time.Second,
+		DisableKeepAlives:     p.config.DisableKeepAlives,
+		DisableCompression:    p.config.DisableCompression,
+	}
+
+	return &http.Client{
+		Transport: transport,
+		Timeout:   0, // No timeout - handled by context
+	}
+}
+
+// Get retrieves a client from the pool
+func (p *HTTPClientPool) Get() *http.Client {
+	p.stats.Gets.Add(1)
+	p.stats.Active.Add(1)
+
+	obj := p.pool.Get()
+	client, ok := obj.(*http.Client)
+	if !ok || client == nil {
+		client = p.createClient()
+	}
+	return client
+}
+
+// Put returns a client to the pool
+func (p *HTTPClientPool) Put(client *http.Client) {
+	if client == nil {
+		return
+	}
+
+	p.stats.Puts.Add(1)
+	p.stats.Active.Add(-1)
+	p.stats.TotalIdle.Add(1)
+
+	// Reset client state before returning to pool
+	client.Timeout = 0
+
+	p.pool.Put(client)
+}
+
+// GetStats returns a snapshot of pool statistics.
+func (p *HTTPClientPool) GetStats() PoolStatsSnapshot {
+	return PoolStatsSnapshot{
+		Gets:      p.stats.Gets.Load(),
+		Puts:      p.stats.Puts.Load(),
+		Misses:    p.stats.Misses.Load(),
+		Active:    p.stats.Active.Load(),
+		TotalIdle: p.stats.TotalIdle.Load(),
+	}
+}
+
+// StatsSnapshot returns current stats as plain values.
+func (p *HTTPClientPool) StatsSnapshot() (gets, puts, misses uint64, active, totalIdle int64) {
+	return p.stats.Gets.Load(), p.stats.Puts.Load(), p.stats.Misses.Load(),
+		p.stats.Active.Load(), p.stats.TotalIdle.Load()
+}
+
+// Do executes an HTTP request using a pooled client
+func (p *HTTPClientPool) Do(req *http.Request) (*http.Response, error) {
+	client := p.Get()
+	defer p.Put(client)
+
+	return client.Do(req) // #nosec G704 -- Gateway proxy intentionally forwards requests to configured upstreams.
+}
+
+// DoWithTimeout executes a request with timeout
+func (p *HTTPClientPool) DoWithTimeout(req *http.Request, timeout time.Duration) (*http.Response, error) {
+	ctx, cancel := context.WithTimeout(req.Context(), timeout)
+	defer cancel()
+
+	req = req.WithContext(ctx)
+	return p.Do(req)
+}
+
+// Global pool instance
+var globalPool = NewHTTPClientPool(DefaultConnectionPoolConfig())
+
+// GetPooledClient gets a client from the global pool
+func GetPooledClient() *http.Client {
+	return globalPool.Get()
+}
+
+// PutPooledClient returns a client to the global pool
+func PutPooledClient(client *http.Client) {
+	globalPool.Put(client)
+}
+
+// PooledDo executes a request using the global pool
+func PooledDo(req *http.Request) (*http.Response, error) {
+	return globalPool.Do(req)
+}

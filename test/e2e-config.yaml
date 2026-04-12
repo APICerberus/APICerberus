@@ -1,0 +1,40 @@
+# E2E test configuration — minimal config for running Playwright tests
+gateway:
+  http_addr: ":8080"
+  read_timeout: "30s"
+  write_timeout: "30s"
+  idle_timeout: "120s"
+
+admin:
+  addr: ":9876"
+  api_key: "e2e-test-admin-key-must-be-at-least-32-chars-long"
+  token_secret: "e2e-test-jwt-secret-must-be-at-least-32-characters"
+  ui_enabled: true
+  ui_path: "/dashboard"
+
+portal:
+  enabled: false
+
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+
+store:
+  path: ":memory:"
+  busy_timeout: "5s"
+  journal_mode: "WAL"
+  foreign_keys: true
+
+billing:
+  enabled: true
+  default_cost: 1
+
+rate_limit:
+  enabled: true
+  strategy: "token_bucket"
+  requests_per_second: 1000
+  burst_size: 1500
+
+cluster:
+  enabled: false

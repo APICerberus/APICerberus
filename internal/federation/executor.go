@@ -12,8 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/wsjson"
+	"github.com/coder/websocket"
 )
 
 // Executor executes federated GraphQL queries.
@@ -704,7 +703,8 @@ func (e *Executor) runSubscription(sub *SubscriptionConnection, step *PlanStep) 
 	initMsg := map[string]any{
 		"type": "connection_init",
 	}
-	if err := wsjson.Write(ctx, ws, initMsg); err != nil {
+	data, _ := json.Marshal(initMsg)
+	if err := ws.Write(ctx, websocket.MessageText, data); err != nil {
 		sub.Errors <- fmt.Errorf("websocket init failed: %w", err)
 		return
 	}
@@ -718,23 +718,28 @@ func (e *Executor) runSubscription(sub *SubscriptionConnection, step *PlanStep) 
 			"variables": step.Variables,
 		},
 	}
-	if err := wsjson.Write(ctx, ws, subMsg); err != nil {
+	data, _ = json.Marshal(subMsg)
+	if err := ws.Write(ctx, websocket.MessageText, data); err != nil {
 		sub.Errors <- fmt.Errorf("subscription start failed: %w", err)
 		return
 	}
 
 	// Listen for messages
 	for {
+		_, msgData, err := ws.Read(ctx)
+		if err != nil {
+			if !strings.Contains(err.Error(), "going away") && err != io.EOF {
+				sub.Errors <- fmt.Errorf("websocket receive error: %w", err)
+			}
+			return
+		}
 		var msg struct {
 			Type    string         `json:"type"`
 			ID      string         `json:"id"`
 			Payload map[string]any `json:"payload"`
 		}
-
-		if err := wsjson.Read(ctx, ws, &msg); err != nil {
-			if !strings.Contains(err.Error(), "going away") && err != io.EOF {
-				sub.Errors <- fmt.Errorf("websocket receive error: %w", err)
-			}
+		if err := json.Unmarshal(msgData, &msg); err != nil {
+			sub.Errors <- fmt.Errorf("websocket receive error: %w", err)
 			return
 		}
 
@@ -777,7 +782,8 @@ func (e *Executor) StopSubscription(subID string) error {
 			"type": "stop",
 			"id":   subID,
 		}
-		_ = wsjson.Write(ctx, sub.Conn, stopMsg)
+		stopData, _ := json.Marshal(stopMsg)
+		_ = sub.Conn.Write(ctx, websocket.MessageText, stopData)
 		_ = sub.Conn.Close(websocket.StatusNormalClosure, "")
 	}
 

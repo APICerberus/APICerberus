@@ -59,7 +59,6 @@ type OptimizedEngine struct {
 	// Batch processing
 	batchMu      sync.Mutex
 	batch        []RequestMetric
-	batchTimer   *time.Timer
 	batchFlushCh chan struct{}
 
 	// Async processing

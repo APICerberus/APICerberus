@@ -66,14 +66,6 @@ func (rs *requestState) setPipelineResponse(resp *http.Response) {
 	}
 }
 
-// getPipelineResponse returns the captured upstream response.
-func (rs *requestState) getPipelineResponse() *http.Response {
-	if rs.pipelineCtx == nil {
-		return nil
-	}
-	return rs.pipelineCtx.Response
-}
-
 // getDownstreamWriter returns the pipeline response writer, falling back to
 // the original response writer.
 func (rs *requestState) getDownstreamWriter(fallback http.ResponseWriter) http.ResponseWriter {

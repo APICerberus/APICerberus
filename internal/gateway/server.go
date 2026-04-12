@@ -69,7 +69,6 @@ type Gateway struct {
 	healthCancel   context.CancelFunc
 	auditCancel    context.CancelFunc
 	auditDone      chan struct{} // closed when audit goroutine finishes
-	analyticsDone  chan struct{} // closed when analytics shutdown finishes
 }
 
 // New initializes all gateway subsystems from config.

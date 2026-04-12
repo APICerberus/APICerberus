@@ -18,7 +18,6 @@ import (
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/pkg/uuid"
 	yamlpkg "github.com/APICerberus/APICerebrus/internal/pkg/yaml"
-	"github.com/APICerberus/APICerebrus/internal/plugin"
 	"github.com/APICerberus/APICerebrus/internal/store"
 	"github.com/APICerberus/APICerebrus/internal/version"
 )
@@ -54,8 +53,6 @@ type Server struct {
 	closeOnce sync.Once
 	closed    bool
 
-	// Plugin Marketplace (lazily initialized)
-	marketplace *plugin.Marketplace
 }
 
 type adminAuthAttempts struct {

@@ -80,9 +80,7 @@ const (
 )
 
 // QueryOptimizer optimizes query execution plans.
-type QueryOptimizer struct {
-	enabled bool
-}
+type QueryOptimizer struct{}
 
 // OptimizedPlan represents an optimized execution plan.
 type OptimizedPlan struct {

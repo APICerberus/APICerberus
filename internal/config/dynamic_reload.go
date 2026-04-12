@@ -286,7 +286,6 @@ func stringSlicesEqual(a, b []string) bool {
 type DynamicConfigManager struct {
 	mu         sync.RWMutex
 	config     *Config
-	reloader   *ConfigReloader
 	history    []ConfigVersion
 	maxHistory int
 }

@@ -55,7 +55,7 @@ func NewProxy(cfg *ProxyConfig) (*Proxy, error) {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
-	conn, err := grpc.Dial(cfg.Target, opts...)
+	conn, err := grpc.NewClient(cfg.Target, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial upstream: %w", err)
 	}

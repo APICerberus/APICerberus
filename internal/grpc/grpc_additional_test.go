@@ -1398,7 +1398,7 @@ func TestStreamProxy_WithConnection(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Create client connection
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Skipf("Failed to connect: %v", err)
 	}

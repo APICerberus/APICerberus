@@ -32,7 +32,7 @@ func TestProxyServerStream_SuccessPath(t *testing.T) {
 	go grpcServer.Serve(lis)
 	time.Sleep(10 * time.Millisecond)
 
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Skipf("Failed to connect: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestProxyClientStream_SuccessPath(t *testing.T) {
 	go grpcServer.Serve(lis)
 	time.Sleep(10 * time.Millisecond)
 
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Skipf("Failed to connect: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestProxyBidiStream_SuccessPath(t *testing.T) {
 	go grpcServer.Serve(lis)
 	time.Sleep(10 * time.Millisecond)
 
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Skipf("Failed to connect: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestStreamProxy_ErrorScenarios(t *testing.T) {
 	go grpcServer.Serve(lis)
 	time.Sleep(10 * time.Millisecond)
 
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Skipf("Failed to connect: %v", err)
 	}
@@ -324,7 +324,7 @@ func TestStreamProxy_NonExistentMethod(t *testing.T) {
 	go grpcServer.Serve(lis)
 	time.Sleep(10 * time.Millisecond)
 
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Skipf("Failed to connect: %v", err)
 	}

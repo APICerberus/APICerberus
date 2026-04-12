@@ -131,7 +131,7 @@ func TestProxyServerStream_StreamingScenarios(t *testing.T) {
 	go s.Serve(lis)
 	time.Sleep(10 * time.Millisecond)
 
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Skipf("Failed to connect: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestProxyClientStream_BodyVariations(t *testing.T) {
 	go s.Serve(lis)
 	time.Sleep(10 * time.Millisecond)
 
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Skipf("Failed to connect: %v", err)
 	}
@@ -226,7 +226,7 @@ func TestProxyBidiStream_Scenarios(t *testing.T) {
 	go s.Serve(lis)
 	time.Sleep(10 * time.Millisecond)
 
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Skipf("Failed to connect: %v", err)
 	}

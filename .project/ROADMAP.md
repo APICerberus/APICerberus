@@ -31,7 +31,7 @@ APICerebrus is a **feature-complete** API Gateway at v1.0.0-rc.1 with:
 ### High Priority
 1. **ServeHTTP refactoring** — `gateway/server.go:191-597` (400+ lines) is the primary maintainability concern
 2. **Type coercion cleanup** — Some duplication remains despite `pkg/coerce` package
-3. **Audit monitoring** — Expose dropped audit entries counter to `/metrics` endpoint
+3. **Audit monitoring** — Expose dropped audit entries counter to `/metrics` endpoint ✅
 
 ### Medium Priority
 4. **Error type standardization** — Mix of custom error structs and `fmt.Errorf` across packages
@@ -58,7 +58,7 @@ APICerebrus is a **feature-complete** API Gateway at v1.0.0-rc.1 with:
 
 - [ ] **Expose audit drop counter** — Add `audit_dropped` metric to Prometheus `/metrics` endpoint
 
-- [ ] **Verify JWT replay cache bounds** — Confirm `JTIReplayCache` maxSize and eviction work correctly under load
+- [x] **Verify JWT replay cache bounds** — `JTIReplayCache` is correctly bounded with 10K default, 25% eviction on capacity, and LRU oldest-expiry removal ✅
 
 ---
 

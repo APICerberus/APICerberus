@@ -413,7 +413,7 @@ func TestSplitPathEmpty(t *testing.T) {
 	t.Parallel()
 
 	parts := splitPath("")
-	if parts != nil && len(parts) != 0 {
+	if len(parts) != 0 {
 		t.Fatalf("expected nil/empty for empty path, got: %v", parts)
 	}
 }

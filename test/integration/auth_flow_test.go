@@ -390,7 +390,7 @@ type authTestRuntime struct {
 	cancel    context.CancelFunc
 	gwErrCh   chan error
 	adminErr  chan error
-	store     *store.Store
+	store     *store.Store //lint:ignore U1000 reserved for future use
 }
 
 func startAuthTestRuntime(t *testing.T, cfg *config.Config) *authTestRuntime {
@@ -530,6 +530,7 @@ func buildAuthTestConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath, up
 	}
 }
 
+//lint:ignore U1000 reserved for future use
 func buildJWTTestConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath, upstreamHost string) *config.Config {
 	cfg := buildAuthTestConfig(t, gwAddr, adminAddr, routeID, routePath, upstreamHost)
 	// Add JWT plugin configuration

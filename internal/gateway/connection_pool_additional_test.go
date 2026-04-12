@@ -45,7 +45,7 @@ func TestConnectionPool_StatsSnapshot(t *testing.T) {
 
 	// Get a client to increment stats
 	client := pool.Get()
-	gets, puts, _, active, _ = pool.StatsSnapshot()
+	gets, _, _, active, _ = pool.StatsSnapshot()
 	if gets != 1 {
 		t.Errorf("Gets = %d, want 1", gets)
 	}
@@ -55,7 +55,7 @@ func TestConnectionPool_StatsSnapshot(t *testing.T) {
 
 	// Put it back
 	pool.Put(client)
-	gets, puts, _, active, totalIdle = pool.StatsSnapshot()
+	_, puts, _, active, totalIdle = pool.StatsSnapshot()
 	if puts != 1 {
 		t.Errorf("Puts = %d, want 1", puts)
 	}

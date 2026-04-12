@@ -24,7 +24,7 @@ func TestRunAuditTail_InvalidURL(t *testing.T) {
 
 func TestRunAuditStats_WithTopRoutesEmpty(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"total_requests": 1000,
 			"error_requests": 50,
 			"error_rate":     "5%",
@@ -46,7 +46,7 @@ func TestRunAuditExport_WithCustomFormat(t *testing.T) {
 		if r.URL.Query().Get("format") != "csv" {
 			t.Errorf("Expected format=csv, got %s", r.URL.Query().Get("format"))
 		}
-		w.Write([]byte("id,method,status\nlog-1,GET,200\n"))
+		_, _ = w.Write([]byte("id,method,status\nlog-1,GET,200\n"))
 	}))
 	defer upstream.Close()
 
@@ -62,7 +62,7 @@ func TestRunAuditExport_WithCustomFormat(t *testing.T) {
 
 func TestRunAuditStats_JSONOutput(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"total_requests": 1000,
 			"error_requests": 50,
 		})
@@ -98,7 +98,7 @@ func TestRunAuditTail_Filters(t *testing.T) {
 
 func TestRunCreditAdjust_JSONOutput(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"user_id":        "user-1",
 			"credit_balance": 600,
 			"amount":         100,
@@ -121,7 +121,7 @@ func TestRunCreditAdjust_JSONOutput(t *testing.T) {
 
 func TestRunCreditTransactions_JSONOutput(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"transactions": []map[string]any{
 				{"id": "txn-1", "type": "topup", "amount": 100, "balance_after": 500, "description": "Initial topup", "created_at": "2024-01-01T00:00:00Z"},
 			},
@@ -155,7 +155,7 @@ func TestRunAuditRetention_UnknownSubcommand(t *testing.T) {
 // Test runAnalyticsLatency with server
 func TestRunAnalyticsLatency(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"p50_ms":  10,
 			"p95_ms":  50,
 			"p99_ms":  100,
@@ -221,7 +221,7 @@ func TestRunAuditCleanup_InvalidURL(t *testing.T) {
 
 func TestRunAuditCleanup_WithAllFlags(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"deleted": 100,
 		})
 	}))

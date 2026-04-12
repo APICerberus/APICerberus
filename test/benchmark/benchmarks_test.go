@@ -80,7 +80,7 @@ func BenchmarkResponseWriter(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		rr := httptest.NewRecorder()
 		rr.WriteHeader(http.StatusOK)
-		rr.Write(data)
+		_, _ = rr.Write(data)
 	}
 }
 

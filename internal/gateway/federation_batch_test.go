@@ -26,7 +26,7 @@ func TestServeFederationBatch_InvalidMethod(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/graphql/batch", nil)
@@ -52,7 +52,7 @@ func TestServeFederationBatch_InvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/graphql/batch", bytes.NewReader([]byte("not json")))
@@ -79,7 +79,7 @@ func TestServeFederationBatch_EmptyBatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	rec := httptest.NewRecorder()
 	body, _ := json.Marshal([]batchGraphQLRequest{})
@@ -107,7 +107,7 @@ func TestServeFederationBatch_NotReady(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Federation is enabled but planner/executor are nil (not composed yet)
 	rec := httptest.NewRecorder()
@@ -137,7 +137,7 @@ func TestServeFederationBatch_EmptyQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Manually set up a mock executor/planner to test empty query handling
 	// Without subgraphs, the planner will be nil, so we test the empty query check indirectly.

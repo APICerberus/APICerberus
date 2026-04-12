@@ -46,7 +46,7 @@ func BenchmarkLatencyPercentles(b *testing.B) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"ok":true}`))
+		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer upstream.Close()
 
@@ -94,7 +94,7 @@ func BenchmarkLatencyGatewayEndToEnd(b *testing.B) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"message":"success"}`))
+		_, _ = w.Write([]byte(`{"message":"success"}`))
 	}))
 	defer upstream.Close()
 

@@ -244,8 +244,7 @@ func FuzzSignRoundTrip(f *testing.F) {
 		}
 
 		// EdDSA round-trip
-		sig, err = SignES256(signingInput, ecKey) // reusing signing input for EdDSA test
-		_ = sig                                   // EdDSA signing needs Ed25519 key, skip here
+		_, _ = SignES256(signingInput, ecKey) // reusing signing input for EdDSA test; EdDSA signing needs Ed25519 key, skip here
 
 		// VerifyEdDSA with valid Ed25519 key but wrong signature
 		if VerifyEdDSA(signingInput, []byte("wrong"), edKey) {

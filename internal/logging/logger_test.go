@@ -84,7 +84,7 @@ func TestSetupFileOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setup error: %v", err)
 	}
-	defer cleanup()
+	defer func() { _ = cleanup() }()
 
 	logger.Info("hello", "k", "v")
 	if err := cleanup(); err != nil {

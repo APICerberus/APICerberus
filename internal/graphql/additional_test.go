@@ -225,7 +225,7 @@ func TestDialUpstream_WSSScheme(t *testing.T) {
 	}
 	// We expect an error since there's no server
 	if rw != nil && conn != nil {
-		rw = nil // Just to use the variable
+		_ = rw // Just to use the variable
 	}
 }
 
@@ -669,6 +669,7 @@ func (e *errorWriter) Write(p []byte) (n int, err error) {
 }
 
 // limitedWriter is a writer that fails after a certain number of bytes
+//lint:ignore U1000 reserved for future use
 type limitedWriter struct {
 	limit   int
 	written int
@@ -688,6 +689,7 @@ func (l *limitedWriter) Write(p []byte) (n int, err error) {
 }
 
 // createTestConn creates a mock connection for testing
+//nolint:unused // used for future test scenarios
 func createTestConn() (net.Conn, *bufio.ReadWriter) {
 	client, _ := net.Pipe()
 	rw := bufio.NewReadWriter(bufio.NewReader(client), bufio.NewWriter(client))
@@ -756,7 +758,7 @@ func TestDialUpstream_HTTPSScheme(t *testing.T) {
 		}
 	}
 	if rw != nil && conn != nil {
-		rw = nil // Use the variable
+		_ = rw // Use the variable
 	}
 }
 
@@ -790,7 +792,7 @@ func TestDialUpstream_HostWithoutPort(t *testing.T) {
 		conn.Close()
 	}
 	if rw != nil {
-		rw = nil // Use the variable
+		_ = rw // Use the variable
 	}
 }
 
@@ -827,7 +829,7 @@ func TestDialUpstream_UpgradeWriteError(t *testing.T) {
 		t.Error("Expected error when connection is closed immediately")
 	}
 	if rw != nil {
-		rw = nil
+		_ = rw
 	}
 }
 
@@ -857,7 +859,7 @@ func TestDialUpstream_Non101Response(t *testing.T) {
 		t.Errorf("Expected 'rejected websocket upgrade' error, got: %v", err)
 	}
 	if rw != nil {
-		rw = nil
+		_ = rw
 	}
 }
 

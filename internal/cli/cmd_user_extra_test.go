@@ -26,7 +26,7 @@ func TestRunUserStatus_MissingID(t *testing.T) {
 func TestRunUserStatus_APIError(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]any{"error": "server error"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": "server error"})
 	}))
 	defer upstream.Close()
 
@@ -54,7 +54,7 @@ func TestRunUserAPIKeyList_MissingUser(t *testing.T) {
 // TestRunUserAPIKeyList_EmptyResults tests empty results handling
 func TestRunUserAPIKeyList_EmptyResults(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode([]map[string]any{})
+		_ = json.NewEncoder(w).Encode([]map[string]any{})
 	}))
 	defer upstream.Close()
 
@@ -130,7 +130,7 @@ func TestRunUserPermissionList_MissingUser(t *testing.T) {
 // TestRunUserPermissionList_EmptyResults tests empty results handling
 func TestRunUserPermissionList_EmptyResults(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode([]map[string]any{})
+		_ = json.NewEncoder(w).Encode([]map[string]any{})
 	}))
 	defer upstream.Close()
 
@@ -172,12 +172,12 @@ func TestRunUserPermissionGrant_MissingRoute(t *testing.T) {
 func TestRunUserPermissionGrant_Deny(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
-		json.NewDecoder(r.Body).Decode(&payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
 		if payload["allowed"] != false {
 			t.Errorf("Expected allowed=false, got %v", payload["allowed"])
 		}
 
-		json.NewEncoder(w).Encode(map[string]any{"id": "perm-1"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "perm-1"})
 	}))
 	defer upstream.Close()
 
@@ -291,7 +291,7 @@ func TestRequireArg_WithError(t *testing.T) {
 func TestRunUserList_APIError(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]any{"error": "server error"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": "server error"})
 	}))
 	defer upstream.Close()
 
@@ -308,7 +308,7 @@ func TestRunUserList_APIError(t *testing.T) {
 func TestRunUserCreate_APIError(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]any{"error": "invalid email"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": "invalid email"})
 	}))
 	defer upstream.Close()
 
@@ -339,7 +339,7 @@ func TestRunUserUpdate_MissingID(t *testing.T) {
 func TestRunUserUpdate_APIError(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]any{"error": "user not found"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": "user not found"})
 	}))
 	defer upstream.Close()
 
@@ -358,7 +358,7 @@ func TestRunUserUpdate_APIError(t *testing.T) {
 func TestRunUserGet_APIError(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]any{"error": "user not found"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": "user not found"})
 	}))
 	defer upstream.Close()
 

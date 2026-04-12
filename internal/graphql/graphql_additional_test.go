@@ -1088,7 +1088,7 @@ func TestInMemoryAPQCache_cleanup(t *testing.T) {
 	cache := NewInMemoryAPQCache(100, time.Hour)
 
 	// Add an entry
-	cache.Set("hash1", "query1")
+	_ = cache.Set("hash1", "query1")
 
 	// Manually set lastUsed to be expired
 	cache.mu.Lock()

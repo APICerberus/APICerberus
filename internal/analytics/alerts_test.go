@@ -180,12 +180,12 @@ func TestAlertEngine_ListRules(t *testing.T) {
 	}
 
 	// Add some rules
-	engine.UpsertRule(AlertRule{
+	_, _ = engine.UpsertRule(AlertRule{
 		ID:   "rule-b",
 		Name: "Beta Rule",
 		Type: AlertRuleErrorRate,
 	})
-	engine.UpsertRule(AlertRule{
+	_, _ = engine.UpsertRule(AlertRule{
 		ID:   "rule-a",
 		Name: "Alpha Rule",
 		Type: AlertRuleP99Latency,
@@ -233,7 +233,7 @@ func TestAlertEngine_Evaluate(t *testing.T) {
 
 	t.Run("disabled rule", func(t *testing.T) {
 		engine := NewAlertEngine(AlertEngineOptions{})
-		engine.UpsertRule(AlertRule{
+		_, _ = engine.UpsertRule(AlertRule{
 			ID:        "disabled-rule",
 			Name:      "Disabled Rule",
 			Enabled:   false,
@@ -259,7 +259,7 @@ func TestAlertEngine_Evaluate(t *testing.T) {
 
 	t.Run("error rate rule triggered", func(t *testing.T) {
 		engine := NewAlertEngine(AlertEngineOptions{})
-		engine.UpsertRule(AlertRule{
+		_, _ = engine.UpsertRule(AlertRule{
 			ID:        "error-rate-rule",
 			Name:      "Error Rate Rule",
 			Enabled:   true,
@@ -286,7 +286,7 @@ func TestAlertEngine_Evaluate(t *testing.T) {
 
 	t.Run("p99 latency rule triggered", func(t *testing.T) {
 		engine := NewAlertEngine(AlertEngineOptions{})
-		engine.UpsertRule(AlertRule{
+		_, _ = engine.UpsertRule(AlertRule{
 			ID:        "latency-rule",
 			Name:      "Latency Rule",
 			Enabled:   true,
@@ -313,7 +313,7 @@ func TestAlertEngine_Evaluate(t *testing.T) {
 
 	t.Run("upstream health rule triggered", func(t *testing.T) {
 		engine := NewAlertEngine(AlertEngineOptions{})
-		engine.UpsertRule(AlertRule{
+		_, _ = engine.UpsertRule(AlertRule{
 			ID:        "health-rule",
 			Name:      "Health Rule",
 			Enabled:   true,
@@ -333,7 +333,7 @@ func TestAlertEngine_Evaluate(t *testing.T) {
 
 	t.Run("zero time defaults to now", func(t *testing.T) {
 		engine := NewAlertEngine(AlertEngineOptions{})
-		engine.UpsertRule(AlertRule{
+		_, _ = engine.UpsertRule(AlertRule{
 			ID:        "test-rule",
 			Name:      "Test Rule",
 			Enabled:   true,

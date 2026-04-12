@@ -452,7 +452,7 @@ func TestExecutor_ExecuteOptimized(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -881,6 +881,7 @@ func TestPlanner_findSubgraphForField(t *testing.T) {
 	sg := planner.findSubgraphForField("users")
 	if sg == nil {
 		t.Error("Expected to find subgraph for 'users' field")
+		return
 	}
 	if sg.ID != "users" {
 		t.Errorf("Expected subgraph 'users', got %s", sg.ID)
@@ -1264,7 +1265,7 @@ func TestExecutor_ExecuteBatch_Success(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var reqBody map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&reqBody)
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
 
 		response := map[string]interface{}{
 			"batch_0": map[string]interface{}{
@@ -1277,7 +1278,7 @@ func TestExecutor_ExecuteBatch_Success(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -1334,7 +1335,7 @@ func TestExecutor_ExecuteBatch_InvalidJSON(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("invalid json"))
+		_, _ = w.Write([]byte("invalid json"))
 	}))
 	defer server.Close()
 
@@ -1374,7 +1375,7 @@ func TestExecutor_ExecuteParallel_WithDependencies(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -1489,7 +1490,7 @@ func TestExecutor_executeStep_GraphQLErrors(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -1525,7 +1526,7 @@ func TestExecutor_executeStep_EntitiesResponse(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -1865,7 +1866,7 @@ func TestSubgraphManager_FetchSchema_IntrospectionErrors(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -1890,7 +1891,7 @@ func TestSubgraphManager_FetchSchema_InvalidJSON(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("invalid json"))
+		_, _ = w.Write([]byte("invalid json"))
 	}))
 	defer server.Close()
 
@@ -1960,6 +1961,7 @@ func TestSubgraph_GetSchema(t *testing.T) {
 	schema := subgraph.GetSchema()
 	if schema == nil {
 		t.Error("GetSchema should return schema")
+		return
 	}
 
 	if schema.QueryType != "Query" {
@@ -2051,7 +2053,7 @@ func TestExecutor_Execute_WithDependencies_Additional(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -2238,7 +2240,7 @@ func TestExecutor_ExecuteSubscription_Full(t *testing.T) {
 
 	// Clean up
 	if sub != nil {
-		executor.StopSubscription(sub.ID)
+		_ = executor.StopSubscription(sub.ID)
 	}
 }
 
@@ -2364,7 +2366,7 @@ func TestSubgraphManager_FetchSchema_Success(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -2425,7 +2427,7 @@ func TestExecutor_ExecuteBatch_NonMapResponse(t *testing.T) {
 			"batch_1": 123,
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -2464,7 +2466,7 @@ func TestExecutor_executeStep_ScalarResult(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -2552,7 +2554,7 @@ func TestExecutor_ExecuteParallel_Empty(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -2676,7 +2678,7 @@ func TestExecutor_ExecuteOptimized_MultipleGroups(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 

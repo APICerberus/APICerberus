@@ -179,7 +179,7 @@ func TestFixtureConfig(t *testing.T) {
 func TestTestServer(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
 	server := NewTestServer(t, handler)
@@ -204,7 +204,7 @@ func TestResponseAssertions(t *testing.T) {
 		case "/json":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"id":"123","name":"test"}`))
+			_, _ = w.Write([]byte(`{"id":"123","name":"test"}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -569,7 +569,7 @@ func TestRecordingMockPlugin(t *testing.T) {
 	}
 
 	ctx := NewTestPipelineContext(t)
-	plugin.Run(ctx.PipelineContext)
+	_, _ = plugin.Run(ctx.PipelineContext)
 
 	if !*called {
 		t.Error("Expected plugin to be called")
@@ -580,7 +580,7 @@ func TestRecordingMockPlugin(t *testing.T) {
 func TestAssertJSON(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"id":"123","name":"test","nested":{"key":"value"}}`))
+		_, _ = w.Write([]byte(`{"id":"123","name":"test","nested":{"key":"value"}}`))
 	})
 
 	server := NewTestServer(t, handler)
@@ -596,7 +596,7 @@ func TestAssertJSON(t *testing.T) {
 // TestAssertBodyContains verifies body contains assertion.
 func TestAssertBodyContains(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`Hello, World!`))
+		_, _ = w.Write([]byte(`Hello, World!`))
 	})
 
 	server := NewTestServer(t, handler)
@@ -608,7 +608,7 @@ func TestAssertBodyContains(t *testing.T) {
 // TestReadBody verifies body reading.
 func TestReadBody(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`test body content`))
+		_, _ = w.Write([]byte(`test body content`))
 	})
 
 	server := NewTestServer(t, handler)
@@ -624,7 +624,7 @@ func TestReadBody(t *testing.T) {
 func TestParseJSON(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"id":"123","name":"test"}`))
+		_, _ = w.Write([]byte(`{"id":"123","name":"test"}`))
 	})
 
 	server := NewTestServer(t, handler)
@@ -690,7 +690,7 @@ func TestNewRecorder(t *testing.T) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`created`))
+		_, _ = w.Write([]byte(`created`))
 	})
 
 	req := httptest.NewRequest("GET", "/test", nil)

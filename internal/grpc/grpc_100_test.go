@@ -52,6 +52,7 @@ func createBufconnClient(t *testing.T, lis *bufconn.Listener) *grpc.ClientConn {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	//nolint:staticcheck // grpc.DialContext is deprecated but still supported in grpc 1.x
 	conn, err := grpc.DialContext(ctx, "passthrough:///bufnet",
 		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 			return lis.Dial()

@@ -31,7 +31,7 @@ func TestRunStart_Advanced(t *testing.T) {
 		// Create temp file with invalid content
 		tmpFile, _ := os.CreateTemp("", "invalid-config-*.yaml")
 		defer os.Remove(tmpFile.Name())
-		tmpFile.WriteString("invalid: yaml: content: [[[")
+		_, _ = tmpFile.WriteString("invalid: yaml: content: [[[")
 		tmpFile.Close()
 
 		err := runStart([]string{"--config", tmpFile.Name()})
@@ -46,7 +46,7 @@ func TestRunAudit_More(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// The audit API uses /admin/api/v1/audit-logs
 		if strings.Contains(r.URL.Path, "/audit-logs") {
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"logs": []map[string]any{
 					{"id": "log-1", "message": "test"},
 				},
@@ -89,7 +89,7 @@ func TestRunAudit_More(t *testing.T) {
 func TestRunCredit_More(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/credits") {
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"user_id":  "user-1",
 				"balance":  100,
 				"currency": "credits",
@@ -121,14 +121,14 @@ func TestRunCredit_More(t *testing.T) {
 func TestRunAnalytics_More(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/analytics/overview") {
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"total_requests": 1000,
 				"avg_latency_ms": 50.5,
 			})
 			return
 		}
 		if strings.Contains(r.URL.Path, "/analytics/latency") {
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"percentiles": map[string]any{
 					"p50": 10.5,
 					"p99": 100.2,
@@ -157,7 +157,7 @@ func TestRunAnalytics_More(t *testing.T) {
 	t.Run("analytics requests", func(t *testing.T) {
 		upstream2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.Contains(r.URL.Path, "/analytics/requests") || strings.Contains(r.URL.Path, "/analytics/timeseries") {
-				json.NewEncoder(w).Encode(map[string]any{
+				_ = json.NewEncoder(w).Encode(map[string]any{
 					"series": []map[string]any{
 						{"timestamp": "2024-01-01T00:00:00Z", "requests": 500},
 					},

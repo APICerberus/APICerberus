@@ -17,7 +17,7 @@ func TestGracefulShutdown(t *testing.T) {
 		// Simulate slow response
 		time.Sleep(100 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("upstream response"))
+		_, _ = w.Write([]byte("upstream response"))
 	})
 	defer upstream.Close()
 
@@ -355,7 +355,7 @@ func newTestServer(t *testing.T, handler http.HandlerFunc) *testServer {
 	}
 
 	go func() {
-		server.Serve(listener)
+		_ = server.Serve(listener)
 	}()
 
 	return &testServer{

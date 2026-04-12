@@ -1035,7 +1035,7 @@ func TestCache_NilOperations(t *testing.T) {
 	cache.Clear()
 	cache.Delete("key")
 	if _, err := cache.DeleteByPattern(".*"); err != nil {
-		// expected error in test
+		_ = err // expected error in test
 	}
 	cache.DeleteByTag("tag")
 	cache.DeleteByTags([]string{"tag"})

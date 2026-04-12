@@ -120,7 +120,7 @@ admin:
   api_key: "test-admin-key"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 `
-	os.WriteFile(configPath, []byte(configContent), 0644)
+	_ = os.WriteFile(configPath, []byte(configContent), 0644)
 
 	reloaderCalled := false
 	reloader := func(cfg *Config) error {
@@ -462,7 +462,9 @@ func TestDynamicConfigManager_GetCurrentConfig(t *testing.T) {
 	current := manager.GetCurrentConfig()
 	if current == nil {
 		t.Error("GetCurrentConfig() returned nil")
+		return
 	}
+	//nolint:staticcheck // staticcheck false positive: current is already checked above
 	if current.Gateway.HTTPAddr != ":8080" {
 		t.Errorf("HTTPAddr = %v, want :8080", current.Gateway.HTTPAddr)
 	}

@@ -15,46 +15,46 @@ func TestRunUser_WithMockServer(t *testing.T) {
 		switch {
 		case strings.Contains(r.URL.Path, "/api-keys"):
 			if r.Method == http.MethodPost {
-				json.NewEncoder(w).Encode(map[string]any{
+				_ = json.NewEncoder(w).Encode(map[string]any{
 					"id": "key-new", "key_prefix": "ck_live_abc", "name": "New Key", "status": "active",
 				})
 			} else if r.Method == http.MethodDelete {
-				json.NewEncoder(w).Encode(map[string]any{"id": "key-1"})
+				_ = json.NewEncoder(w).Encode(map[string]any{"id": "key-1"})
 			} else {
-				json.NewEncoder(w).Encode([]map[string]any{
+				_ = json.NewEncoder(w).Encode([]map[string]any{
 					{"id": "key-1", "key_prefix": "ck_live_abc", "name": "Production Key", "status": "active"},
 				})
 			}
 		case strings.Contains(r.URL.Path, "/permissions"):
 			if r.Method == http.MethodPost {
-				json.NewEncoder(w).Encode(map[string]any{"id": "perm-new"})
+				_ = json.NewEncoder(w).Encode(map[string]any{"id": "perm-new"})
 			} else if r.Method == http.MethodDelete {
-				json.NewEncoder(w).Encode(map[string]any{"id": "perm-1"})
+				_ = json.NewEncoder(w).Encode(map[string]any{"id": "perm-1"})
 			} else {
-				json.NewEncoder(w).Encode([]map[string]any{
+				_ = json.NewEncoder(w).Encode([]map[string]any{
 					{"id": "perm-1", "route_id": "route-1", "methods": "GET,POST", "allowed": true},
 				})
 			}
 		case strings.Contains(r.URL.Path, "/ip-whitelist"):
 			if r.Method == http.MethodPost {
-				json.NewEncoder(w).Encode(map[string]any{"ip": "192.168.1.100"})
+				_ = json.NewEncoder(w).Encode(map[string]any{"ip": "192.168.1.100"})
 			} else if r.Method == http.MethodDelete {
-				json.NewEncoder(w).Encode(map[string]any{"ip": "192.168.1.100"})
+				_ = json.NewEncoder(w).Encode(map[string]any{"ip": "192.168.1.100"})
 			} else {
-				json.NewEncoder(w).Encode([]map[string]any{
+				_ = json.NewEncoder(w).Encode([]map[string]any{
 					{"ip": "192.168.1.1/24"},
 				})
 			}
 		case strings.Contains(r.URL.Path, "/reset-password"):
-			json.NewEncoder(w).Encode(map[string]any{"id": "user-1"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "user-1"})
 		case strings.Contains(r.URL.Path, "/suspend"):
-			json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "status": "suspended"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "status": "suspended"})
 		case strings.Contains(r.URL.Path, "/activate"):
-			json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "status": "active"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "status": "active"})
 		case strings.Contains(r.URL.Path, "/status"):
-			json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "status": "active"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "status": "active"})
 		case strings.HasSuffix(r.URL.Path, "/users/user-1"):
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id": "user-1", "email": "user@example.com", "name": "Test User", "role": "user", "status": "active",
 			})
 		default:
@@ -161,7 +161,7 @@ func TestRunUser_WithMockServer(t *testing.T) {
 	})
 	t.Run("user apikey list empty", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			json.NewEncoder(w).Encode([]map[string]any{})
+			_ = json.NewEncoder(w).Encode([]map[string]any{})
 		}))
 		defer srv.Close()
 		err := runUser([]string{"apikey", "list", "--admin-url", srv.URL, "--admin-key", "test-key", "--user", "user-1"})
@@ -171,7 +171,7 @@ func TestRunUser_WithMockServer(t *testing.T) {
 	})
 	t.Run("user permission list empty", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			json.NewEncoder(w).Encode([]map[string]any{})
+			_ = json.NewEncoder(w).Encode([]map[string]any{})
 		}))
 		defer srv.Close()
 		err := runUser([]string{"permission", "list", "--admin-url", srv.URL, "--admin-key", "test-key", "--user", "user-1"})
@@ -181,7 +181,7 @@ func TestRunUser_WithMockServer(t *testing.T) {
 	})
 	t.Run("user ip list empty", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			json.NewEncoder(w).Encode([]map[string]any{})
+			_ = json.NewEncoder(w).Encode([]map[string]any{})
 		}))
 		defer srv.Close()
 		err := runUser([]string{"ip", "list", "--admin-url", srv.URL, "--admin-key", "test-key", "--user", "user-1"})
@@ -194,7 +194,7 @@ func TestRunUser_WithMockServer(t *testing.T) {
 // TestRunAnalytics_LatencyWithServer tests analytics latency with mock server
 func TestRunAnalytics_LatencyWithServer(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"p50_ms": 10, "p95_ms": 50, "p99_ms": 100, "avg_ms": 25, "count": 1000,
 		})
 	}))

@@ -397,7 +397,7 @@ func TestLogout_WithSessionFromContext(t *testing.T) {
 		TokenHash: store.HashSessionToken(token),
 		ExpiresAt: time.Now().Add(time.Hour),
 	}
-	st.Sessions().Create(session)
+	_ = st.Sessions().Create(session)
 
 	srv, err := NewServer(cfg, st)
 	if err != nil {

@@ -34,7 +34,7 @@ func TestE2EGraphQLFederation(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("Failed to start gateway: %v", err)
 	}
-	defer cmd.Process.Kill()
+	defer func() { _ = cmd.Process.Kill() }()
 
 	// Wait for gateway to start
 	time.Sleep(2 * time.Second)

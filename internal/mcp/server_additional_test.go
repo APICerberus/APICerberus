@@ -1330,7 +1330,7 @@ func TestBuildRuntime(t *testing.T) {
 		if gw != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			gw.Shutdown(ctx)
+			_ = gw.Shutdown(ctx)
 		}
 	})
 }
@@ -1422,6 +1422,7 @@ func TestCloneConfigAdditional(t *testing.T) {
 		cfg := config.CloneConfig(src)
 		if cfg == nil {
 			t.Error("config.CloneConfig should not return nil")
+			return
 		}
 		if len(cfg.Audit.RouteRetentionDays) != 2 {
 			t.Errorf("RouteRetentionDays length = %d, want 2", len(cfg.Audit.RouteRetentionDays))
@@ -1443,6 +1444,7 @@ func TestCloneConfigAdditional(t *testing.T) {
 		cfg := config.CloneConfig(src)
 		if cfg == nil {
 			t.Error("config.CloneConfig should not return nil")
+			return
 		}
 		if len(cfg.Upstreams) != 1 {
 			t.Errorf("Upstreams length = %d, want 1", len(cfg.Upstreams))
@@ -1474,6 +1476,7 @@ func TestCloneConfigAdditional(t *testing.T) {
 		cfg := config.CloneConfig(src)
 		if cfg == nil {
 			t.Error("config.CloneConfig should not return nil")
+			return
 		}
 		if len(cfg.Consumers) != 1 {
 			t.Errorf("Consumers length = %d, want 1", len(cfg.Consumers))
@@ -1484,6 +1487,7 @@ func TestCloneConfigAdditional(t *testing.T) {
 	})
 }
 
+//lint:ignore U1000 helper function for future use
 func boolPtr(b bool) *bool {
 	return &b
 }
@@ -1747,7 +1751,7 @@ func TestRunSSE_HTTPRequests(t *testing.T) {
 
 		// Read a bit of the response to verify it's streaming
 		buf := make([]byte, 1024)
-		resp.Body.Read(buf)
+		_, _ = resp.Body.Read(buf)
 		if !strings.Contains(string(buf), "ready") {
 			t.Error("Expected 'ready' event in SSE stream")
 		}
@@ -2102,7 +2106,7 @@ func TestBuildRuntime_AdminFailure(t *testing.T) {
 		// Clean up if somehow it succeeded
 		if gw != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			gw.Shutdown(ctx)
+			_ = gw.Shutdown(ctx)
 			cancel()
 		}
 		t.Skip("Admin server accepted invalid address, skipping error path test")

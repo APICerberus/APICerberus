@@ -1,6 +1,7 @@
 package tracing
 
 import (
+	"context"
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
@@ -56,7 +57,7 @@ func TestMiddleware_Enabled(t *testing.T) {
 	}
 	defer func() {
 		if tracer != nil {
-			_ = tracer.Shutdown(nil)
+			_ = tracer.Shutdown(context.Background())
 		}
 	}()
 
@@ -92,7 +93,7 @@ func TestMiddleware_ErrorStatus(t *testing.T) {
 	}
 	defer func() {
 		if tracer != nil {
-			_ = tracer.Shutdown(nil)
+			_ = tracer.Shutdown(context.Background())
 		}
 	}()
 
@@ -127,7 +128,7 @@ func TestMiddleware_ClientError(t *testing.T) {
 	}
 	defer func() {
 		if tracer != nil {
-			_ = tracer.Shutdown(nil)
+			_ = tracer.Shutdown(context.Background())
 		}
 	}()
 
@@ -162,7 +163,7 @@ func TestMiddleware_WithXForwardedHeaders(t *testing.T) {
 	}
 	defer func() {
 		if tracer != nil {
-			_ = tracer.Shutdown(nil)
+			_ = tracer.Shutdown(context.Background())
 		}
 	}()
 

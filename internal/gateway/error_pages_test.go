@@ -68,7 +68,7 @@ func TestWriteErrorRoute_HTML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	rec := httptest.NewRecorder()
 	g.writeErrorRoute(rec, http.StatusBadGateway, "upstream_error", "Upstream failed", &config.Route{
@@ -98,7 +98,7 @@ func TestWriteErrorRoute_JSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	rec := httptest.NewRecorder()
 	g.writeErrorRoute(rec, http.StatusBadGateway, "upstream_error", "Upstream failed", &config.Route{
@@ -129,7 +129,7 @@ func TestWriteErrorRoute_RouteLevelOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Global is off, route-level overrides to HTML
 	rec := httptest.NewRecorder()
@@ -161,7 +161,7 @@ func TestWriteErrorRoute_NilRoute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Nil route should default to JSON (global off)
 	rec := httptest.NewRecorder()

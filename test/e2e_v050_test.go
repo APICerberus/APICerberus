@@ -33,7 +33,7 @@ func TestE2ERaftClustering(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("Failed to start gateway: %v", err)
 	}
-	defer cmd.Process.Kill()
+	defer func() { _ = cmd.Process.Kill() }()
 
 	// Wait for gateway to start
 	time.Sleep(2 * time.Second)
@@ -245,9 +245,9 @@ func TestE2ERaft3NodeCluster(t *testing.T) {
 	node3.AddPeer("node-2", "127.0.0.1:13002")
 
 	// Start transports
-	transport1.Start(node1)
-	transport2.Start(node2)
-	transport3.Start(node3)
+	_ = transport1.Start(node1)
+	_ = transport2.Start(node2)
+	_ = transport3.Start(node3)
 
 	t.Log("3-node cluster created successfully")
 

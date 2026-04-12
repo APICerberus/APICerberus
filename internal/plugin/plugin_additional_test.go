@@ -1906,7 +1906,7 @@ func TestBuildIPRestrictPlugin(t *testing.T) {
 		ctx := &PipelineContext{
 			Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
 		}
-		handled, err := plugin.Run(ctx)
+		handled, _ := plugin.Run(ctx)
 		if handled != false {
 			t.Errorf("Run() handled = %v, want false", handled)
 		}
@@ -2023,7 +2023,7 @@ func TestBuildRequestValidatorPlugin(t *testing.T) {
 		ctx := &PipelineContext{
 			Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
 		}
-		handled, err := plugin.Run(ctx)
+		handled, _ := plugin.Run(ctx)
 		if handled != false {
 			t.Errorf("Run() handled = %v, want false", handled)
 		}

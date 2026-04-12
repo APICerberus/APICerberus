@@ -44,7 +44,7 @@ func TestGateway_Start_WithHTTPS_Edge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -76,7 +76,7 @@ func TestGateway_Start_NoListeners_Edge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -126,7 +126,7 @@ func TestGateway_Reload_NilConfig_Edge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	err = g.Reload(nil)
 	if err == nil {
@@ -145,7 +145,7 @@ func TestGateway_Reload_WithTLSManagerError_Edge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	newCfg := &config.Config{
 		Gateway: config.GatewayConfig{
@@ -175,7 +175,7 @@ func TestGateway_Addr_Edge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Before start, listener is nil
 	addr := g.Addr()
@@ -705,7 +705,7 @@ func TestServeHTTPS_NilServer_Edge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	err = g.serveHTTPS(nil, nil)
 	if err == nil {
@@ -724,7 +724,7 @@ func TestServeHTTPS_NilTLSManager_Edge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	server := &http.Server{Addr: "127.0.0.1:0"}
 	err = g.serveHTTPS(server, nil)
@@ -760,7 +760,7 @@ func TestServeHTTPS_ListenError_Edge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	tlsManager, _ := NewTLSManager(config.TLSConfig{
 		CertFile: certFile,
@@ -1050,7 +1050,7 @@ func TestGateway_ServeHTTP_MaxBodySize_Edge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Request with body larger than max
 	body := strings.NewReader("this body is way too large for the limit")
@@ -1077,7 +1077,7 @@ func TestGateway_ServeHTTP_RouteNotFound_Edge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	req := httptest.NewRequest("GET", "/api", nil)
 	w := httptest.NewRecorder()
@@ -1116,7 +1116,7 @@ func TestGateway_ServeHTTP_UpstreamNotFound_Edge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	req := httptest.NewRequest("GET", "/api", nil)
 	w := httptest.NewRecorder()
@@ -1141,7 +1141,7 @@ func TestGateway_ConcurrentAccess_Edge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {

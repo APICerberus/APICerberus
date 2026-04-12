@@ -68,11 +68,11 @@ func TestRunUser_IPCommands(t *testing.T) {
 func TestRunUser_SuspendActivate(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/status") {
-			json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "status": "suspended"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "status": "suspended"})
 			return
 		}
 		if r.Method == http.MethodGet {
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id":     "user-1",
 				"email":  "test@example.com",
 				"status": "active",
@@ -102,11 +102,11 @@ func TestRunUser_SuspendActivate(t *testing.T) {
 func TestRunUser_ResetPassword(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/reset-password") {
-			json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "status": "active"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "status": "active"})
 			return
 		}
 		if r.Method == http.MethodGet && r.URL.Path == "/admin/api/v1/users/user-1" {
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id":     "user-1",
 				"email":  "test@example.com",
 				"status": "active",
@@ -138,7 +138,7 @@ func TestRunUser_ResetPassword(t *testing.T) {
 func TestRunAnalytics_LatencyAdvanced(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/analytics/latency") {
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"percentiles": map[string]any{
 					"p50": 10.5,
 					"p99": 50.2,
@@ -224,7 +224,7 @@ func TestRunStop_MissingPIDFile(t *testing.T) {
 func TestRunStop_InvalidPID(t *testing.T) {
 	tmpDir := t.TempDir()
 	pidFile := tmpDir + "/test.pid"
-	os.WriteFile(pidFile, []byte("not-a-number"), 0644)
+	_ = os.WriteFile(pidFile, []byte("not-a-number"), 0644)
 
 	err := runStop([]string{"--pid-file", pidFile})
 	if err == nil {
@@ -238,7 +238,7 @@ func TestRunStop_InvalidPID(t *testing.T) {
 func TestRunStop_ProcessNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	pidFile := tmpDir + "/test.pid"
-	os.WriteFile(pidFile, []byte("999999"), 0644)
+	_ = os.WriteFile(pidFile, []byte("999999"), 0644)
 
 	err := runStop([]string{"--pid-file", pidFile})
 	// Process may or may not exist, so we just check it doesn't panic
@@ -296,7 +296,7 @@ func TestRunEntityList_InvalidEntity(t *testing.T) {
 
 func TestRunEntityGet_Service(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"id":   "svc-1",
 			"name": "test-service",
 		})
@@ -327,7 +327,7 @@ func TestRunEntityDelete_Service(t *testing.T) {
 
 func TestRunEntityAdd_Service(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"id": "svc-new"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "svc-new"})
 	}))
 	defer upstream.Close()
 
@@ -342,7 +342,7 @@ func TestRunEntityAdd_Service(t *testing.T) {
 
 func TestRunEntityUpdate_Service(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"id": "svc-1"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "svc-1"})
 	}))
 	defer upstream.Close()
 
@@ -406,7 +406,7 @@ func TestResolveAdminConnection_MissingArgs(t *testing.T) {
 func TestRunGatewayEntities_Extra(t *testing.T) {
 	t.Run("service with args", func(t *testing.T) {
 		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"services": []map[string]any{
 					{"id": "svc-1", "name": "Test Service"},
 				},
@@ -422,7 +422,7 @@ func TestRunGatewayEntities_Extra(t *testing.T) {
 
 	t.Run("route with args", func(t *testing.T) {
 		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"routes": []map[string]any{
 					{"id": "route-1", "path": "/api/v1/test"},
 				},
@@ -454,7 +454,7 @@ func TestRunStop_Advanced(t *testing.T) {
 		// Create a temp file with invalid content
 		tmpFile, _ := os.CreateTemp("", "invalid-pid-*.txt")
 		defer os.Remove(tmpFile.Name())
-		tmpFile.WriteString("not-a-number")
+		_, _ = tmpFile.WriteString("not-a-number")
 		tmpFile.Close()
 
 		err := runStop([]string{"--pid-file", tmpFile.Name()})
@@ -484,7 +484,7 @@ func TestRunConfigValidate_Advanced(t *testing.T) {
 		// Create temp file with clearly broken YAML
 		tmpFile, _ := os.CreateTemp("", "invalid-config-*.yaml")
 		defer os.Remove(tmpFile.Name())
-		tmpFile.WriteString("{broken json but not really yaml: [[[")
+		_, _ = tmpFile.WriteString("{broken json but not really yaml: [[[")
 		tmpFile.Close()
 
 		err := runConfigValidate([]string{tmpFile.Name()})
@@ -506,7 +506,7 @@ func TestRunMCP_Advanced(t *testing.T) {
 		// Create a minimal config file
 		tmpFile, _ := os.CreateTemp("", "mcp-config-*.yaml")
 		defer os.Remove(tmpFile.Name())
-		tmpFile.WriteString("server:\n  port: 8080\n")
+		_, _ = tmpFile.WriteString("server:\n  port: 8080\n")
 		tmpFile.Close()
 
 		err := runMCP([]string{"--config", tmpFile.Name(), "--transport", "invalid"})

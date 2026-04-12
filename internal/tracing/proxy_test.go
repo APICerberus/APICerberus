@@ -49,7 +49,7 @@ func TestProxyTracer_Enabled(t *testing.T) {
 	tracer, _ := New(cfg)
 	defer func() {
 		if tracer != nil {
-			_ = tracer.Shutdown(nil)
+			_ = tracer.Shutdown(context.Background())
 		}
 	}()
 
@@ -82,7 +82,7 @@ func TestProxyTracer_WithError(t *testing.T) {
 	tracer, _ := New(cfg)
 	defer func() {
 		if tracer != nil {
-			_ = tracer.Shutdown(nil)
+			_ = tracer.Shutdown(context.Background())
 		}
 	}()
 
@@ -106,7 +106,7 @@ func TestProxyTracer_WithServerError(t *testing.T) {
 	tracer, _ := New(cfg)
 	defer func() {
 		if tracer != nil {
-			_ = tracer.Shutdown(nil)
+			_ = tracer.Shutdown(context.Background())
 		}
 	}()
 
@@ -161,7 +161,7 @@ func TestProxyTracer_TraceRoundTripper_Enabled(t *testing.T) {
 	tracer, _ := New(cfg)
 	defer func() {
 		if tracer != nil {
-			_ = tracer.Shutdown(nil)
+			_ = tracer.Shutdown(context.Background())
 		}
 	}()
 
@@ -202,7 +202,7 @@ func TestTracedRoundTripper_WithError(t *testing.T) {
 	tracer, _ := New(cfg)
 	defer func() {
 		if tracer != nil {
-			_ = tracer.Shutdown(nil)
+			_ = tracer.Shutdown(context.Background())
 		}
 	}()
 
@@ -236,7 +236,7 @@ func TestTracedRoundTripper_WithServerError(t *testing.T) {
 	tracer, _ := New(cfg)
 	defer func() {
 		if tracer != nil {
-			_ = tracer.Shutdown(nil)
+			_ = tracer.Shutdown(context.Background())
 		}
 	}()
 
@@ -286,7 +286,7 @@ func TestEndUpstreamSpan_NilSpan(t *testing.T) {
 	tracer, _ := New(cfg)
 	defer func() {
 		if tracer != nil {
-			_ = tracer.Shutdown(nil)
+			_ = tracer.Shutdown(context.Background())
 		}
 	}()
 

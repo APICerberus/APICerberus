@@ -29,7 +29,7 @@ func TestExecutor_Execute(t *testing.T) {
 			Query     string                 `json:"query"`
 			Variables map[string]interface{} `json:"variables"`
 		}
-		json.NewDecoder(r.Body).Decode(&reqBody)
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
 
 		// Return mock response
 		response := map[string]interface{}{
@@ -41,7 +41,7 @@ func TestExecutor_Execute(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -75,7 +75,7 @@ func TestExecutor_Execute_WithDependencies(t *testing.T) {
 			Query     string                 `json:"query"`
 			Variables map[string]interface{} `json:"variables"`
 		}
-		json.NewDecoder(r.Body).Decode(&reqBody)
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
 
 		callCount++
 
@@ -100,7 +100,7 @@ func TestExecutor_Execute_WithDependencies(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -140,7 +140,7 @@ func TestExecutor_Execute_WithDependencies(t *testing.T) {
 func TestExecutor_Execute_SubgraphError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"errors": []map[string]interface{}{
 				{"message": "Internal server error"},
 			},
@@ -186,7 +186,7 @@ func TestExecutor_Execute_Entities(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -353,7 +353,7 @@ func TestBatchRequest(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 

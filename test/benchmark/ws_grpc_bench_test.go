@@ -219,14 +219,14 @@ func BenchmarkGRPCTranscodingOverhead(b *testing.B) {
 			Length: len(protoPayload),
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer transcodeServer.Close()
 
 	// Raw server that returns binary directly
 	rawServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Write(protoPayload)
+		_, _ = w.Write(protoPayload)
 	}))
 	defer rawServer.Close()
 

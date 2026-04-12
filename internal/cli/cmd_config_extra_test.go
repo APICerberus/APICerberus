@@ -22,7 +22,7 @@ admin:
   api_key: test-key
   token_secret: test-admin-token-secret-at-least-32-chars-long
 `
-	os.WriteFile(configPath, []byte(configContent), 0644)
+	_ = os.WriteFile(configPath, []byte(configContent), 0644)
 
 	// Test export to stdout
 	err := runConfigExport([]string{"--config", configPath, "--out", "-"})
@@ -45,7 +45,7 @@ admin:
   api_key: test-key
   token_secret: test-admin-token-secret-at-least-32-chars-long
 `
-	os.WriteFile(configPath, []byte(configContent), 0644)
+	_ = os.WriteFile(configPath, []byte(configContent), 0644)
 
 	err := runConfigExport([]string{"--config", configPath, "--out", outputPath})
 	if err != nil {
@@ -80,7 +80,7 @@ admin:
   api_key: imported-key
   token_secret: test-admin-token-secret-at-least-32-chars-long
 `
-	os.WriteFile(sourcePath, []byte(configContent), 0644)
+	_ = os.WriteFile(sourcePath, []byte(configContent), 0644)
 
 	err := runConfigImport([]string{"--target", targetPath, sourcePath})
 	if err != nil {
@@ -129,8 +129,8 @@ gateway:
   http_addr: :9090
   https_addr: :9443
 `
-	os.WriteFile(oldPath, []byte(oldContent), 0644)
-	os.WriteFile(newPath, []byte(newContent), 0644)
+	_ = os.WriteFile(oldPath, []byte(oldContent), 0644)
+	_ = os.WriteFile(newPath, []byte(newContent), 0644)
 
 	err := runConfigDiff([]string{oldPath, newPath})
 	if err != nil {
@@ -148,7 +148,7 @@ func TestRunConfigDiff_MissingArgs(t *testing.T) {
 func TestRunConfigDiff_InvalidOldPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	newPath := filepath.Join(tmpDir, "new.yaml")
-	os.WriteFile(newPath, []byte("test"), 0644)
+	_ = os.WriteFile(newPath, []byte("test"), 0644)
 
 	err := runConfigDiff([]string{"/nonexistent/old.yaml", newPath})
 	if err == nil {
@@ -159,7 +159,7 @@ func TestRunConfigDiff_InvalidOldPath(t *testing.T) {
 func TestRunConfigDiff_InvalidNewPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldPath := filepath.Join(tmpDir, "old.yaml")
-	os.WriteFile(oldPath, []byte("test"), 0644)
+	_ = os.WriteFile(oldPath, []byte("test"), 0644)
 
 	err := runConfigDiff([]string{oldPath, "/nonexistent/new.yaml"})
 	if err == nil {
@@ -171,7 +171,7 @@ func TestReadLines(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")
 	content := "line1\nline2\nline3\n"
-	os.WriteFile(testFile, []byte(content), 0644)
+	_ = os.WriteFile(testFile, []byte(content), 0644)
 
 	lines, err := readLines(testFile)
 	if err != nil {
@@ -194,7 +194,7 @@ func TestReadLines(t *testing.T) {
 func TestReadLines_EmptyFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "empty.txt")
-	os.WriteFile(testFile, []byte(""), 0644)
+	_ = os.WriteFile(testFile, []byte(""), 0644)
 
 	lines, err := readLines(testFile)
 	if err != nil {

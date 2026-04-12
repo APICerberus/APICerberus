@@ -122,7 +122,7 @@ func TestCheckNodeHealth_WithHealthyNode(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/admin/api/v1/cluster/status" {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]any{"state": "healthy"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"state": "healthy"})
 		}
 	}))
 	defer server.Close()

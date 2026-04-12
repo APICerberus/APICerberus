@@ -134,7 +134,7 @@ func TestListTemplates(t *testing.T) {
 
 	// Add some templates
 	for i := 0; i < 3; i++ {
-		engine.RegisterTemplate(WebhookTemplate{
+		_ = engine.RegisterTemplate(WebhookTemplate{
 			ID:      "list-test-" + string(rune('a'+i)),
 			Name:    "List Test " + string(rune('A'+i)),
 			Type:    WebhookTemplateCustom,
@@ -157,19 +157,19 @@ func TestListTemplatesByType(t *testing.T) {
 	engine.templates = make(map[string]WebhookTemplate)
 	engine.compiled = make(map[string]*template.Template)
 
-	engine.RegisterTemplate(WebhookTemplate{
+	_ = engine.RegisterTemplate(WebhookTemplate{
 		ID:   "slack-1",
 		Name: "Slack 1",
 		Type: WebhookTemplateSlack,
 		Body: `{"slack": true}`,
 	})
-	engine.RegisterTemplate(WebhookTemplate{
+	_ = engine.RegisterTemplate(WebhookTemplate{
 		ID:   "slack-2",
 		Name: "Slack 2",
 		Type: WebhookTemplateSlack,
 		Body: `{"slack": true}`,
 	})
-	engine.RegisterTemplate(WebhookTemplate{
+	_ = engine.RegisterTemplate(WebhookTemplate{
 		ID:   "discord-1",
 		Name: "Discord 1",
 		Type: WebhookTemplateDiscord,
@@ -192,7 +192,7 @@ func TestRender(t *testing.T) {
 	engine := NewWebhookTemplateEngine()
 
 	// Register a simple test template first
-	engine.RegisterTemplate(WebhookTemplate{
+	_ = engine.RegisterTemplate(WebhookTemplate{
 		ID:          "render-test",
 		Name:        "Render Test",
 		Type:        WebhookTemplateCustom,
@@ -248,7 +248,7 @@ func TestBuildRequest(t *testing.T) {
 	engine := NewWebhookTemplateEngine()
 
 	// Register a simple template
-	engine.RegisterTemplate(WebhookTemplate{
+	_ = engine.RegisterTemplate(WebhookTemplate{
 		ID:          "build-test",
 		Name:        "Build Test",
 		Type:        WebhookTemplateCustom,
@@ -349,7 +349,7 @@ func TestTestTemplate(t *testing.T) {
 	engine := NewWebhookTemplateEngine()
 
 	// Register a template first
-	engine.RegisterTemplate(WebhookTemplate{
+	_ = engine.RegisterTemplate(WebhookTemplate{
 		ID:      "testable",
 		Name:    "Testable Template",
 		Type:    WebhookTemplateCustom,

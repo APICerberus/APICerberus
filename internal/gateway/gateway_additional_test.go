@@ -546,7 +546,7 @@ func TestNew_WithFederation(t *testing.T) {
 	// Shutdown to release database lock before temp dir cleanup
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	g.Shutdown(ctx)
+	_ = g.Shutdown(ctx)
 }
 
 // Test Health Checker Snapshot
@@ -630,7 +630,7 @@ func TestGateway_Uptime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	uptime := g.Uptime()
 	if uptime < 0 {
@@ -645,7 +645,7 @@ func TestGateway_UpstreamHealth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Get upstream health (should return empty map)
 	health := g.UpstreamHealth("nonexistent")
@@ -661,7 +661,7 @@ func TestGateway_FederationGetters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Subgraphs (should return nil when disabled)
 	subgraphs := g.Subgraphs()
@@ -816,6 +816,7 @@ func TestIPHash_ReportHealth_Coverage(t *testing.T) {
 	}
 	if target == nil {
 		t.Error("Expected non-nil target")
+		return
 	}
 	// Should only return healthy target (b)
 	if target.ID != "b" {
@@ -1223,7 +1224,7 @@ func TestGateway_ServeFederation_Coverage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Test non-POST method
 	req := httptest.NewRequest("GET", "/graphql", nil)
@@ -1270,7 +1271,7 @@ func TestGateway_RebuildFederationPlanner_Coverage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Test RebuildFederationPlanner when federation is enabled
 	// This should not panic even if subgraphs/composer are not fully initialized
@@ -1292,7 +1293,7 @@ func TestGateway_RebuildFederationPlanner_Coverage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g2.Shutdown(context.Background())
+	defer func() { _ = g2.Shutdown(context.Background()) }()
 
 	// Should not panic when federation is disabled
 	g2.RebuildFederationPlanner()

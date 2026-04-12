@@ -252,8 +252,8 @@ func TestCertFSM_GetCertificateFromDisk_Errors(t *testing.T) {
 
 		// Create domain directory with only cert file
 		domainDir := filepath.Join(tmpDir, "test.example.com")
-		os.MkdirAll(domainDir, 0755)
-		os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("cert"), 0644)
+		_ = os.MkdirAll(domainDir, 0755)
+		_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("cert"), 0644)
 
 		_, err := fsm.GetCertificateFromDisk("test.example.com")
 		if err == nil {
@@ -269,13 +269,13 @@ func TestCertFSM_GetCertificateFromDisk_Success(t *testing.T) {
 
 	// Create domain directory with cert and key
 	domainDir := filepath.Join(tmpDir, "test.example.com")
-	os.MkdirAll(domainDir, 0755)
-	os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("cert content"), 0644)
-	os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("key content"), 0644)
+	_ = os.MkdirAll(domainDir, 0755)
+	_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("cert content"), 0644)
+	_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("key content"), 0644)
 
 	// Write metadata
 	meta := `{"issued_at": "2024-01-01T00:00:00Z", "expires_at": "2025-01-01T00:00:00Z", "issued_by": "node1"}`
-	os.WriteFile(filepath.Join(domainDir, "meta.json"), []byte(meta), 0644)
+	_ = os.WriteFile(filepath.Join(domainDir, "meta.json"), []byte(meta), 0644)
 
 	cert, err := fsm.GetCertificateFromDisk("test.example.com")
 	if err != nil {
@@ -385,9 +385,9 @@ func TestCertFSM_GetCertificateFromDisk_NoMeta(t *testing.T) {
 
 	// Create domain directory with only cert and key (no meta.json)
 	domainDir := filepath.Join(tmpDir, "test.example.com")
-	os.MkdirAll(domainDir, 0755)
-	os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("cert"), 0644)
-	os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("key"), 0644)
+	_ = os.MkdirAll(domainDir, 0755)
+	_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("cert"), 0644)
+	_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("key"), 0644)
 
 	// Should still work without meta.json
 	cert, err := fsm.GetCertificateFromDisk("test.example.com")
@@ -796,14 +796,12 @@ func TestNode_LastLogIndex_WithEntry(t *testing.T) {
 	node.SetStorage(NewInmemStorage())
 
 	// Append an entry (will fail since not leader)
-	_, err = node.AppendEntry([]byte("test data"))
+	_, _ = node.AppendEntry([]byte("test data"))
 
 	// lastLogIndex should still be valid
 	index := node.lastLogIndex()
-
-	// Should be at least 0
-	if index < 0 {
-		t.Errorf("lastLogIndex = %d, want non-negative", index)
+	if index == 0 {
+		t.Logf("lastLogIndex = %d (may be 0 if no entries)", index)
 	}
 }
 
@@ -825,9 +823,9 @@ func TestNode_LastLogTerm_WithEntry(t *testing.T) {
 
 	term := node.lastLogTerm()
 
-	// Term should be valid
-	if term < 0 {
-		t.Errorf("lastLogTerm = %d, want non-negative", term)
+	// Term should be valid (uint64 so always >= 0)
+	if term == 0 {
+		t.Logf("lastLogTerm = %d (may be 0 if no entries)", term)
 	}
 }
 

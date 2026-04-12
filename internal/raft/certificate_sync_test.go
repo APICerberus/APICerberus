@@ -159,7 +159,7 @@ func TestCertFSM_ApplyCertCommand_ACMERenewalLock_Conflict(t *testing.T) {
 		Deadline: time.Now().Add(time.Hour),
 	}
 	data1, _ := json.Marshal(lock1)
-	fsm.ApplyCertCommand("acme_renewal_lock", data1)
+	_ = fsm.ApplyCertCommand("acme_renewal_lock", data1)
 
 	// Second lock attempt (should fail)
 	lock2 := ACMERenewalLock{
@@ -205,9 +205,9 @@ func TestCertFSM_GetCertificateFromDisk(t *testing.T) {
 
 	// Create certificate files
 	domainDir := filepath.Join(tmpDir, "example.com")
-	os.MkdirAll(domainDir, 0755)
-	os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("CERT-DATA"), 0600)
-	os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("KEY-DATA"), 0600)
+	_ = os.MkdirAll(domainDir, 0755)
+	_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("CERT-DATA"), 0600)
+	_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("KEY-DATA"), 0600)
 
 	// Create metadata
 	meta := map[string]interface{}{
@@ -216,7 +216,7 @@ func TestCertFSM_GetCertificateFromDisk(t *testing.T) {
 		"issued_by":  "node-1",
 	}
 	metaData, _ := json.Marshal(meta)
-	os.WriteFile(filepath.Join(domainDir, "meta.json"), metaData, 0600)
+	_ = os.WriteFile(filepath.Join(domainDir, "meta.json"), metaData, 0600)
 
 	cert, err := fsm.GetCertificateFromDisk("example.com")
 	if err != nil {
@@ -250,9 +250,9 @@ func TestCertFSM_LoadCertificatesFromDisk(t *testing.T) {
 	domains := []string{"example.com", "test.com"}
 	for _, domain := range domains {
 		domainDir := filepath.Join(tmpDir, domain)
-		os.MkdirAll(domainDir, 0755)
-		os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("CERT-"+domain), 0600)
-		os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("KEY-"+domain), 0600)
+		_ = os.MkdirAll(domainDir, 0755)
+		_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("CERT-"+domain), 0600)
+		_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("KEY-"+domain), 0600)
 	}
 
 	err := fsm.LoadCertificatesFromDisk()

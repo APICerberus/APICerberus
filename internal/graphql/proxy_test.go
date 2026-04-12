@@ -163,7 +163,7 @@ func TestIntrospectionChecker(t *testing.T) {
 func TestProxy_Forward_WithVariables(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req Request
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 
 		if req.Variables == nil {
 			t.Error("Variables should not be nil")
@@ -198,7 +198,7 @@ func TestProxy_Forward_WithVariables(t *testing.T) {
 func TestProxy_Forward_WithOperationName(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req Request
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 
 		if req.OperationName != "GetUser" {
 			t.Errorf("OperationName = %s, want GetUser", req.OperationName)

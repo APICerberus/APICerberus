@@ -41,7 +41,7 @@ func TestRunAnalytics_Overview(t *testing.T) {
 			"total_errors":   10,
 			"avg_latency_ms": 45.5,
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -54,7 +54,7 @@ func TestRunAnalytics_Overview(t *testing.T) {
 func TestRunAnalytics_Overview_JSONOutput(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response := map[string]any{"total_requests": 500}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -81,7 +81,7 @@ func TestRunAnalytics_Requests(t *testing.T) {
 				},
 			},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -96,7 +96,7 @@ func TestRunAnalytics_Requests_EmptyItems(t *testing.T) {
 		response := map[string]any{
 			"items": []map[string]any{},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -122,7 +122,7 @@ func TestRunAnalytics_Requests_WithFlags(t *testing.T) {
 			t.Errorf("Expected granularity parameter, got %s", query.Get("granularity"))
 		}
 		response := map[string]any{"items": []map[string]any{}}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -149,7 +149,7 @@ func TestRunAnalytics_Latency(t *testing.T) {
 			"p95": 100,
 			"p99": 200,
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 

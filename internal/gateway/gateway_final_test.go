@@ -44,7 +44,7 @@ func TestGateway_Start_WithNoListeners(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -70,7 +70,7 @@ func TestGateway_Start_WithGRPC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -109,7 +109,7 @@ func TestGateway_Start_WithNilContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Start with nil context - should use background
 	_, cancel := context.WithCancel(context.Background())
@@ -152,7 +152,7 @@ func TestGateway_Start_ListenerError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -180,7 +180,7 @@ func TestGateway_Reload_ErrorPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Test nil config
 	err = g.Reload(nil)
@@ -224,7 +224,7 @@ func TestGateway_Reload_WithHTTPS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Create test certificate files
 	certFile := tmpDir + "/test.crt"
@@ -274,7 +274,7 @@ func TestGateway_Reload_WithPluginError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Create a config that will fail plugin build
 	badCfg := &config.Config{
@@ -322,7 +322,7 @@ func TestGateway_Shutdown_Graceful(t *testing.T) {
 
 	// Start server
 	go func() {
-		g.Start(ctx)
+		_ = g.Start(ctx)
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -357,7 +357,7 @@ func TestGateway_Shutdown_WithGRPC(t *testing.T) {
 	defer cancel()
 
 	go func() {
-		g.Start(ctx)
+		_ = g.Start(ctx)
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -402,14 +402,14 @@ func generateTestCert(certFile, keyFile string) error {
 		return err
 	}
 	defer certOut.Close()
-	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	_ = pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 
 	keyOut, err := os.Create(keyFile)
 	if err != nil {
 		return err
 	}
 	defer keyOut.Close()
-	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)})
+	_ = pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)})
 
 	return nil
 }
@@ -1314,7 +1314,7 @@ func TestGateway_ServeFederation_MethodNotAllowed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Test GET request (should be POST)
 	req := httptest.NewRequest("GET", "/graphql", nil)
@@ -1344,7 +1344,7 @@ func TestGateway_ServeFederation_InvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Test with invalid JSON
 	req := httptest.NewRequest("POST", "/graphql", strings.NewReader("not valid json"))
@@ -1375,7 +1375,7 @@ func TestGateway_ServeFederation_EmptyQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Test with empty query
 	req := httptest.NewRequest("POST", "/graphql", strings.NewReader(`{"query": ""}`))
@@ -1406,7 +1406,7 @@ func TestGateway_ServeFederation_NotReady(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Test when planner/executor are nil (not ready)
 	req := httptest.NewRequest("POST", "/graphql", strings.NewReader(`{"query": "{ test }"}`))
@@ -1433,7 +1433,7 @@ func TestGateway_RebuildFederationPlanner_Disabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Should not panic when federation is disabled
 	g.RebuildFederationPlanner()
@@ -1457,7 +1457,7 @@ func TestGateway_RebuildFederationPlanner_NilSubgraphs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Set subgraphs to nil
 	g.subgraphs = nil
@@ -1484,7 +1484,7 @@ func TestGateway_RebuildFederationPlanner_NilComposer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Set composer to nil
 	g.federationComposer = nil
@@ -2362,7 +2362,7 @@ func TestGateway_writeAuthError_JWTError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	w := httptest.NewRecorder()
 	jwtErr := &plugin.JWTAuthError{
@@ -2388,7 +2388,7 @@ func TestGateway_writePluginError_AllTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	testCases := []struct {
 		name     string
@@ -2470,7 +2470,7 @@ func TestGateway_writeBillingError_ErrNoRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	w := httptest.NewRecorder()
 	g.writeBillingError(w, sql.ErrNoRows)
@@ -2491,7 +2491,7 @@ func TestGateway_writeBillingError_Generic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	w := httptest.NewRecorder()
 	g.writeBillingError(w, errors.New("some billing error"))
@@ -2692,7 +2692,7 @@ func TestGateway_ServeHTTP_MaxBodySize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	// Request with body larger than max
 	body := strings.NewReader("this body is way too large for the limit")
@@ -2719,7 +2719,7 @@ func TestGateway_ServeHTTP_RouteNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	req := httptest.NewRequest("GET", "/api", nil)
 	w := httptest.NewRecorder()
@@ -2758,7 +2758,7 @@ func TestGateway_ServeHTTP_UpstreamNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	req := httptest.NewRequest("GET", "/api", nil)
 	w := httptest.NewRecorder()
@@ -2780,7 +2780,7 @@ func boolPtr(b bool) *bool {
 func TestGateway_MaxBodyBytes_Enforced(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	}))
 	defer upstream.Close()
 
@@ -2863,7 +2863,7 @@ func TestGateway_MaxBodyBytes_ChunkedTransfer(t *testing.T) {
 			t.Logf("Upstream read %d bytes", len(body))
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	}))
 	defer upstream.Close()
 
@@ -2911,7 +2911,7 @@ func TestGateway_MaxBodyBytes_ChunkedTransfer(t *testing.T) {
 	go func() {
 		// Write more than 512 bytes in chunks
 		for i := 0; i < 10; i++ {
-			pw.Write(make([]byte, 100))
+			_, _ = pw.Write(make([]byte, 100))
 		}
 		pw.Close()
 	}()

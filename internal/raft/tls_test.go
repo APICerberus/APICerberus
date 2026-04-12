@@ -70,7 +70,7 @@ func TestTLSCertificateManager_NoCA(t *testing.T) {
 func TestTLSCertificateManager_ImportCACert(t *testing.T) {
 	// Create first manager and generate CA
 	manager1, _ := NewTLSCertificateManager("node1", "test-cluster")
-	manager1.GenerateCA()
+	_ = manager1.GenerateCA()
 	caCert, _ := manager1.ExportCACert()
 
 	// Create second manager and import CA

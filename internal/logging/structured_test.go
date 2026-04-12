@@ -110,7 +110,9 @@ func TestStructuredLogger_WithContext(t *testing.T) {
 	var buf bytes.Buffer
 	logger := NewStructuredLogger(&buf, InfoLevel)
 
+	//nolint:staticcheck // Test context values intentionally use string keys
 	ctx := context.WithValue(context.Background(), "trace_id", "abc123")
+	//nolint:staticcheck // Test context values intentionally use string keys
 	ctx = context.WithValue(ctx, "span_id", "span456")
 
 	newLogger := logger.WithContext(ctx)
@@ -355,7 +357,7 @@ func TestRequestLogger_Middleware(t *testing.T) {
 
 	handler := rl.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	}))
 
 	req := httptest.NewRequest("GET", "/test", nil)

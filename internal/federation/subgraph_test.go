@@ -71,7 +71,7 @@ func TestSubgraphManager_RemoveSubgraph(t *testing.T) {
 		ID:  "users",
 		URL: "http://localhost:4001/graphql",
 	}
-	manager.AddSubgraph(subgraph)
+	_ = manager.AddSubgraph(subgraph)
 
 	manager.RemoveSubgraph("users")
 
@@ -162,7 +162,7 @@ func TestSubgraphManager_FetchSchema(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -202,7 +202,7 @@ func TestSubgraphManager_FetchSchema_Error(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 

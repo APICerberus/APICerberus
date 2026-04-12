@@ -23,7 +23,7 @@ func TestRotateCompressed(t *testing.T) {
 		path := filepath.Join(tmpDir, "test.log")
 
 		// Create initial log file
-		os.WriteFile(path, []byte("log content"), 0644)
+		_ = os.WriteFile(path, []byte("log content"), 0644)
 
 		err := rotateCompressed(path, 0)
 		if err != nil {
@@ -41,7 +41,7 @@ func TestRotateCompressed(t *testing.T) {
 		path := filepath.Join(tmpDir, "test.log")
 
 		// Create initial log file
-		os.WriteFile(path, []byte("latest log"), 0644)
+		_ = os.WriteFile(path, []byte("latest log"), 0644)
 
 		err := rotateCompressed(path, 3)
 		if err != nil {
@@ -61,7 +61,7 @@ func TestRotateCompressed(t *testing.T) {
 
 		// Rotate multiple times
 		for i := 0; i < 5; i++ {
-			os.WriteFile(path, []byte("log content"), 0644)
+			_ = os.WriteFile(path, []byte("log content"), 0644)
 			err := rotateCompressed(path, 3)
 			if err != nil {
 				t.Errorf("rotateCompressed() iteration %d error = %v", i, err)
@@ -78,7 +78,7 @@ func TestCompressTo(t *testing.T) {
 		dstPath := filepath.Join(tmpDir, "test.log.1.gz")
 
 		content := []byte("test log content for compression")
-		os.WriteFile(srcPath, content, 0644)
+		_ = os.WriteFile(srcPath, content, 0644)
 
 		err := compressTo(srcPath, dstPath)
 		if err != nil {
@@ -112,7 +112,7 @@ func TestCompressTo(t *testing.T) {
 		srcPath := filepath.Join(tmpDir, "empty.log")
 		dstPath := filepath.Join(tmpDir, "empty.log.1.gz")
 
-		os.WriteFile(srcPath, []byte{}, 0644)
+		_ = os.WriteFile(srcPath, []byte{}, 0644)
 
 		err := compressTo(srcPath, dstPath)
 		if err != nil {
@@ -134,7 +134,7 @@ func TestCompressTo(t *testing.T) {
 		for i := range content {
 			content[i] = byte('a' + (i % 26))
 		}
-		os.WriteFile(srcPath, content, 0644)
+		_ = os.WriteFile(srcPath, content, 0644)
 
 		err := compressTo(srcPath, dstPath)
 		if err != nil {

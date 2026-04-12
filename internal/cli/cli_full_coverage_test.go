@@ -120,7 +120,7 @@ func TestRunCredit_WithMockServer(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.Contains(r.URL.Path, "/credits/overview"):
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"total_distributed": "100000",
 				"total_consumed":    "50000",
 				"top_consumers": []map[string]any{
@@ -128,24 +128,24 @@ func TestRunCredit_WithMockServer(t *testing.T) {
 				},
 			})
 		case strings.Contains(r.URL.Path, "/credits/balance"):
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"user_id":        "user-1",
 				"credit_balance": "500",
 			})
 		case strings.Contains(r.URL.Path, "/credits/topup"):
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"user_id":        "user-1",
 				"credit_balance": "600",
 				"amount":         100,
 			})
 		case strings.Contains(r.URL.Path, "/credits/deduct"):
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"user_id":        "user-1",
 				"credit_balance": "400",
 				"amount":         100,
 			})
 		case strings.Contains(r.URL.Path, "/credits/transactions"):
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"transactions": []map[string]any{
 					{"id": "txn-1", "type": "topup", "amount": 100, "balance_after": 500, "description": "Test", "created_at": "2024-01-01"},
 				},
@@ -241,18 +241,18 @@ func TestRunEntity_Upstream(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/upstreams"):
 			if strings.HasSuffix(r.URL.Path, "/upstreams") {
-				json.NewEncoder(w).Encode([]map[string]any{
+				_ = json.NewEncoder(w).Encode([]map[string]any{
 					{"id": "up-1", "name": "Test Upstream", "algorithm": "round_robin"},
 				})
 			} else {
-				json.NewEncoder(w).Encode(map[string]any{"id": "up-1", "name": "Test Upstream"})
+				_ = json.NewEncoder(w).Encode(map[string]any{"id": "up-1", "name": "Test Upstream"})
 			}
 		case r.Method == http.MethodPost:
-			json.NewEncoder(w).Encode(map[string]any{"id": "up-new"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "up-new"})
 		case r.Method == http.MethodDelete:
 			w.WriteHeader(http.StatusNoContent)
 		case r.Method == http.MethodPut:
-			json.NewEncoder(w).Encode(map[string]any{"id": "up-1"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "up-1"})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -308,18 +308,18 @@ func TestRunEntity_Route(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/routes"):
 			if strings.HasSuffix(r.URL.Path, "/routes") {
-				json.NewEncoder(w).Encode([]map[string]any{
+				_ = json.NewEncoder(w).Encode([]map[string]any{
 					{"id": "route-1", "path": "/api/*", "service": "svc-1"},
 				})
 			} else {
-				json.NewEncoder(w).Encode(map[string]any{"id": "route-1", "path": "/api/*"})
+				_ = json.NewEncoder(w).Encode(map[string]any{"id": "route-1", "path": "/api/*"})
 			}
 		case r.Method == http.MethodPost:
-			json.NewEncoder(w).Encode(map[string]any{"id": "route-new"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "route-new"})
 		case r.Method == http.MethodDelete:
 			w.WriteHeader(http.StatusNoContent)
 		case r.Method == http.MethodPut:
-			json.NewEncoder(w).Encode(map[string]any{"id": "route-1"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "route-1"})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -335,7 +335,7 @@ func TestRunEntity_Route(t *testing.T) {
 
 	t.Run("route list empty", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			json.NewEncoder(w).Encode([]map[string]any{})
+			_ = json.NewEncoder(w).Encode([]map[string]any{})
 		}))
 		defer srv.Close()
 		err := runRoute([]string{"list", "--admin-url", srv.URL, "--admin-key", "test-key"})
@@ -438,20 +438,20 @@ func TestRunAnalytics_Subcommands(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.Contains(r.URL.Path, "/analytics/overview"):
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"total_requests":  1000,
 				"avg_latency_ms":  45,
 				"error_rate":      "2%",
 				"top_routes":      []map[string]any{},
 			})
 		case strings.Contains(r.URL.Path, "/analytics/timeseries"):
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{
 					{"timestamp": "2024-01-01T00:00:00Z", "requests": 100, "errors": 2, "avg_latency_ms": 10},
 				},
 			})
 		case strings.Contains(r.URL.Path, "/analytics/latency"):
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"p50_ms": 10, "p95_ms": 50, "p99_ms": 100, "avg_ms": 25,
 			})
 		default:
@@ -508,14 +508,14 @@ func TestRunAudit_Subcommands(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.Contains(r.URL.Path, "/audit-logs"):
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"audit_logs": []map[string]any{
 					{"id": "log-1", "method": "GET", "path": "/api/v1", "status_code": 200, "latency_ms": 10, "user_id": "user-1", "route_id": "route-1"},
 				},
 				"total": 1,
 			})
 		case strings.Contains(r.URL.Path, "/audit/stats"):
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"total_requests": 1000, "error_requests": 50, "error_rate": "5%", "avg_latency_ms": 45.5,
 			})
 		default:

@@ -49,7 +49,7 @@ func TestRunCreditOverview(t *testing.T) {
 				},
 			},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -65,7 +65,7 @@ func TestRunCreditOverview_JSONOutput(t *testing.T) {
 			"total_distributed": 10000,
 			"total_consumed":    7500,
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -82,7 +82,7 @@ func TestRunCreditOverview_EmptyConsumers(t *testing.T) {
 			"total_consumed":    0,
 			"top_consumers":     []map[string]any{},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -105,7 +105,7 @@ func TestRunCreditBalance(t *testing.T) {
 			"user_id":        "user-1",
 			"credit_balance": 500,
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -132,7 +132,7 @@ func TestRunCreditTopup(t *testing.T) {
 		}
 
 		var payload map[string]any
-		json.NewDecoder(r.Body).Decode(&payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
 		if payload["amount"] != float64(100) {
 			t.Errorf("Expected amount=100, got %v", payload["amount"])
 		}
@@ -145,7 +145,7 @@ func TestRunCreditTopup(t *testing.T) {
 			"credit_balance": 600,
 			"amount":         100,
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -171,7 +171,7 @@ func TestRunCreditDeduct(t *testing.T) {
 		}
 
 		var payload map[string]any
-		json.NewDecoder(r.Body).Decode(&payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
 		if payload["amount"] != float64(50) {
 			t.Errorf("Expected amount=50, got %v", payload["amount"])
 		}
@@ -181,7 +181,7 @@ func TestRunCreditDeduct(t *testing.T) {
 			"credit_balance": 450,
 			"amount":         -50,
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -250,7 +250,7 @@ func TestRunCreditTransactions(t *testing.T) {
 			},
 			"total": 1,
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -272,7 +272,7 @@ func TestRunCreditTransactions_EmptyResults(t *testing.T) {
 			"transactions": []map[string]any{},
 			"total":        0,
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 

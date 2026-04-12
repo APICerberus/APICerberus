@@ -35,7 +35,7 @@ func TestGatewayHandleHealth_HealthEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -81,7 +81,7 @@ func TestGatewayHandleHealth_ReadyEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 	rec := httptest.NewRecorder()
@@ -124,7 +124,7 @@ func TestGatewayHandleHealth_AuditDropsEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	req := httptest.NewRequest(http.MethodGet, "/health/audit-drops", nil)
 	rec := httptest.NewRecorder()
@@ -162,7 +162,7 @@ func TestGatewayHandleHealth_UnknownPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	req := httptest.NewRequest(http.MethodGet, "/not-health", nil)
 	rec := httptest.NewRecorder()
@@ -200,7 +200,7 @@ func TestGatewayHandleMetrics_MetricsEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	rec := httptest.NewRecorder()
@@ -256,7 +256,7 @@ func TestGatewayHandleMetrics_NonMetricsPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	req := httptest.NewRequest(http.MethodGet, "/not-metrics", nil)
 	rec := httptest.NewRecorder()
@@ -284,7 +284,7 @@ func TestGatewayHandleMetrics_PostRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New error: %v", err)
 	}
-	defer g.Shutdown(context.Background())
+	defer func() { _ = g.Shutdown(context.Background()) }()
 
 	req := httptest.NewRequest(http.MethodPost, "/metrics", nil)
 	rec := httptest.NewRecorder()

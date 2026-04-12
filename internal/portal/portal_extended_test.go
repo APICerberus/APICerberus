@@ -327,7 +327,7 @@ func TestWithSession_ExpiredSession(t *testing.T) {
 		TokenHash: store.HashSessionToken(token),
 		ExpiresAt: time.Now().UTC().Add(-time.Hour), // Expired
 	}
-	st.Sessions().Create(session)
+	_ = st.Sessions().Create(session)
 
 	srv, err := NewServer(cfg, st)
 	if err != nil {
@@ -379,7 +379,7 @@ func TestWithSession_InactiveUser(t *testing.T) {
 		TokenHash: store.HashSessionToken(token),
 		ExpiresAt: time.Now().UTC().Add(time.Hour),
 	}
-	st.Sessions().Create(session)
+	_ = st.Sessions().Create(session)
 
 	srv, err := NewServer(cfg, st)
 	if err != nil {
@@ -624,6 +624,7 @@ func TestGetClientIP_EdgeCases(t *testing.T) {
 func TestUserFromContext_NilContext(t *testing.T) {
 	t.Parallel()
 
+	//nolint:staticcheck // Testing behavior with nil context
 	user := userFromContext(nil)
 	if user != nil {
 		t.Error("expected nil user from nil context")
@@ -633,6 +634,7 @@ func TestUserFromContext_NilContext(t *testing.T) {
 func TestSessionFromContext_NilContext(t *testing.T) {
 	t.Parallel()
 
+	//nolint:staticcheck // Testing behavior with nil context
 	session := sessionFromContext(nil)
 	if session != nil {
 		t.Error("expected nil session from nil context")

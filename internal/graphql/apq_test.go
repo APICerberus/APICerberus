@@ -184,7 +184,7 @@ func TestInMemoryAPQCache_TTL(t *testing.T) {
 
 	query := "{ users { id } }"
 	hash := ComputeQueryHash(query)
-	cache.Set(query, hash)
+	_ = cache.Set(query, hash)
 
 	// Should find immediately
 	_, found := cache.Get(hash)
@@ -311,7 +311,7 @@ func TestAPQMiddleware_ProcessRequest_HashOnly(t *testing.T) {
 	// First, persist the query
 	query := "{ users { id } }"
 	hash := ComputeQueryHash(query)
-	cache.Set(query, hash)
+	_ = cache.Set(query, hash)
 
 	// Now request with hash only
 	req := &Request{
@@ -568,7 +568,7 @@ func TestAPQMiddleware_APQHTTPMiddleware(t *testing.T) {
 	// Test with hash only (after persisting)
 	query := "{ users { id } }"
 	hash := ComputeQueryHash(query)
-	cache.Set(query, hash)
+	_ = cache.Set(query, hash)
 
 	reqBody := map[string]interface{}{
 		"query": "",
@@ -729,7 +729,7 @@ func TestAPQMiddleware_DeletePersistedQuery(t *testing.T) {
 
 	query := "{ users { id } }"
 	hash := ComputeQueryHash(query)
-	cache.Set(query, hash)
+	_ = cache.Set(query, hash)
 
 	if !middleware.DeletePersistedQuery(hash) {
 		t.Error("expected DeletePersistedQuery to return true")
@@ -750,7 +750,7 @@ func TestAPQMiddleware_GetPersistedQuery(t *testing.T) {
 
 	query := "{ users { id } }"
 	hash := ComputeQueryHash(query)
-	cache.Set(query, hash)
+	_ = cache.Set(query, hash)
 
 	entry, found := middleware.GetPersistedQuery(hash)
 	if !found {
@@ -777,7 +777,7 @@ func TestAPQMiddleware_GetStats(t *testing.T) {
 	// Add and retrieve entry
 	query := "{ users { id } }"
 	hash := ComputeQueryHash(query)
-	cache.Set(query, hash)
+	_ = cache.Set(query, hash)
 	cache.Get(hash)
 
 	stats := middleware.GetStats()

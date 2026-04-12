@@ -855,7 +855,7 @@ func TestAlertEngine_Evaluate_P99NoMetrics(t *testing.T) {
 	t.Parallel()
 
 	engine := NewAlertEngine(AlertEngineOptions{})
-	engine.UpsertRule(AlertRule{
+	_, _ = engine.UpsertRule(AlertRule{
 		ID:        "p99-no-metrics",
 		Name:      "P99 No Metrics",
 		Enabled:   true,
@@ -888,7 +888,7 @@ func TestAlertEngine_Evaluate_WebhookMarshalError(t *testing.T) {
 	defer server.Close()
 
 	engine := NewAlertEngine(AlertEngineOptions{})
-	engine.UpsertRule(AlertRule{
+	_, _ = engine.UpsertRule(AlertRule{
 		ID:        "webhook-marshal-rule",
 		Name:      "Webhook Marshal Rule",
 		Enabled:   true,
@@ -976,7 +976,7 @@ func TestAlertEngine_Evaluate_RuleNotTriggered(t *testing.T) {
 	t.Parallel()
 
 	engine := NewAlertEngine(AlertEngineOptions{})
-	engine.UpsertRule(AlertRule{
+	_, _ = engine.UpsertRule(AlertRule{
 		ID:        "not-triggered",
 		Name:      "Not Triggered Rule",
 		Enabled:   true,
@@ -1004,7 +1004,7 @@ func TestAlertEngine_Evaluate_P99NotTriggered(t *testing.T) {
 	t.Parallel()
 
 	engine := NewAlertEngine(AlertEngineOptions{})
-	engine.UpsertRule(AlertRule{
+	_, _ = engine.UpsertRule(AlertRule{
 		ID:        "p99-not-triggered",
 		Name:      "P99 Not Triggered",
 		Enabled:   true,
@@ -1032,7 +1032,7 @@ func TestAlertEngine_Evaluate_HealthNotTriggered(t *testing.T) {
 	t.Parallel()
 
 	engine := NewAlertEngine(AlertEngineOptions{})
-	engine.UpsertRule(AlertRule{
+	_, _ = engine.UpsertRule(AlertRule{
 		ID:        "health-not-triggered",
 		Name:      "Health Not Triggered",
 		Enabled:   true,
@@ -1074,7 +1074,7 @@ func TestAlertEngine_Evaluate_EmptyMetricsForErrorRate(t *testing.T) {
 	t.Parallel()
 
 	engine := NewAlertEngine(AlertEngineOptions{})
-	engine.UpsertRule(AlertRule{
+	_, _ = engine.UpsertRule(AlertRule{
 		ID:        "empty-error-rate",
 		Name:      "Empty Error Rate",
 		Enabled:   true,
@@ -1097,7 +1097,7 @@ func TestAlertEngine_Evaluate_EmptyMetricsForP99(t *testing.T) {
 	t.Parallel()
 
 	engine := NewAlertEngine(AlertEngineOptions{})
-	engine.UpsertRule(AlertRule{
+	_, _ = engine.UpsertRule(AlertRule{
 		ID:        "empty-p99",
 		Name:      "Empty P99",
 		Enabled:   true,

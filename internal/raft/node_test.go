@@ -752,9 +752,9 @@ func TestNode_WaitForCommit_NodeStopped(t *testing.T) {
 	}
 
 	// Start and then stop the node
-	transport.Start(node)
-	node.Start()
-	node.Stop()
+	_ = transport.Start(node)
+	_ = node.Start()
+	_ = node.Stop()
 
 	// Wait should fail because node is stopped
 	err = node.WaitForCommit(1, time.Second)
@@ -779,7 +779,7 @@ func TestNode_Start_WithStorage(t *testing.T) {
 
 	// Create storage with some state
 	storage := NewInmemStorage()
-	storage.SaveState(5, "node-voted")
+	_ = storage.SaveState(5, "node-voted")
 	node.SetStorage(storage)
 
 	// Start should restore state from storage
@@ -796,7 +796,7 @@ func TestNode_Start_WithStorage(t *testing.T) {
 		t.Errorf("Expected votedFor 'node-voted', got %s", node.VotedFor)
 	}
 
-	node.Stop()
+	_ = node.Stop()
 }
 
 // TestNode_Start_WithLogEntries tests Start with log entries restoration
@@ -819,7 +819,7 @@ func TestNode_Start_WithLogEntries(t *testing.T) {
 		{Index: 1, Term: 1, Command: []byte(`{"type":"test"}`)},
 		{Index: 2, Term: 1, Command: []byte(`{"type":"test2"}`)},
 	}
-	storage.SaveLog(entries)
+	_ = storage.SaveLog(entries)
 	node.SetStorage(storage)
 
 	// Start should restore log entries
@@ -833,5 +833,5 @@ func TestNode_Start_WithLogEntries(t *testing.T) {
 		t.Errorf("Expected 2 log entries, got %d", len(node.Log))
 	}
 
-	node.Stop()
+	_ = node.Stop()
 }

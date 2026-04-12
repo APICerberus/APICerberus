@@ -66,7 +66,7 @@ func startNodes(t *testing.T, nodes []*Node) {
 
 func stopNodes(nodes []*Node) {
 	for _, n := range nodes {
-		n.Stop()
+		_ = n.Stop()
 	}
 }
 

@@ -531,7 +531,7 @@ type lifecycleTestRuntime struct {
 	cancel    context.CancelFunc
 	gwErrCh   chan error
 	adminErr  chan error
-	store     *store.Store
+	store     *store.Store //lint:ignore U1000 reserved for future use
 }
 
 func startLifecycleTestRuntime(t *testing.T, cfg *config.Config) *lifecycleTestRuntime {

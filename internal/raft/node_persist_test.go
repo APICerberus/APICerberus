@@ -298,8 +298,8 @@ func TestNode_Stop_WithRunningTransport(t *testing.T) {
 	}
 
 	// Start the node
-	transport.Start(node)
-	node.Start()
+	_ = transport.Start(node)
+	_ = node.Start()
 	time.Sleep(10 * time.Millisecond)
 
 	// Stop should succeed
@@ -329,9 +329,9 @@ func TestNode_Stop_Idempotent(t *testing.T) {
 	}
 
 	// Stop multiple times should not panic
-	node.Stop()
-	node.Stop()
-	node.Stop()
+	_ = node.Stop()
+	_ = node.Stop()
+	_ = node.Stop()
 }
 
 // TestNode_Start_WithSnapshot tests Start with snapshot restoration
@@ -351,7 +351,7 @@ func TestNode_Start_WithSnapshot(t *testing.T) {
 	// Create storage with snapshot
 	storage := NewInmemStorage()
 	snapData := []byte(`{"routes":{"r1":{"path":"/test","target":"http://localhost:8080"}}}`)
-	storage.SaveSnapshot(5, 2, snapData)
+	_ = storage.SaveSnapshot(5, 2, snapData)
 	node.SetStorage(storage)
 
 	// Start should restore snapshot
@@ -368,7 +368,7 @@ func TestNode_Start_WithSnapshot(t *testing.T) {
 		t.Errorf("Expected lastSnapshotTerm 2, got %d", node.lastSnapshotTerm)
 	}
 
-	node.Stop()
+	_ = node.Stop()
 }
 
 // TestNode_HandleInstallSnapshot_PersistsSnapshot tests snapshot persistence
@@ -491,7 +491,7 @@ func TestNode_ReplicateTo_WithSnapshot(t *testing.T) {
 	node.lastSnapshotTerm = 1
 
 	// Save a snapshot
-	storage.SaveSnapshot(10, 1, []byte(`{"routes":{}}`))
+	_ = storage.SaveSnapshot(10, 1, []byte(`{"routes":{}}`))
 
 	// This should trigger InstallSnapshot path in replicateTo
 	// We can't easily verify without mocking transport, but we ensure no panic

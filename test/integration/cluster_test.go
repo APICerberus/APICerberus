@@ -56,7 +56,7 @@ func TestNodeJoinLeave(t *testing.T) {
 	if err := node1.Start(); err != nil {
 		t.Fatalf("failed to start node1: %v", err)
 	}
-	defer node1.Stop()
+	defer func() { _ = node1.Stop() }()
 
 	// Verify node1 starts as follower
 	if state := node1.GetState(); state != raft.StateFollower {
@@ -72,7 +72,7 @@ func TestNodeJoinLeave(t *testing.T) {
 	if err := node2.Start(); err != nil {
 		t.Fatalf("failed to start node2: %v", err)
 	}
-	defer node2.Stop()
+	defer func() { _ = node2.Stop() }()
 
 	// Add node2 as peer to node1
 	node1.AddPeer("node2", "127.0.0.1:12002")
@@ -155,7 +155,7 @@ func TestLeaderElection(t *testing.T) {
 		if err := node.Start(); err != nil {
 			t.Fatalf("failed to start node%d: %v", i+1, err)
 		}
-		defer node.Stop()
+		defer func() { _ = node.Stop() }()
 	}
 
 	// Connect all nodes
@@ -252,7 +252,7 @@ func TestDataReplication(t *testing.T) {
 		if err := node.Start(); err != nil {
 			t.Fatalf("failed to start node%d: %v", i+1, err)
 		}
-		defer node.Stop()
+		defer func() { _ = node.Stop() }()
 	}
 
 	// Connect all nodes
@@ -414,7 +414,7 @@ func TestFailoverScenarios(t *testing.T) {
 	// Stop remaining nodes
 	for i, node := range nodes {
 		if i != initialLeaderIdx {
-			node.Stop()
+			_ = node.Stop()
 		}
 	}
 
@@ -592,7 +592,7 @@ func (t *TestTransport) LocalAddr() string {
 }
 
 func (t *TestTransport) Close() {
-	t.Stop()
+	_ = t.Stop()
 }
 
 // Helper types and functions for cluster tests

@@ -254,7 +254,7 @@ func TestStreamProxy_ProxyClientStream(t *testing.T) {
 		// This will panic with nil connection, so we need to recover
 		defer func() {
 			if r := recover(); r != nil {
-				// Expected panic due to nil connection
+				_ = r // Expected panic due to nil connection
 			}
 		}()
 
@@ -751,7 +751,7 @@ func TestStreamProxy_ProxyClientStream_ErrorPaths(t *testing.T) {
 		// This will panic with nil connection, so we need to recover
 		defer func() {
 			if r := recover(); r != nil {
-				// Expected panic due to nil connection - this is acceptable
+				_ = r // Expected panic due to nil connection - this is acceptable
 			}
 		}()
 

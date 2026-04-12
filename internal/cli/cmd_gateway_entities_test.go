@@ -15,7 +15,7 @@ func TestRunService(t *testing.T) {
 		switch r.Method {
 		case http.MethodGet:
 			if r.URL.Path == "/admin/api/v1/services" {
-				json.NewEncoder(w).Encode([]map[string]any{
+				_ = json.NewEncoder(w).Encode([]map[string]any{
 					{"id": "svc-1", "name": "Test Service", "protocol": "http", "upstream": "up-1"},
 				})
 				return
@@ -36,7 +36,7 @@ func TestRunRoute(t *testing.T) {
 		switch r.Method {
 		case http.MethodGet:
 			if r.URL.Path == "/admin/api/v1/routes" {
-				json.NewEncoder(w).Encode([]map[string]any{
+				_ = json.NewEncoder(w).Encode([]map[string]any{
 					{"id": "route-1", "name": "Test Route", "service": "svc-1", "paths": "/api", "methods": "GET", "priority": 100},
 				})
 				return
@@ -57,7 +57,7 @@ func TestRunUpstream(t *testing.T) {
 		switch r.Method {
 		case http.MethodGet:
 			if r.URL.Path == "/admin/api/v1/upstreams" {
-				json.NewEncoder(w).Encode([]map[string]any{
+				_ = json.NewEncoder(w).Encode([]map[string]any{
 					{"id": "up-1", "name": "Test Upstream", "algorithm": "round_robin", "targets": []map[string]any{{"id": "t1"}}},
 				})
 				return
@@ -106,7 +106,7 @@ func TestRunEntityList_Service(t *testing.T) {
 			{"id": "svc-1", "name": "Service One", "protocol": "http", "upstream": "up-1"},
 			{"id": "svc-2", "name": "Service Two", "protocol": "https", "upstream": "up-2"},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -121,7 +121,7 @@ func TestRunEntityList_Route(t *testing.T) {
 		response := []map[string]any{
 			{"id": "route-1", "name": "Route One", "service": "svc-1", "paths": "/api/v1", "methods": "GET,POST", "priority": 100},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -141,7 +141,7 @@ func TestRunEntityList_Upstream(t *testing.T) {
 				"targets":   []map[string]any{{"id": "t1"}, {"id": "t2"}},
 			},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -153,7 +153,7 @@ func TestRunEntityList_Upstream(t *testing.T) {
 
 func TestRunEntityList_EmptyResults(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode([]map[string]any{})
+		_ = json.NewEncoder(w).Encode([]map[string]any{})
 	}))
 	defer upstream.Close()
 
@@ -168,7 +168,7 @@ func TestRunEntityList_UnknownEntity(t *testing.T) {
 		response := []map[string]any{
 			{"id": "unknown-1", "name": "Unknown"},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -185,7 +185,7 @@ func TestRunEntityAdd_WithBody(t *testing.T) {
 		}
 
 		var payload map[string]any
-		json.NewDecoder(r.Body).Decode(&payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
 		if payload["name"] != "New Service" {
 			t.Errorf("Expected name='New Service', got %v", payload["name"])
 		}
@@ -194,7 +194,7 @@ func TestRunEntityAdd_WithBody(t *testing.T) {
 			"id":   "svc-new",
 			"name": "New Service",
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -211,16 +211,16 @@ func TestRunEntityAdd_WithBody(t *testing.T) {
 func TestRunEntityAdd_WithFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	payloadFile := filepath.Join(tmpDir, "payload.json")
-	os.WriteFile(payloadFile, []byte(`{"name":"File Service","protocol":"https"}`), 0644)
+	_ = os.WriteFile(payloadFile, []byte(`{"name":"File Service","protocol":"https"}`), 0644)
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
-		json.NewDecoder(r.Body).Decode(&payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
 		if payload["name"] != "File Service" {
 			t.Errorf("Expected name='File Service', got %v", payload["name"])
 		}
 
-		json.NewEncoder(w).Encode(map[string]any{"id": "svc-file", "name": "File Service"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "svc-file", "name": "File Service"})
 	}))
 	defer upstream.Close()
 
@@ -258,7 +258,7 @@ func TestRunEntityGet(t *testing.T) {
 			"name":     "Service One",
 			"protocol": "http",
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -277,7 +277,7 @@ func TestRunEntityGet_PositionalArg(t *testing.T) {
 		if !strings.HasSuffix(r.URL.Path, "/svc-2") {
 			t.Errorf("Expected path to end with /svc-2, got %s", r.URL.Path)
 		}
-		json.NewEncoder(w).Encode(map[string]any{"id": "svc-2"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "svc-2"})
 	}))
 	defer upstream.Close()
 
@@ -311,12 +311,12 @@ func TestRunEntityUpdate(t *testing.T) {
 		}
 
 		var payload map[string]any
-		json.NewDecoder(r.Body).Decode(&payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
 		if payload["name"] != "Updated Service" {
 			t.Errorf("Expected name='Updated Service', got %v", payload["name"])
 		}
 
-		json.NewEncoder(w).Encode(map[string]any{"id": "svc-1", "name": "Updated Service"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "svc-1", "name": "Updated Service"})
 	}))
 	defer upstream.Close()
 
@@ -388,7 +388,7 @@ func TestLoadJSONPayload_FromBody(t *testing.T) {
 func TestLoadJSONPayload_FromFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	payloadFile := filepath.Join(tmpDir, "payload.json")
-	os.WriteFile(payloadFile, []byte(`{"name":"File Test","value":456}`), 0644)
+	_ = os.WriteFile(payloadFile, []byte(`{"name":"File Test","value":456}`), 0644)
 
 	payload, err := loadJSONPayload(payloadFile, "")
 	if err != nil {

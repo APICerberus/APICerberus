@@ -329,7 +329,7 @@ func TestInmemTransport_RequestVote(t *testing.T) {
 		requestVoteResponse: &RequestVoteResponse{Term: 2, VoteGranted: true},
 	}
 
-	t2.Start(handler)
+	_ = t2.Start(handler)
 	t1.Connect("node-2", t2)
 
 	req := &RequestVoteRequest{Term: 2, CandidateID: "node-1"}
@@ -383,7 +383,7 @@ func TestInmemTransport_AppendEntries(t *testing.T) {
 		appendEntriesResponse: &AppendEntriesResponse{Term: 1, Success: true},
 	}
 
-	t2.Start(handler)
+	_ = t2.Start(handler)
 	t1.Connect("node-2", t2)
 
 	req := &AppendEntriesRequest{Term: 1, LeaderID: "node-1"}
@@ -418,7 +418,7 @@ func TestInmemTransport_InstallSnapshot(t *testing.T) {
 		installSnapshotResponse: &InstallSnapshotResponse{Term: 1, Success: true},
 	}
 
-	t2.Start(handler)
+	_ = t2.Start(handler)
 	t1.Connect("node-2", t2)
 
 	req := &InstallSnapshotRequest{Term: 1, LeaderID: "node-1", Data: []byte("snapshot")}
@@ -492,7 +492,7 @@ func TestHTTPTransport_Integration(t *testing.T) {
 
 		resp := handler.HandleRequestVote(&req)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	})
 
 	server := httptest.NewServer(mux)
@@ -548,7 +548,7 @@ func TestHTTPTransport_InvalidResponse(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/raft/request-vote", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("invalid json"))
+		_, _ = w.Write([]byte("invalid json"))
 	})
 
 	server := httptest.NewServer(mux)
@@ -590,10 +590,10 @@ func TestHTTPTransport_AppendEntries_Integration(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/raft/append-entries", func(w http.ResponseWriter, r *http.Request) {
 		var req AppendEntriesRequest
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 		resp := handler.HandleAppendEntries(&req)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	})
 
 	server := httptest.NewServer(mux)
@@ -625,10 +625,10 @@ func TestHTTPTransport_InstallSnapshot_Integration(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/raft/install-snapshot", func(w http.ResponseWriter, r *http.Request) {
 		var req InstallSnapshotRequest
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 		resp := handler.HandleInstallSnapshot(&req)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	})
 
 	server := httptest.NewServer(mux)
@@ -729,7 +729,7 @@ func TestInmemTransport_ConcurrentAccess(t *testing.T) {
 		requestVoteResponse: &RequestVoteResponse{Term: 1, VoteGranted: true},
 	}
 
-	t2.Start(handler)
+	_ = t2.Start(handler)
 	t1.Connect("node-2", t2)
 
 	// Concurrent requests
@@ -760,7 +760,7 @@ func TestHTTPTransport_Start_WithHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer transport.Stop()
+	defer func() { _ = transport.Stop() }()
 
 	if transport.handler != handler {
 		t.Error("Handler not set correctly in transport")
@@ -798,7 +798,7 @@ func TestHTTPTransport_postRPC_SuccessPath(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/raft/test", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		w.Write(body) // Echo back
+		_, _ = w.Write(body) // Echo back
 	})
 
 	server := httptest.NewServer(mux)

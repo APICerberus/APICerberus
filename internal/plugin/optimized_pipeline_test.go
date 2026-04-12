@@ -92,8 +92,8 @@ func TestNewOptimizedPipeline(t *testing.T) {
 		cfg := OptimizedPipelineConfig{EnableResultCache: false, EnableFastPath: false}
 		p := NewOptimizedPipeline(plugins, cfg)
 
-		// Modify original
-		plugins = append(plugins, NewPipelinePlugin("p3", PhasePreAuth, 0, nil, nil))
+		// Modify original (intentionally not using result - testing that pipeline is not affected)
+		_ = append(plugins, NewPipelinePlugin("p3", PhasePreAuth, 0, nil, nil))
 
 		// Pipeline should not be affected
 		if len(p.plugins) != 2 {

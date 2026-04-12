@@ -1670,7 +1670,7 @@ func TestSetFromString_UnsupportedType(t *testing.T) {
 func TestSetFromString_CannotSet(t *testing.T) {
 	// Test with a field that cannot be set (unexported)
 	type testStruct struct {
-		unexported string
+		unexported string //lint:ignore U1000 accessed via reflection
 	}
 	s := testStruct{}
 	field := reflect.ValueOf(&s).Elem().FieldByName("unexported")
@@ -2220,7 +2220,7 @@ admin:
 	cr.Start()
 
 	// Trigger manual reload
-	cr.TriggerManualReload()
+	_ = cr.TriggerManualReload()
 
 	// Wait for reload
 	select {
@@ -2278,7 +2278,7 @@ admin:
 	cr.Start()
 
 	// Trigger manual reload
-	cr.TriggerManualReload()
+	_ = cr.TriggerManualReload()
 
 	// Wait for reload to be called (even though it returns an error)
 	select {

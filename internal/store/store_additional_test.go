@@ -305,6 +305,7 @@ func TestFindByEmail(t *testing.T) {
 	}
 	if found == nil {
 		t.Error("FindByEmail should return user")
+		return
 	}
 	if found.Email != "findbyemail@example.com" {
 		t.Errorf("Email = %q, want findbyemail@example.com", found.Email)
@@ -350,6 +351,7 @@ func TestFindByHash(t *testing.T) {
 	}
 	if found == nil {
 		t.Error("FindByHash should return API key")
+		return
 	}
 	if found.KeyHash != apiKey.KeyHash {
 		t.Errorf("KeyHash = %q, want %q", found.KeyHash, apiKey.KeyHash)
@@ -392,6 +394,7 @@ func TestAuditFindByID(t *testing.T) {
 	}
 	if found == nil {
 		t.Error("FindByID should return audit entry")
+		return
 	}
 	if found.ID != "audit-test-1" {
 		t.Errorf("ID = %q, want audit-test-1", found.ID)
@@ -2203,7 +2206,7 @@ func TestBuildRouteExclusionCondition(t *testing.T) {
 	}
 
 	// Test nil routes
-	condition, args = buildRouteExclusionCondition(nil)
+	condition, _ = buildRouteExclusionCondition(nil)
 	if condition != "" {
 		t.Errorf("buildRouteExclusionCondition(nil) should return empty condition, got: %s", condition)
 	}

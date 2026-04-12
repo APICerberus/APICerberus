@@ -339,7 +339,7 @@ func TestECDSAPublicKeyFromJWK(t *testing.T) {
 	}
 
 	if !VerifyES256("test.input", make([]byte, 64), pub) {
-		// Just checking the key is usable; signature won't verify without proper signing
+		_ = pub // Intentionally empty - just checking the key is usable; signature won't verify without proper signing
 	}
 }
 

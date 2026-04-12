@@ -451,7 +451,7 @@ func TestOptimizedProxy_Forward(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
 	defer upstream.Close()
 
@@ -523,7 +523,7 @@ func TestOptimizedProxy_Do(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
 	defer upstream.Close()
 
@@ -578,7 +578,7 @@ func TestOptimizedProxy_writeResponse(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"data":"test"}`))
+		_, _ = w.Write([]byte(`{"data":"test"}`))
 	}))
 	defer upstream.Close()
 
@@ -615,7 +615,7 @@ func TestOptimizedProxy_WriteResponse(t *testing.T) {
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("hello"))
+		_, _ = w.Write([]byte("hello"))
 	}))
 	defer upstream.Close()
 
@@ -896,7 +896,7 @@ func TestOptimizedProxy_Forward_Coalescing(t *testing.T) {
 		time.Sleep(10 * time.Millisecond) // Simulate some processing time
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"count":` + string(rune('0'+requestCount)) + `}`))
+		_, _ = w.Write([]byte(`{"count":` + string(rune('0'+requestCount)) + `}`))
 	}))
 	defer upstream.Close()
 

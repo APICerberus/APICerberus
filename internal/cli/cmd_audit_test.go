@@ -54,7 +54,7 @@ func TestRunAuditSearch(t *testing.T) {
 			},
 			"total": 1,
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -81,7 +81,7 @@ func TestRunAuditSearch_WithFilters(t *testing.T) {
 			"entries": []map[string]any{},
 			"total":   0,
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -103,7 +103,7 @@ func TestRunAuditSearch_EmptyResults(t *testing.T) {
 			"entries": []map[string]any{},
 			"total":   0,
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -129,7 +129,7 @@ func TestRunAuditDetail(t *testing.T) {
 			"path":        "/api/test",
 			"status_code": 200,
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -144,7 +144,7 @@ func TestRunAuditDetail_PositionalArg(t *testing.T) {
 		if !strings.Contains(r.URL.Path, "log-2") {
 			t.Errorf("Expected log-2 in path, got %s", r.URL.Path)
 		}
-		json.NewEncoder(w).Encode(map[string]any{"id": "log-2"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "log-2"})
 	}))
 	defer upstream.Close()
 
@@ -176,7 +176,7 @@ func TestRunAuditExport(t *testing.T) {
 			t.Errorf("Expected format=jsonl, got %s", r.URL.Query().Get("format"))
 		}
 
-		w.Write([]byte(`{"id":"log-1","method":"GET"}
+		_, _ = w.Write([]byte(`{"id":"log-1","method":"GET"}
 {"id":"log-2","method":"POST"}
 `))
 	}))
@@ -209,7 +209,7 @@ func TestRunAuditStats(t *testing.T) {
 				{"user_id": "user-1", "consumer_name": "Test User", "count": 200},
 			},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -232,7 +232,7 @@ func TestRunAuditCleanup(t *testing.T) {
 			"deleted":   100,
 			"remaining": 900,
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -249,7 +249,7 @@ func TestRunAuditCleanup_WithCutoff(t *testing.T) {
 			t.Errorf("Expected cutoff parameter, got %s", query.Get("cutoff"))
 		}
 
-		json.NewEncoder(w).Encode(map[string]any{"deleted": 50})
+		_ = json.NewEncoder(w).Encode(map[string]any{"deleted": 50})
 	}))
 	defer upstream.Close()
 
@@ -434,7 +434,7 @@ audit:
     route1: 30
     route2: 60
 `
-	os.WriteFile(configPath, []byte(configContent), 0644)
+	_ = os.WriteFile(configPath, []byte(configContent), 0644)
 
 	err := runAuditRetentionShow([]string{"--config", configPath})
 	if err != nil {
@@ -454,7 +454,7 @@ admin:
 audit:
   retention_days: 30
 `
-	os.WriteFile(configPath, []byte(configContent), 0644)
+	_ = os.WriteFile(configPath, []byte(configContent), 0644)
 
 	err := runAuditRetentionShow([]string{"--config", configPath})
 	if err != nil {
@@ -476,7 +476,7 @@ audit:
   route_retention_days:
     route1: 15
 `
-	os.WriteFile(configPath, []byte(configContent), 0644)
+	_ = os.WriteFile(configPath, []byte(configContent), 0644)
 
 	err := runAuditRetentionSet([]string{"--config", configPath, "--days", "60"})
 	if err != nil {
@@ -502,7 +502,7 @@ admin:
 audit:
   retention_days: 30
 `
-	os.WriteFile(configPath, []byte(configContent), 0644)
+	_ = os.WriteFile(configPath, []byte(configContent), 0644)
 
 	err := runAuditRetentionSet([]string{
 		"--config", configPath,
@@ -524,7 +524,7 @@ admin:
   api_key: test-key
   token_secret: test-admin-token-secret-at-least-32-chars-long
 `
-	os.WriteFile(configPath, []byte(configContent), 0644)
+	_ = os.WriteFile(configPath, []byte(configContent), 0644)
 
 	err := runAuditRetentionSet([]string{"--config", configPath})
 	if err == nil {
@@ -542,7 +542,7 @@ admin:
   api_key: test-key
   token_secret: test-admin-token-secret-at-least-32-chars-long
 `
-	os.WriteFile(configPath, []byte(configContent), 0644)
+	_ = os.WriteFile(configPath, []byte(configContent), 0644)
 
 	err := runAuditRetentionSet([]string{
 		"--config", configPath,
@@ -565,7 +565,7 @@ admin:
 audit:
   retention_days: 30
 `
-	os.WriteFile(configPath, []byte(configContent), 0644)
+	_ = os.WriteFile(configPath, []byte(configContent), 0644)
 
 	// Test "show" subcommand
 	err := runAuditRetention([]string{"show", "--config", configPath})
@@ -598,7 +598,7 @@ admin:
 audit:
   retention_days: 30
 `
-	os.WriteFile(configPath, []byte(configContent), 0644)
+	_ = os.WriteFile(configPath, []byte(configContent), 0644)
 
 	// No args defaults to show - use env or default config instead
 	// Since we can't pass --config directly to runAuditRetention,
@@ -633,7 +633,7 @@ func TestRunAuditTail(t *testing.T) {
 					},
 				},
 			}
-			json.NewEncoder(w).Encode(response)
+			_ = json.NewEncoder(w).Encode(response)
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)

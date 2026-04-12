@@ -24,7 +24,7 @@ func BenchmarkOptimizedProxy(b *testing.B) {
 	// Create test server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
 	defer ts.Close()
 
@@ -67,7 +67,7 @@ func BenchmarkStandardProxy(b *testing.B) {
 	// Create test server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
 	defer ts.Close()
 
@@ -233,7 +233,7 @@ func BenchmarkFullRequestFlow(b *testing.B) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"message":"success"}`))
+		_, _ = w.Write([]byte(`{"message":"success"}`))
 	}))
 	defer upstream.Close()
 
@@ -281,7 +281,7 @@ func BenchmarkFullRequestFlow(b *testing.B) {
 	if err != nil {
 		b.Fatalf("failed to create gateway: %v", err)
 	}
-	defer gw.Shutdown(nil)
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

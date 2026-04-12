@@ -50,7 +50,7 @@ func TestRunUserList(t *testing.T) {
 			},
 			"total": 1,
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -85,7 +85,7 @@ func TestRunUserList_WithFilters(t *testing.T) {
 			t.Errorf("Expected offset=10, got %s", query.Get("offset"))
 		}
 
-		json.NewEncoder(w).Encode(map[string]any{"users": []map[string]any{}, "total": 0})
+		_ = json.NewEncoder(w).Encode(map[string]any{"users": []map[string]any{}, "total": 0})
 	}))
 	defer upstream.Close()
 
@@ -107,7 +107,7 @@ func TestRunUserList_WithFilters(t *testing.T) {
 
 func TestRunUserList_EmptyResults(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"users": []map[string]any{}, "total": 0})
+		_ = json.NewEncoder(w).Encode(map[string]any{"users": []map[string]any{}, "total": 0})
 	}))
 	defer upstream.Close()
 
@@ -127,7 +127,7 @@ func TestRunUserCreate(t *testing.T) {
 		}
 
 		var payload map[string]any
-		json.NewDecoder(r.Body).Decode(&payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
 		if payload["email"] != "newuser@example.com" {
 			t.Errorf("Expected email=newuser@example.com, got %v", payload["email"])
 		}
@@ -140,7 +140,7 @@ func TestRunUserCreate(t *testing.T) {
 			"status":         "active",
 			"credit_balance": 100,
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -162,12 +162,12 @@ func TestRunUserCreate(t *testing.T) {
 func TestRunUserCreate_WithPassword(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
-		json.NewDecoder(r.Body).Decode(&payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
 		if payload["password"] != "secret123" {
 			t.Errorf("Expected password to be set, got %v", payload["password"])
 		}
 
-		json.NewEncoder(w).Encode(map[string]any{"id": "user-1"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "user-1"})
 	}))
 	defer upstream.Close()
 
@@ -221,7 +221,7 @@ func TestRunUserGet(t *testing.T) {
 			"role":   "user",
 			"status": "active",
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -236,7 +236,7 @@ func TestRunUserGet_PositionalArg(t *testing.T) {
 		if !strings.HasSuffix(r.URL.Path, "/user-2") {
 			t.Errorf("Expected path to end with /user-2, got %s", r.URL.Path)
 		}
-		json.NewEncoder(w).Encode(map[string]any{"id": "user-2"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "user-2"})
 	}))
 	defer upstream.Close()
 
@@ -263,7 +263,7 @@ func TestRunUserUpdate(t *testing.T) {
 		}
 
 		var payload map[string]any
-		json.NewDecoder(r.Body).Decode(&payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
 		if payload["name"] != "Updated Name" {
 			t.Errorf("Expected name=Updated Name, got %v", payload["name"])
 		}
@@ -275,7 +275,7 @@ func TestRunUserUpdate(t *testing.T) {
 			"role":   "user",
 			"status": "active",
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -293,12 +293,12 @@ func TestRunUserUpdate(t *testing.T) {
 func TestRunUserUpdate_WithCredits(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
-		json.NewDecoder(r.Body).Decode(&payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
 		if payload["credit_balance"] != float64(500) {
 			t.Errorf("Expected credit_balance=500, got %v", payload["credit_balance"])
 		}
 
-		json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "credit_balance": 500})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "credit_balance": 500})
 	}))
 	defer upstream.Close()
 
@@ -316,7 +316,7 @@ func TestRunUserUpdate_WithCredits(t *testing.T) {
 func TestRunUserUpdate_WithRateLimit(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
-		json.NewDecoder(r.Body).Decode(&payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
 		rateLimits, ok := payload["rate_limits"].(map[string]any)
 		if !ok {
 			t.Errorf("Expected rate_limits in payload, got %v", payload["rate_limits"])
@@ -325,7 +325,7 @@ func TestRunUserUpdate_WithRateLimit(t *testing.T) {
 			t.Errorf("Expected requests_per_second=100, got %v", rateLimits["requests_per_second"])
 		}
 
-		json.NewEncoder(w).Encode(map[string]any{"id": "user-1"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "user-1"})
 	}))
 	defer upstream.Close()
 
@@ -360,7 +360,7 @@ func TestRunUserStatus(t *testing.T) {
 			t.Errorf("Expected suspend path, got %s", r.URL.Path)
 		}
 
-		json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "status": "suspended"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "status": "suspended"})
 	}))
 	defer upstream.Close()
 
@@ -375,7 +375,7 @@ func TestRunUserStatus_Activate(t *testing.T) {
 		if !strings.Contains(r.URL.Path, "/user-1/activate") {
 			t.Errorf("Expected activate path, got %s", r.URL.Path)
 		}
-		json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "status": "active"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "user-1", "status": "active"})
 	}))
 	defer upstream.Close()
 
@@ -416,7 +416,7 @@ func TestRunUserAPIKeyList(t *testing.T) {
 				"status":     "active",
 			},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -433,7 +433,7 @@ func TestRunUserAPIKeyCreate(t *testing.T) {
 		}
 
 		var payload map[string]any
-		json.NewDecoder(r.Body).Decode(&payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
 		if payload["name"] != "My API Key" {
 			t.Errorf("Expected name='My API Key', got %v", payload["name"])
 		}
@@ -442,7 +442,7 @@ func TestRunUserAPIKeyCreate(t *testing.T) {
 			"key":     "ck_live_full_key_here",
 			"api_key": map[string]any{"id": "key-1", "name": "My API Key"},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -514,7 +514,7 @@ func TestRunUserPermissionList(t *testing.T) {
 				"credit_cost": 10,
 			},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -531,7 +531,7 @@ func TestRunUserPermissionGrant(t *testing.T) {
 		}
 
 		var payload map[string]any
-		json.NewDecoder(r.Body).Decode(&payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
 		if payload["route_id"] != "route-1" {
 			t.Errorf("Expected route_id=route-1, got %v", payload["route_id"])
 		}
@@ -539,7 +539,7 @@ func TestRunUserPermissionGrant(t *testing.T) {
 			t.Errorf("Expected allowed=true, got %v", payload["allowed"])
 		}
 
-		json.NewEncoder(w).Encode(map[string]any{"id": "perm-1"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "perm-1"})
 	}))
 	defer upstream.Close()
 
@@ -607,7 +607,7 @@ func TestRunUserIPList(t *testing.T) {
 		response := map[string]any{
 			"ip_whitelist": []string{"192.168.1.1/24", "10.0.0.1"},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer upstream.Close()
 
@@ -624,12 +624,12 @@ func TestRunUserIPAdd(t *testing.T) {
 		}
 
 		var payload map[string]any
-		json.NewDecoder(r.Body).Decode(&payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
 		if payload["ip"] != "192.168.1.1" {
 			t.Errorf("Expected ip=192.168.1.1, got %v", payload["ip"])
 		}
 
-		json.NewEncoder(w).Encode(map[string]any{"success": true})
+		_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
 	}))
 	defer upstream.Close()
 

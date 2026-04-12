@@ -97,7 +97,7 @@ func TestAdminClientCall(t *testing.T) {
 				t.Error("Missing or incorrect X-Admin-Key header")
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 		}))
 		defer server.Close()
 
@@ -126,10 +126,10 @@ func TestAdminClientCall(t *testing.T) {
 			}
 
 			var payload map[string]any
-			json.NewDecoder(r.Body).Decode(&payload)
+			_ = json.NewDecoder(r.Body).Decode(&payload)
 
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{"received": payload})
+			_ = json.NewEncoder(w).Encode(map[string]any{"received": payload})
 		}))
 		defer server.Close()
 
@@ -152,7 +152,7 @@ func TestAdminClientCall(t *testing.T) {
 	t.Run("error response", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"error": map[string]string{
 					"code":    "INVALID_INPUT",
 					"message": "Invalid input data",
@@ -195,7 +195,7 @@ func TestAdminClientCall(t *testing.T) {
 				t.Error("Missing query parameter")
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 		}))
 		defer server.Close()
 

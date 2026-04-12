@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -196,7 +197,7 @@ func BenchmarkRouterParallel(b *testing.B) {
 func BenchmarkProxyThroughput(b *testing.B) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
 	defer upstream.Close()
 
@@ -234,7 +235,7 @@ func BenchmarkProxyThroughput(b *testing.B) {
 func BenchmarkProxyParallelThroughput(b *testing.B) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
 	defer upstream.Close()
 
@@ -279,7 +280,7 @@ func BenchmarkProxyLargeResponse(b *testing.B) {
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write(largeBody)
+		_, _ = w.Write(largeBody)
 	}))
 	defer upstream.Close()
 
@@ -475,7 +476,7 @@ func BenchmarkGatewayEndToEnd(b *testing.B) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"message":"success"}`))
+		_, _ = w.Write([]byte(`{"message":"success"}`))
 	}))
 	defer upstream.Close()
 
@@ -512,7 +513,7 @@ func BenchmarkGatewayEndToEnd(b *testing.B) {
 	if err != nil {
 		b.Fatalf("failed to create gateway: %v", err)
 	}
-	defer gw.Shutdown(nil)
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	// Wait for gateway to be ready
 	time.Sleep(50 * time.Millisecond)

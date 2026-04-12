@@ -66,7 +66,7 @@ func TestSplitBrainScenario(t *testing.T) {
 
 	// In real implementation, would partition network here
 	// For test, we stop the leader to simulate partition
-	leader.Stop()
+	_ = leader.Stop()
 
 	// Wait for new leader election among remaining nodes
 	time.Sleep(600 * time.Millisecond)
@@ -149,7 +149,7 @@ func TestCertificateSyncFailover(t *testing.T) {
 
 	// Simulate leader failure
 	t.Log("Simulating leader failure...")
-	leader.Stop()
+	_ = leader.Stop()
 
 	// Wait for new leader election
 	time.Sleep(600 * time.Millisecond)
@@ -307,7 +307,7 @@ func setupClusterWithSize(t *testing.T, size int) []*Node {
 func cleanupCluster(nodes []*Node) {
 	for _, node := range nodes {
 		if node != nil {
-			node.Stop()
+			_ = node.Stop()
 		}
 	}
 }

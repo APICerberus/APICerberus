@@ -278,7 +278,7 @@ func TestStreamProxy_NilConnection(t *testing.T) {
 		// Should panic with nil connection, but we recover
 		defer func() {
 			if r := recover(); r != nil {
-				// Expected
+				_ = r // Expected panic
 			}
 		}()
 
@@ -292,7 +292,7 @@ func TestStreamProxy_NilConnection(t *testing.T) {
 
 		defer func() {
 			if r := recover(); r != nil {
-				// Expected
+				_ = r // Expected panic
 			}
 		}()
 
@@ -306,7 +306,7 @@ func TestStreamProxy_NilConnection(t *testing.T) {
 
 		defer func() {
 			if r := recover(); r != nil {
-				// Expected
+				_ = r // Expected panic
 			}
 		}()
 

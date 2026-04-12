@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"strings"
@@ -695,18 +696,6 @@ func (g *Gateway) writeErrorRoute(w http.ResponseWriter, status int, code, messa
 	g.writeError(w, status, code, message)
 }
 
-// writeErrorWithID includes a request_id in the error response for audit trail correlation.
-func (g *Gateway) writeErrorWithID(w http.ResponseWriter, r *http.Request, status int, code, message string) {
-	resp := errorResponse{
-		Error: gatewayError{
-			Code:      code,
-			Message:   message,
-			RequestID: strings.TrimSpace(r.Header.Get("X-Request-ID")),
-		},
-	}
-	_ = jsonutil.WriteJSON(w, status, resp)
-}
-
 func (g *Gateway) writeAuthError(w http.ResponseWriter, err error) {
 	var authErr *plugin.AuthError
 	if errors.As(err, &authErr) {
@@ -887,9 +876,7 @@ func userToConsumer(user *store.User) *config.Consumer {
 		"role":    user.Role,
 		"status":  user.Status,
 	}
-	for key, value := range user.Metadata {
-		metadata[key] = value
-	}
+	maps.Copy(metadata, user.Metadata)
 
 	// Map user.RateLimits to Consumer.RateLimit struct.
 	// User.RateLimits is a JSON map that may contain "requests_per_second"
@@ -1120,23 +1107,23 @@ func (g *Gateway) handleMetrics(w http.ResponseWriter, r *http.Request) bool {
 	var buf strings.Builder
 	buf.WriteString("# HELP gateway_requests_total Total number of requests processed.\n")
 	buf.WriteString("# TYPE gateway_requests_total counter\n")
-	buf.WriteString(fmt.Sprintf("gateway_requests_total %d\n", totalReqs))
+	fmt.Fprintf(&buf, "gateway_requests_total %d\n", totalReqs)
 
 	buf.WriteString("# HELP gateway_active_connections Number of currently active connections.\n")
 	buf.WriteString("# TYPE gateway_active_connections gauge\n")
-	buf.WriteString(fmt.Sprintf("gateway_active_connections %d\n", activeConns))
+	fmt.Fprintf(&buf, "gateway_active_connections %d\n", activeConns)
 
 	buf.WriteString("# HELP gateway_audit_dropped_total Total number of audit log entries dropped.\n")
 	buf.WriteString("# TYPE gateway_audit_dropped_total counter\n")
-	buf.WriteString(fmt.Sprintf("gateway_audit_dropped_total %d\n", auditDropped))
+	fmt.Fprintf(&buf, "gateway_audit_dropped_total %d\n", auditDropped)
 
 	buf.WriteString("# HELP gateway_database_ready Database connectivity status (1=ready, 0=not ready).\n")
 	buf.WriteString("# TYPE gateway_database_ready gauge\n")
-	buf.WriteString(fmt.Sprintf("gateway_database_ready %d\n", dbReady))
+	fmt.Fprintf(&buf, "gateway_database_ready %d\n", dbReady)
 
 	buf.WriteString("# HELP gateway_uptime_seconds Time since gateway started in seconds.\n")
 	buf.WriteString("# TYPE gateway_uptime_seconds gauge\n")
-	buf.WriteString(fmt.Sprintf("gateway_uptime_seconds %.0f\n", uptime))
+	fmt.Fprintf(&buf, "gateway_uptime_seconds %.0f\n", uptime)
 
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	w.WriteHeader(http.StatusOK)

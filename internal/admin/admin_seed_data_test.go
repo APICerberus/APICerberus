@@ -221,7 +221,7 @@ func TestAuditEndpoints_WithSeededData(t *testing.T) {
 		{ID: "audit-2", RequestID: "req-2", RouteID: "route-1", ServiceName: "svc-1", Method: "POST", Path: "/api/test", StatusCode: 500, LatencyMS: 200, ClientIP: "127.0.0.1", CreatedAt: now.Add(-3 * time.Minute)},
 		{ID: "audit-3", RequestID: "req-3", RouteID: "route-2", ServiceName: "svc-2", Method: "GET", Path: "/api/data", StatusCode: 404, LatencyMS: 10, ClientIP: "192.168.1.1", CreatedAt: now.Add(-1 * time.Minute)},
 	}
-	st.Audits().BatchInsert(entries)
+	_ = st.Audits().BatchInsert(entries)
 	st.Close()
 
 	t.Run("search audit logs with results", func(t *testing.T) {

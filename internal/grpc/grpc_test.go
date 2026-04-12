@@ -108,7 +108,7 @@ func TestH2CServer(t *testing.T) {
 	// Create a simple handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello from h2c"))
+		_, _ = w.Write([]byte("Hello from h2c"))
 	})
 
 	// Create h2c server with random port
@@ -157,7 +157,7 @@ func TestH2CServer(t *testing.T) {
 
 	// Stop server
 	ctx := context.Background()
-	server.Stop(ctx)
+	_ = server.Stop(ctx)
 }
 
 func TestMetadataFromHeaders(t *testing.T) {

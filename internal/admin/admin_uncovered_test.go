@@ -921,7 +921,7 @@ func TestCollectRequestMetricEvents_WithGateway(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -930,7 +930,7 @@ func TestCollectRequestMetricEvents_WithGateway(t *testing.T) {
 
 	// First call should return empty (no metrics yet)
 	events := stream.collectRequestMetricEvents()
-	if events != nil && len(events) != 0 {
+	if len(events) != 0 {
 		t.Errorf("Expected nil or empty events for fresh engine, got %d", len(events))
 	}
 
@@ -1005,7 +1005,7 @@ func TestCollectRequestMetricEvents_NilEngine(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -2056,7 +2056,7 @@ func TestRealtimeStream_CollectHealthEvents(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:        gw,
@@ -2230,6 +2230,7 @@ func TestHandleRealtimeWebSocket_InvalidKey(t *testing.T) {
 // =============================================================================
 
 // TestCollectRequestMetricEvents_WithMockMetrics tests collectRequestMetricEvents with mock metrics
+//lint:ignore U1000 reserved for future test use
 type mockAnalyticsEngineForCollect struct {
 	metrics []analytics.RequestMetric
 }
@@ -2247,7 +2248,7 @@ func TestCollectRequestMetricEvents_WithMockMetrics(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -2274,7 +2275,7 @@ func TestCollectRequestMetricEvents_Deduplication(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -2295,7 +2296,7 @@ func TestCollectRequestMetricEvents_ZeroTimestamp(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -2390,7 +2391,7 @@ func TestRealtimeStream_CollectEvents_WithUpstreams(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -2445,7 +2446,7 @@ func TestRealtimeStream_CollectHealthEvents_HealthChanges(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -2486,7 +2487,7 @@ func TestCollectHealthEvents_TargetIDEmpty(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -2735,7 +2736,7 @@ func TestRealtimeStream_CollectEvents_NilGateway(t *testing.T) {
 	}
 
 	events := stream.collectEvents(upstreams)
-	if events != nil && len(events) != 0 {
+	if len(events) != 0 {
 		t.Errorf("Expected nil or empty events for nil gateway, got %d", len(events))
 	}
 }
@@ -2749,7 +2750,7 @@ func TestRealtimeStream_CollectRequestMetricEvents_SignatureUpdate(t *testing.T)
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -3057,6 +3058,7 @@ func TestDashboardAssetExists_WithFile(t *testing.T) {
 // =============================================================================
 
 // mockAnalyticsEngineWithMetrics is a mock implementation that returns predefined metrics
+//lint:ignore U1000 reserved for future test use
 type mockAnalyticsEngineWithMetrics struct {
 	metrics []analytics.RequestMetric
 }
@@ -3119,7 +3121,7 @@ func TestCollectRequestMetricEvents_WithMockData(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -3149,7 +3151,7 @@ func TestCollectRequestMetricEvents_SignatureMatching(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	// Test with pre-set signature
 	stream := &realtimeStream{
@@ -3203,7 +3205,7 @@ func TestCollectRequestMetricEvents_EventOrdering(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -3224,7 +3226,7 @@ func TestCollectHealthEvents_UpstreamVariations(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -3258,7 +3260,7 @@ func TestCollectHealthEvents_TargetVariations(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -3511,7 +3513,7 @@ func TestCollectRequestMetricEvents_MultipleCalls(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -3540,7 +3542,7 @@ func TestCollectEvents_WithNilUpstreams(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -3562,7 +3564,7 @@ func TestCollectEvents_EmptyUpstreams(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -3943,7 +3945,7 @@ func TestRealtimeStream_CollectHealthEvents_NoTargets(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -3974,7 +3976,7 @@ func TestCollectHealthEvents_HealthChangeFromUnhealthyToHealthy(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -4490,7 +4492,7 @@ func TestCollectRequestMetricEvents_WithEmptySignature(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -4515,7 +4517,7 @@ func TestCollectHealthEvents_MultipleUpstreams(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -4554,7 +4556,7 @@ func TestCollectHealthEvents_SameHealthNoChange(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,

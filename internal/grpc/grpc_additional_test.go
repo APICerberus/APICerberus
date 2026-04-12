@@ -399,7 +399,7 @@ func TestTranscoder_LoadDescriptors_InvalidPath(t *testing.T) {
 func TestTranscoder_LoadDescriptors_InvalidData(t *testing.T) {
 	tmpDir := t.TempDir()
 	invalidFile := tmpDir + "/invalid.desc"
-	os.WriteFile(invalidFile, []byte("invalid data"), 0600)
+	_ = os.WriteFile(invalidFile, []byte("invalid data"), 0600)
 
 	tc := NewTranscoder()
 	err := tc.LoadDescriptors(invalidFile)
@@ -828,7 +828,7 @@ func TestH2CServer_StartStop(t *testing.T) {
 	// Create a simple handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	server := NewH2CServer(config, handler)
@@ -883,7 +883,7 @@ func TestH2CServer_DefaultConfig(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	server.Stop(ctx)
+	_ = server.Stop(ctx)
 }
 
 // Test Transcoder JSONToProto with invalid input
@@ -1391,7 +1391,7 @@ func TestStreamProxy_WithConnection(t *testing.T) {
 	defer grpcServer.Stop()
 
 	go func() {
-		grpcServer.Serve(lis)
+		grpcServer.Serve(lis) //nolint:errcheck
 	}()
 
 	// Give server time to start

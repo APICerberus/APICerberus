@@ -19,6 +19,7 @@ import (
 // =============================================================================
 
 // mockAnalyticsEngine is a mock implementation of analytics.Engine for testing
+//lint:ignore U1000 reserved for future test use
 type mockAnalyticsEngine struct {
 	latestMetrics []analytics.RequestMetric
 	returnNil     bool
@@ -257,7 +258,7 @@ func TestCollectRequestMetricEvents_WithMetrics(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create gateway: %v", err)
 	}
-	defer gw.Shutdown(context.Background())
+	defer func() { _ = gw.Shutdown(context.Background()) }()
 
 	stream := &realtimeStream{
 		gateway:             gw,
@@ -266,7 +267,7 @@ func TestCollectRequestMetricEvents_WithMetrics(t *testing.T) {
 
 	// First call should return empty (no metrics yet)
 	events := stream.collectRequestMetricEvents()
-	if events != nil && len(events) != 0 {
+	if len(events) != 0 {
 		t.Errorf("Expected nil or empty events for fresh engine, got %d", len(events))
 	}
 }
@@ -340,7 +341,7 @@ func TestUpdateUser_FullPayload(t *testing.T) {
 	}
 
 	var createResult map[string]any
-	json.Unmarshal([]byte(body), &createResult)
+	_ = json.Unmarshal([]byte(body), &createResult)
 
 	userID, _ := createResult["id"].(string)
 	if userID == "" {
@@ -390,7 +391,7 @@ func TestUpdateUser_AllFields(t *testing.T) {
 	}
 
 	var createResult map[string]any
-	json.Unmarshal([]byte(body), &createResult)
+	_ = json.Unmarshal([]byte(body), &createResult)
 
 	userID, _ := createResult["id"].(string)
 	if userID == "" {

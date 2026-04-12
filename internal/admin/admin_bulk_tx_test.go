@@ -140,7 +140,7 @@ func TestBulkTransactionDirect(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
-		defer op.Rollback()
+		defer func() { _ = op.Rollback() }()
 		result, err := op.Exec("SELECT 1")
 		if err != nil {
 			t.Errorf("expected no error on exec, got %v", err)
@@ -155,7 +155,7 @@ func TestBulkTransactionDirect(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
-		defer op.Rollback()
+		defer func() { _ = op.Rollback() }()
 		row := op.QueryRow("SELECT 1")
 		if row == nil {
 			t.Error("expected non-nil row")
@@ -175,7 +175,7 @@ func TestBulkTransactionDirect(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
-		defer op.Rollback()
+		defer func() { _ = op.Rollback() }()
 		rows, err := op.Query("SELECT 1")
 		if err != nil {
 			t.Errorf("expected no error on query, got %v", err)

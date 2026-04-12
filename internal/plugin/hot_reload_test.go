@@ -204,7 +204,7 @@ func TestPluginReloader_WatchFile(t *testing.T) {
 	defer reloader.Stop()
 
 	testFile := filepath.Join(tmpDir, "test.lua")
-	os.WriteFile(testFile, []byte("test content"), 0644)
+	_ = os.WriteFile(testFile, []byte("test content"), 0644)
 
 	err := reloader.WatchFile(testFile)
 	if err != nil {
@@ -236,8 +236,8 @@ func TestPluginReloader_UnwatchFile(t *testing.T) {
 	defer reloader.Stop()
 
 	testFile := filepath.Join(tmpDir, "test.lua")
-	os.WriteFile(testFile, []byte("test content"), 0644)
-	reloader.WatchFile(testFile)
+	_ = os.WriteFile(testFile, []byte("test content"), 0644)
+	_ = reloader.WatchFile(testFile)
 
 	err := reloader.UnwatchFile(testFile)
 	if err != nil {
@@ -258,7 +258,7 @@ func TestPluginReloader_ReloadPlugin(t *testing.T) {
 
 	// Create plugin file
 	pluginFile := filepath.Join(tmpDir, "myplugin.lua")
-	os.WriteFile(pluginFile, []byte("plugin content"), 0644)
+	_ = os.WriteFile(pluginFile, []byte("plugin content"), 0644)
 
 	// Register handler
 	handlerCalled := false
@@ -333,7 +333,7 @@ func TestDynamicPluginManager_LoadPlugin(t *testing.T) {
 func TestDynamicPluginManager_UnloadPlugin(t *testing.T) {
 	manager := NewDynamicPluginManager(nil)
 
-	manager.LoadPlugin("test-plugin", []byte("content"))
+	_ = manager.LoadPlugin("test-plugin", []byte("content"))
 	err := manager.UnloadPlugin("test-plugin")
 	if err != nil {
 		t.Errorf("UnloadPlugin() error = %v", err)
@@ -396,7 +396,7 @@ func TestDynamicPluginManager_ListPlugins(t *testing.T) {
 func TestDynamicPluginManager_SetPluginError(t *testing.T) {
 	manager := NewDynamicPluginManager(nil)
 
-	manager.LoadPlugin("test-plugin", []byte("content"))
+	_ = manager.LoadPlugin("test-plugin", []byte("content"))
 	manager.SetPluginError("test-plugin", fmt.Errorf("test error"))
 
 	plugin, _ := manager.GetPlugin("test-plugin")
@@ -411,7 +411,7 @@ func TestDynamicPluginManager_SetPluginError(t *testing.T) {
 func TestDynamicPluginManager_ClearPluginError(t *testing.T) {
 	manager := NewDynamicPluginManager(nil)
 
-	manager.LoadPlugin("test-plugin", []byte("content"))
+	_ = manager.LoadPlugin("test-plugin", []byte("content"))
 	manager.SetPluginError("test-plugin", fmt.Errorf("test error"))
 	manager.ClearPluginError("test-plugin")
 

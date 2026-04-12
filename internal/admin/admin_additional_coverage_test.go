@@ -20,7 +20,7 @@ func TestAnalytics_NilEngine(t *testing.T) {
 		Store: config.StoreConfig{Path: storePath, BusyTimeout: time.Second, JournalMode: "WAL"},
 	})
 	now := time.Now().UTC()
-	seedStore.Audits().BatchInsert([]store.AuditEntry{
+	_ = seedStore.Audits().BatchInsert([]store.AuditEntry{
 		{ID: "ae1", RequestID: "rae1", RouteID: "route-1", ServiceName: "svc-1", Method: "GET", Path: "/api", StatusCode: 200, LatencyMS: 50, ClientIP: "127.0.0.1", CreatedAt: now.Add(-5 * time.Minute)},
 	})
 	seedStore.Close()

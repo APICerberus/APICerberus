@@ -102,6 +102,7 @@ func (m *mockACMEClient) CreateOrderCert(ctx context.Context, url string, csr []
 }
 
 // Helper to create provider with mock client
+//lint:ignore U1000 test helper reserved for future mock testing
 func newTestACMEProviderWithMock(cfg *config.Config, raftNode RaftNode, mockClient ACMEClient) (*ACMEProvider, error) {
 	provider, err := NewACMEProvider(cfg, raftNode)
 	if err != nil {
@@ -431,9 +432,9 @@ func TestACMEProvider_LoadCertificateFromDisk_InvalidFiles(t *testing.T) {
 	t.Run("invalid certificate PEM", func(t *testing.T) {
 		domain := "invalid.example.com"
 		domainDir := filepath.Join(tmpDir, domain)
-		os.MkdirAll(domainDir, 0750)
-		os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("invalid"), 0600)
-		os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
+		_ = os.MkdirAll(domainDir, 0750)
+		_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("invalid"), 0600)
+		_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
 
 		_, err := provider.loadCertificateFromDisk(domain)
 		if err == nil {
@@ -444,9 +445,9 @@ func TestACMEProvider_LoadCertificateFromDisk_InvalidFiles(t *testing.T) {
 	t.Run("missing certificate file", func(t *testing.T) {
 		domain := "missing.example.com"
 		domainDir := filepath.Join(tmpDir, domain)
-		os.MkdirAll(domainDir, 0750)
+		_ = os.MkdirAll(domainDir, 0750)
 		// Only write key file
-		os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("key"), 0600)
+		_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("key"), 0600)
 
 		_, err := provider.loadCertificateFromDisk(domain)
 		if err == nil {
@@ -457,9 +458,9 @@ func TestACMEProvider_LoadCertificateFromDisk_InvalidFiles(t *testing.T) {
 	t.Run("missing key file", func(t *testing.T) {
 		domain := "missing-key.example.com"
 		domainDir := filepath.Join(tmpDir, domain)
-		os.MkdirAll(domainDir, 0750)
+		_ = os.MkdirAll(domainDir, 0750)
 		// Only write cert file
-		os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("cert"), 0600)
+		_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("cert"), 0600)
 
 		_, err := provider.loadCertificateFromDisk(domain)
 		if err == nil {
@@ -495,12 +496,12 @@ func TestACMEProvider_loadExistingCertificates_WithErrors(t *testing.T) {
 	// Create directories with invalid certificates
 	domain := "invalid.example.com"
 	domainDir := filepath.Join(tmpDir, domain)
-	os.MkdirAll(domainDir, 0750)
-	os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("invalid"), 0600)
-	os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
+	_ = os.MkdirAll(domainDir, 0750)
+	_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("invalid"), 0600)
+	_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
 
 	// Create a file instead of directory
-	os.WriteFile(filepath.Join(tmpDir, "not-a-domain.txt"), []byte("test"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "not-a-domain.txt"), []byte("test"), 0644)
 
 	err := provider.loadExistingCertificates()
 	if err != nil {
@@ -542,7 +543,7 @@ func TestACMEProvider_loadOrCreateAccountKey_LoadExisting(t *testing.T) {
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	keyDER, _ := x509.MarshalECPrivateKey(key)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
-	os.WriteFile(filepath.Join(tmpDir, "account.key"), keyPEM, 0600)
+	_ = os.WriteFile(filepath.Join(tmpDir, "account.key"), keyPEM, 0600)
 
 	provider := &ACMEProvider{
 		storagePath: tmpDir,
@@ -562,7 +563,7 @@ func TestACMEProvider_loadOrCreateAccountKey_InvalidExistingKey(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Write invalid key
-	os.WriteFile(filepath.Join(tmpDir, "account.key"), []byte("invalid"), 0600)
+	_ = os.WriteFile(filepath.Join(tmpDir, "account.key"), []byte("invalid"), 0600)
 
 	provider := &ACMEProvider{
 		storagePath: tmpDir,
@@ -652,9 +653,6 @@ func TestCachedCertificate_TLS(t *testing.T) {
 		Leaf:        cached.Cert,
 	}
 
-	if tlsCert == nil {
-		t.Error("tls.Certificate is nil")
-	}
 	if len(tlsCert.Certificate) != 1 {
 		t.Errorf("Certificate chain length = %d, want 1", len(tlsCert.Certificate))
 	}
@@ -855,15 +853,15 @@ func TestACMEProvider_LoadCertificateFromDisk_CorruptedCert(t *testing.T) {
 
 	domain := "corrupted.example.com"
 	domainDir := filepath.Join(tmpDir, domain)
-	os.MkdirAll(domainDir, 0750)
+	_ = os.MkdirAll(domainDir, 0750)
 
 	// Create corrupted cert file
 	certPath := filepath.Join(domainDir, "cert.pem")
-	os.WriteFile(certPath, []byte("not a valid PEM"), 0600)
+	_ = os.WriteFile(certPath, []byte("not a valid PEM"), 0600)
 
 	// Create valid key file
 	keyPath := filepath.Join(domainDir, "key.pem")
-	os.WriteFile(keyPath, []byte("not a valid key PEM"), 0600)
+	_ = os.WriteFile(keyPath, []byte("not a valid key PEM"), 0600)
 
 	// Try to load corrupted certificate
 	_, err = provider.loadCertificateFromDisk(domain)
@@ -891,12 +889,12 @@ func TestACMEProvider_LoadCertificateFromDisk_MissingKey(t *testing.T) {
 
 	domain := "missingkey.example.com"
 	domainDir := filepath.Join(tmpDir, domain)
-	os.MkdirAll(domainDir, 0750)
+	_ =os.MkdirAll(domainDir, 0750)
 
 	// Create valid cert file but no key file
 	certPath := filepath.Join(domainDir, "cert.pem")
 	certPEM := generateTestCertPEM(t, domain)
-	os.WriteFile(certPath, certPEM, 0600)
+	_ =os.WriteFile(certPath, certPEM, 0600)
 
 	// Try to load certificate with missing key
 	_, err = provider.loadCertificateFromDisk(domain)
@@ -965,8 +963,8 @@ func TestLoadCertificateFromDisk_Errors(t *testing.T) {
 			name: "missing key file",
 			setup: func() {
 				domainDir := filepath.Join(tmpDir, "missing-key.example.com")
-				os.MkdirAll(domainDir, 0750)
-				os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("test"), 0600)
+				_ = os.MkdirAll(domainDir, 0750)
+				_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("test"), 0600)
 			},
 			domain:  "missing-key.example.com",
 			wantErr: true,
@@ -975,9 +973,9 @@ func TestLoadCertificateFromDisk_Errors(t *testing.T) {
 			name: "invalid cert PEM",
 			setup: func() {
 				domainDir := filepath.Join(tmpDir, "invalid-cert.example.com")
-				os.MkdirAll(domainDir, 0750)
-				os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("invalid"), 0600)
-				os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
+				_ = os.MkdirAll(domainDir, 0750)
+				_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("invalid"), 0600)
+				_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
 			},
 			domain:  "invalid-cert.example.com",
 			wantErr: true,
@@ -986,11 +984,11 @@ func TestLoadCertificateFromDisk_Errors(t *testing.T) {
 			name: "invalid key PEM",
 			setup: func() {
 				domainDir := filepath.Join(tmpDir, "invalid-key.example.com")
-				os.MkdirAll(domainDir, 0750)
+				_ = os.MkdirAll(domainDir, 0750)
 				// Valid cert PEM
 				certPEM := generateTestCertPEM(t, "invalid-key.example.com")
-				os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
-				os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
+				_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
+				_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
 			},
 			domain:  "invalid-key.example.com",
 			wantErr: true,
@@ -1300,17 +1298,17 @@ func TestACMEProvider_loadCertificateFromDisk_WrongKeyType(t *testing.T) {
 
 	domain := "wrongkey.example.com"
 	domainDir := filepath.Join(tmpDir, domain)
-	os.MkdirAll(domainDir, 0750)
+	_ = os.MkdirAll(domainDir, 0750)
 
 	// Create valid cert
 	certPEM := generateTestCertPEM(t, domain)
-	os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
+	_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
 
 	// Create key with wrong type (RSA key block with EC content)
 	wrongKeyPEM := []byte(`-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEA0Z3VS5JJcds3xfn/ygWyF8PbnGy0AHB7MhgwKVPSmwaFkYLv
 -----END RSA PRIVATE KEY-----`)
-	os.WriteFile(filepath.Join(domainDir, "key.pem"), wrongKeyPEM, 0600)
+	_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), wrongKeyPEM, 0600)
 
 	_, err = provider.loadCertificateFromDisk(domain)
 	if err == nil {
@@ -1363,7 +1361,7 @@ func TestACMEProvider_loadExistingCertificates_FileNotDir(t *testing.T) {
 
 	// Create a file instead of a subdirectory
 	testFile := filepath.Join(tmpDir, "not-a-directory.txt")
-	os.WriteFile(testFile, []byte("test"), 0644)
+	_ = os.WriteFile(testFile, []byte("test"), 0644)
 
 	provider := &ACMEProvider{
 		storagePath: tmpDir,
@@ -1391,7 +1389,7 @@ func TestACMEProvider_loadOrCreateAccountKey_ValidExisting(t *testing.T) {
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
 	keyPath := filepath.Join(tmpDir, "account.key")
-	os.WriteFile(keyPath, keyPEM, 0600)
+	_ = os.WriteFile(keyPath, keyPEM, 0600)
 
 	provider := &ACMEProvider{
 		storagePath: tmpDir,
@@ -1690,7 +1688,7 @@ func TestLoadExistingCertificates(t *testing.T) {
 			setup: func(dir string) {
 				// Create a domain directory with valid cert
 				domainDir := filepath.Join(dir, "valid.example.com")
-				os.MkdirAll(domainDir, 0750)
+				_ = os.MkdirAll(domainDir, 0750)
 
 				// Generate and store a valid certificate
 				cfg := &config.Config{
@@ -1710,7 +1708,7 @@ func TestLoadExistingCertificates(t *testing.T) {
 					IssuedAt:  time.Now(),
 					ExpiresAt: time.Now().Add(24 * time.Hour),
 				}
-				provider.storeCertificateLocally(cert)
+				_ = provider.storeCertificateLocally(cert)
 			},
 			wantErr: false,
 		},
@@ -1719,9 +1717,9 @@ func TestLoadExistingCertificates(t *testing.T) {
 			setup: func(dir string) {
 				// Create a domain directory with invalid cert files
 				domainDir := filepath.Join(dir, "invalid.example.com")
-				os.MkdirAll(domainDir, 0750)
-				os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("invalid"), 0600)
-				os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
+				_ = os.MkdirAll(domainDir, 0750)
+				_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("invalid"), 0600)
+				_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
 			},
 			wantErr: false, // Should skip invalid certs, not error
 		},
@@ -1729,7 +1727,7 @@ func TestLoadExistingCertificates(t *testing.T) {
 			name: "non-directory entries are skipped",
 			setup: func(dir string) {
 				// Create a file in the storage directory (not a directory)
-				os.WriteFile(filepath.Join(dir, "not-a-directory.txt"), []byte("test"), 0600)
+				_ = os.WriteFile(filepath.Join(dir, "not-a-directory.txt"), []byte("test"), 0600)
 			},
 			wantErr: false,
 		},
@@ -1885,7 +1883,7 @@ func TestACMEProvider_LoadOrCreateAccountKey_EdgeCases(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Create a file with valid PEM header but invalid content
-		os.WriteFile(filepath.Join(tmpDir, "account.key"), []byte(
+		_ = os.WriteFile(filepath.Join(tmpDir, "account.key"), []byte(
 			"-----BEGIN EC PRIVATE KEY-----\ninvalid\n-----END EC PRIVATE KEY-----",
 		), 0600)
 
@@ -1907,7 +1905,7 @@ func TestACMEProvider_LoadOrCreateAccountKey_EdgeCases(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Create empty file
-		os.WriteFile(filepath.Join(tmpDir, "account.key"), []byte{}, 0600)
+		_ = os.WriteFile(filepath.Join(tmpDir, "account.key"), []byte{}, 0600)
 
 		provider := &ACMEProvider{
 			storagePath: tmpDir,
@@ -2018,12 +2016,12 @@ func TestACMEProvider_LoadCertificateFromDisk_CorruptedKey(t *testing.T) {
 
 	domain := "corrupted-key.example.com"
 	domainDir := filepath.Join(tmpDir, domain)
-	os.MkdirAll(domainDir, 0750)
+	_ = os.MkdirAll(domainDir, 0750)
 
 	// Create valid cert but invalid key
 	certPEM := generateTestCertPEM(t, domain)
-	os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
-	os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte(
+	_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
+	_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte(
 		"-----BEGIN EC PRIVATE KEY-----\ninvalid\n-----END EC PRIVATE KEY-----",
 	), 0600)
 
@@ -2725,7 +2723,7 @@ func TestACMEProvider_LoadExistingCertificates_NoPermission(t *testing.T) {
 
 	// Remove read permission from storage directory (may not work on all OS)
 	_ = os.Chmod(tmpDir, 0000)
-	defer os.Chmod(tmpDir, 0750)
+	defer func() { _ = os.Chmod(tmpDir, 0750) }()
 
 	// Try to load - should not panic
 	_ = provider.loadExistingCertificates()
@@ -2737,7 +2735,7 @@ func TestACMEProvider_LoadOrCreateAccountKey_DirectoryAsFile(t *testing.T) {
 
 	// Create a subdirectory that will be used as the account key path
 	keyPath := filepath.Join(tmpDir, "account.key")
-	_ = os.MkdirAll(keyPath, 0750)
+	_ =os.MkdirAll(keyPath, 0750)
 
 	cfg := &config.Config{
 		ACME: config.ACMEConfig{
@@ -2783,7 +2781,7 @@ func TestACMEProvider_StoreCertificateLocally_ReadOnlyDir(t *testing.T) {
 	// Make domain directory read-only
 	domainDir := filepath.Join(tmpDir, cert.Domain)
 	_ = os.Chmod(domainDir, 0555)
-	defer os.Chmod(domainDir, 0750)
+	defer func() { _ = os.Chmod(domainDir, 0750) }()
 
 	// Try to store again - may fail but should not panic
 	_ = provider.storeCertificateLocally(cert)
@@ -3176,14 +3174,14 @@ func TestACMEProvider_LoadCertificateFromDisk_EdgeCases(t *testing.T) {
 
 		domain := "test.example.com"
 		domainDir := filepath.Join(tmpDir, domain)
-		os.MkdirAll(domainDir, 0750)
+		_ = os.MkdirAll(domainDir, 0750)
 
 		// Valid cert
 		certPEM := generateTestCertPEM(t, domain)
-		os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
+		_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
 
 		// Invalid key format (not EC)
-		os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte(
+		_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte(
 			"-----BEGIN EC PRIVATE KEY-----\ninvalid\n-----END EC PRIVATE KEY-----",
 		), 0600)
 
@@ -3416,7 +3414,7 @@ func TestACMEProvider_StoreCertificateLocally_MkdirError(t *testing.T) {
 	// Create a file where we expect a directory
 	tmpDir := t.TempDir()
 	blockingFile := filepath.Join(tmpDir, "blocking")
-	os.WriteFile(blockingFile, []byte("block"), 0644)
+	_ = os.WriteFile(blockingFile, []byte("block"), 0644)
 
 	provider := &ACMEProvider{
 		storagePath: blockingFile, // This is a file, not a directory
@@ -3461,20 +3459,20 @@ func TestACMEProvider_LoadCertificateFromDisk_UnreadableCert(t *testing.T) {
 
 	domain := "unreadable.example.com"
 	domainDir := filepath.Join(tmpDir, domain)
-	os.MkdirAll(domainDir, 0750)
+	_ = os.MkdirAll(domainDir, 0750)
 
 	// Write valid cert
 	certPEM := generateTestCertPEM(t, domain)
-	os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0000) // No permissions
+	_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0000) // No permissions
 	// Write valid key
 	keyPEM := generateTestKeyPEM(t)
-	os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0600)
+	_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0600)
 
 	// Try to read - may fail due to permissions
 	_, _ = provider.loadCertificateFromDisk(domain)
 
 	// Restore permissions for cleanup
-	os.Chmod(filepath.Join(domainDir, "cert.pem"), 0600)
+	_ = os.Chmod(filepath.Join(domainDir, "cert.pem"), 0600)
 }
 
 // Test loadCertificateFromDisk with unreadable key file
@@ -3496,20 +3494,20 @@ func TestACMEProvider_LoadCertificateFromDisk_UnreadableKey(t *testing.T) {
 
 	domain := "unreadable-key.example.com"
 	domainDir := filepath.Join(tmpDir, domain)
-	os.MkdirAll(domainDir, 0750)
+	_ = os.MkdirAll(domainDir, 0750)
 
 	// Write valid cert
 	certPEM := generateTestCertPEM(t, domain)
-	os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
+	_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
 	// Write valid key but unreadable
 	keyPEM := generateTestKeyPEM(t)
-	os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0000) // No permissions
+	_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0000) // No permissions
 
 	// Try to read - may fail due to permissions
 	_, _ = provider.loadCertificateFromDisk(domain)
 
 	// Restore permissions for cleanup
-	os.Chmod(filepath.Join(domainDir, "key.pem"), 0600)
+	_ = os.Chmod(filepath.Join(domainDir, "key.pem"), 0600)
 }
 
 // Test loadExistingCertificates with subdirectory that has no cert files
@@ -3531,7 +3529,7 @@ func TestACMEProvider_LoadExistingCertificates_EmptyDomainDir(t *testing.T) {
 
 	// Create empty domain directory
 	domainDir := filepath.Join(tmpDir, "empty.example.com")
-	os.MkdirAll(domainDir, 0750)
+	_ = os.MkdirAll(domainDir, 0750)
 
 	// Should skip this directory without error
 	err = provider.loadExistingCertificates()
@@ -3558,7 +3556,7 @@ func TestACMEProvider_LoadExistingCertificates_NestedDirs(t *testing.T) {
 	}
 
 	// Create nested directory structure
-	os.MkdirAll(filepath.Join(tmpDir, "level1", "level2"), 0750)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "level1", "level2"), 0750)
 
 	// Should handle this gracefully
 	err = provider.loadExistingCertificates()
@@ -3575,7 +3573,7 @@ func TestACMEProvider_LoadOrCreateAccountKey_InvalidPEMBlock(t *testing.T) {
 	wrongPEM := []byte(`-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEA0Z3VS5JJcds3xfn/ygWyF8PbnGy0AHB7MhgwKVPSmwaFkYLv
 -----END RSA PRIVATE KEY-----`)
-	os.WriteFile(filepath.Join(tmpDir, "account.key"), wrongPEM, 0600)
+	_ = os.WriteFile(filepath.Join(tmpDir, "account.key"), wrongPEM, 0600)
 
 	provider := &ACMEProvider{
 		storagePath: tmpDir,
@@ -3953,12 +3951,12 @@ func TestACMEProvider_LoadCertificateFromDisk_Symlink(t *testing.T) {
 	// Create valid certificate
 	domain := "symlink.example.com"
 	domainDir := filepath.Join(tmpDir, domain)
-	os.MkdirAll(domainDir, 0750)
+	_ = os.MkdirAll(domainDir, 0750)
 
 	certPEM := generateTestCertPEM(t, domain)
 	keyPEM := generateTestKeyPEM(t)
-	os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
-	os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0600)
+	_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
+	_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0600)
 
 	// Load should succeed
 	loaded, err := provider.loadCertificateFromDisk(domain)
@@ -3991,12 +3989,12 @@ func TestACMEProvider_LoadExistingCertificates_ManyDomains(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		domain := fmt.Sprintf("multi%d.example.com", i)
 		domainDir := filepath.Join(tmpDir, domain)
-		os.MkdirAll(domainDir, 0750)
+		_ = os.MkdirAll(domainDir, 0750)
 
 		certPEM := generateTestCertPEM(t, domain)
 		keyPEM := generateTestKeyPEM(t)
-		os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
-		os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0600)
+		_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
+		_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0600)
 	}
 
 	// Load all certificates
@@ -4316,8 +4314,8 @@ func TestACMEProvider_StoreCertificateLocally_WriteErrors(t *testing.T) {
 
 		// Make directory read-only
 		domainDir := filepath.Join(tmpDir, cert.Domain)
-		os.Chmod(domainDir, 0555)
-		defer os.Chmod(domainDir, 0750)
+		_ = os.Chmod(domainDir, 0555)
+		defer func() { _ = os.Chmod(domainDir, 0750) }()
 
 		// Second store may fail due to permissions
 		_ = provider.storeCertificateLocally(cert)
@@ -4355,15 +4353,15 @@ func TestACMEProvider_LoadCertificateFromDisk_CertFormats(t *testing.T) {
 	t.Run("cert with trailing data", func(t *testing.T) {
 		domain := "trailing.example.com"
 		domainDir := filepath.Join(tmpDir, domain)
-		os.MkdirAll(domainDir, 0750)
+		_ = os.MkdirAll(domainDir, 0750)
 
 		// Valid cert with trailing data
 		certPEM := generateTestCertPEM(t, domain)
 		certPEM = append(certPEM, []byte("\n# trailing data")...)
 		keyPEM := generateTestKeyPEM(t)
 
-		os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
-		os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0600)
+		_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
+		_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0600)
 
 		// Should still load (pem.Decode ignores trailing data)
 		_, err := provider.loadCertificateFromDisk(domain)
@@ -4375,7 +4373,7 @@ func TestACMEProvider_LoadCertificateFromDisk_CertFormats(t *testing.T) {
 	t.Run("key with multiple PEM blocks", func(t *testing.T) {
 		domain := "multikey.example.com"
 		domainDir := filepath.Join(tmpDir, domain)
-		os.MkdirAll(domainDir, 0750)
+		_ = os.MkdirAll(domainDir, 0750)
 
 		certPEM := generateTestCertPEM(t, domain)
 		keyPEM := generateTestKeyPEM(t)
@@ -4383,8 +4381,8 @@ func TestACMEProvider_LoadCertificateFromDisk_CertFormats(t *testing.T) {
 		keyPEM = append(keyPEM, []byte("\n")...)
 		keyPEM = append(keyPEM, generateTestKeyPEM(t)...)
 
-		os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
-		os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0600)
+		_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
+		_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0600)
 
 		// Should use first valid key
 		loaded, err := provider.loadCertificateFromDisk(domain)
@@ -4403,12 +4401,12 @@ func TestNewACMEProvider_WithExistingCerts(t *testing.T) {
 	// Pre-populate with valid certificate
 	domain := "existing.example.com"
 	domainDir := filepath.Join(tmpDir, domain)
-	os.MkdirAll(domainDir, 0750)
+	_ = os.MkdirAll(domainDir, 0750)
 
 	certPEM := generateTestCertPEM(t, domain)
 	keyPEM := generateTestKeyPEM(t)
-	os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
-	os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0600)
+	_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
+	_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0600)
 
 	cfg := &config.Config{
 		ACME: config.ACMEConfig{
@@ -4440,9 +4438,9 @@ func TestNewACMEProvider_WithInvalidCerts(t *testing.T) {
 
 	// Create domain directory with invalid cert
 	domainDir := filepath.Join(tmpDir, "invalid.example.com")
-	os.MkdirAll(domainDir, 0750)
-	os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("invalid"), 0600)
-	os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
+	_ = os.MkdirAll(domainDir, 0750)
+	_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("invalid"), 0600)
+	_ = os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
 
 	cfg := &config.Config{
 		ACME: config.ACMEConfig{
@@ -4517,7 +4515,7 @@ func TestACMEProvider_LoadOrCreateAccountKey_DirCreation(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Ensure parent directory exists
 	nestedDir := filepath.Join(tmpDir, "nested", "acme")
-	os.MkdirAll(nestedDir, 0750)
+	_ = os.MkdirAll(nestedDir, 0750)
 
 	provider := &ACMEProvider{
 		storagePath: nestedDir,
@@ -4719,7 +4717,7 @@ func TestACMEProvider_LoadOrCreateAccountKey_WriteError(t *testing.T) {
 	// Create a read-only directory
 	tmpDir := t.TempDir()
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	os.MkdirAll(readOnlyDir, 0750)
+	_ = os.MkdirAll(readOnlyDir, 0750)
 
 	// First create a valid key
 	provider := &ACMEProvider{
@@ -4840,11 +4838,11 @@ func TestACMEProvider_LoadCertificateFromDisk_CertOnly(t *testing.T) {
 
 	domain := "certonly.example.com"
 	domainDir := filepath.Join(tmpDir, domain)
-	os.MkdirAll(domainDir, 0750)
+	_ = os.MkdirAll(domainDir, 0750)
 
 	// Write only cert file
 	certPEM := generateTestCertPEM(t, domain)
-	os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
+	_ = os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
 	// Don't write key file
 
 	_, err := provider.loadCertificateFromDisk(domain)

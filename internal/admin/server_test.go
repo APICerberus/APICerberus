@@ -179,7 +179,7 @@ func TestAdminRealtimeWebSocketEndpoint(t *testing.T) {
 	}
 
 	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	defer conn.SetReadDeadline(time.Time{})
+	defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
 
 	foundLiveEvent := false
 	for i := 0; i < 6; i++ {

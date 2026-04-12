@@ -851,12 +851,12 @@ func TestCache_AfterProxy(t *testing.T) {
 	rec := httptest.NewRecorder()
 	rec.Header().Set("Content-Type", "application/json")
 	rec.WriteHeader(http.StatusOK)
-	rec.Write([]byte(`{"users": []}`))
+	_, _ = rec.Write([]byte(`{"users": []}`))
 
 	// Wrap in capture writer
 	capture := NewCaptureResponseWriter(rec)
 	capture.WriteHeader(http.StatusOK)
-	capture.Write([]byte(`{"users": []}`))
+	_, _ = capture.Write([]byte(`{"users": []}`))
 
 	ctx := &PipelineContext{
 		Request:        req,
@@ -886,12 +886,12 @@ func TestCache_AfterProxy_NonCacheable(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/users", nil)
 	rec := httptest.NewRecorder()
 	rec.WriteHeader(http.StatusNotFound)
-	rec.Write([]byte(`{"error": "not found"}`))
+	_, _ = rec.Write([]byte(`{"error": "not found"}`))
 
 	// Wrap in capture writer
 	capture := NewCaptureResponseWriter(rec)
 	capture.WriteHeader(http.StatusNotFound)
-	capture.Write([]byte(`{"error": "not found"}`))
+	_, _ = capture.Write([]byte(`{"error": "not found"}`))
 
 	ctx := &PipelineContext{
 		Request:        req,
@@ -1034,12 +1034,14 @@ func TestCache_NilOperations(t *testing.T) {
 	cache.Stop()
 	cache.Clear()
 	cache.Delete("key")
-	cache.DeleteByPattern(".*")
+	if _, err := cache.DeleteByPattern(".*"); err != nil {
+		// expected error in test
+	}
 	cache.DeleteByTag("tag")
 	cache.DeleteByTags([]string{"tag"})
 	cache.Get("key")
 	cache.Set("key", 200, nil, nil, 0, nil)
-	cache.WarmURL("GET", "/", nil, nil, 0, nil)
+	_ = cache.WarmURL("GET", "/", nil, nil, 0, nil)
 	cache.WarmURLs(nil)
 
 	if cache.Len() != 0 {
@@ -1401,12 +1403,12 @@ func TestCache_AfterProxy_WithCacheControl(t *testing.T) {
 	rec.Header().Set("Content-Type", "application/json")
 	rec.Header().Set("Cache-Control", "max-age=60")
 	rec.WriteHeader(http.StatusOK)
-	rec.Write([]byte(`{"users": []}`))
+	_, _ = rec.Write([]byte(`{"users": []}`))
 
 	// Wrap in capture writer
 	capture := NewCaptureResponseWriter(rec)
 	capture.WriteHeader(http.StatusOK)
-	capture.Write([]byte(`{"users": []}`))
+	_, _ = capture.Write([]byte(`{"users": []}`))
 
 	ctx := &PipelineContext{
 		Request:        req,
@@ -1444,12 +1446,12 @@ func TestCache_AfterProxy_WithTags(t *testing.T) {
 	rec.Header().Set("Content-Type", "application/json")
 	rec.Header().Set("X-Cache-Tags", "users,api")
 	rec.WriteHeader(http.StatusOK)
-	rec.Write([]byte(`{"users": []}`))
+	_, _ = rec.Write([]byte(`{"users": []}`))
 
 	// Wrap in capture writer
 	capture := NewCaptureResponseWriter(rec)
 	capture.WriteHeader(http.StatusOK)
-	capture.Write([]byte(`{"users": []}`))
+	_, _ = capture.Write([]byte(`{"users": []}`))
 
 	ctx := &PipelineContext{
 		Request:        req,
@@ -1483,12 +1485,12 @@ func TestCache_AfterProxy_NonCacheableStatus(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/users", nil)
 	rec := httptest.NewRecorder()
 	rec.WriteHeader(http.StatusInternalServerError)
-	rec.Write([]byte(`{"error": "server error"}`))
+	_, _ = rec.Write([]byte(`{"error": "server error"}`))
 
 	// Wrap in capture writer
 	capture := NewCaptureResponseWriter(rec)
 	capture.WriteHeader(http.StatusInternalServerError)
-	capture.Write([]byte(`{"error": "server error"}`))
+	_, _ = capture.Write([]byte(`{"error": "server error"}`))
 
 	ctx := &PipelineContext{
 		Request:        req,

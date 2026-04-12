@@ -28,6 +28,7 @@ func TestProxy_handleGRPC_SuccessPaths(t *testing.T) {
 	s := grpc.NewServer()
 	defer s.Stop()
 
+	//nolint:errcheck
 	go s.Serve(lis)
 	time.Sleep(10 * time.Millisecond)
 
@@ -128,6 +129,7 @@ func TestProxyServerStream_StreamingScenarios(t *testing.T) {
 	s := grpc.NewServer()
 	defer s.Stop()
 
+	//nolint:errcheck
 	go s.Serve(lis)
 	time.Sleep(10 * time.Millisecond)
 
@@ -175,6 +177,7 @@ func TestProxyClientStream_BodyVariations(t *testing.T) {
 	s := grpc.NewServer()
 	defer s.Stop()
 
+	//nolint:errcheck
 	go s.Serve(lis)
 	time.Sleep(10 * time.Millisecond)
 
@@ -223,6 +226,7 @@ func TestProxyBidiStream_Scenarios(t *testing.T) {
 	s := grpc.NewServer()
 	defer s.Stop()
 
+	//nolint:errcheck
 	go s.Serve(lis)
 	time.Sleep(10 * time.Millisecond)
 
@@ -285,6 +289,7 @@ func TestProxy_handleGRPCWeb_SuccessPaths(t *testing.T) {
 	s := grpc.NewServer()
 	defer s.Stop()
 
+	//nolint:errcheck
 	go s.Serve(lis)
 	time.Sleep(10 * time.Millisecond)
 

@@ -1248,6 +1248,7 @@ func TestStreamProxy_WithRealGRPCServer(t *testing.T) {
 	defer grpcServer.Stop()
 
 	go func() {
+		//nolint:errcheck
 		grpcServer.Serve(lis)
 	}()
 

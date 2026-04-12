@@ -31,7 +31,7 @@ func TestDeleteUser_WithAssociatedData(t *testing.T) {
 	}
 
 	var createResult map[string]any
-	json.Unmarshal([]byte(body), &createResult)
+	_ = json.Unmarshal([]byte(body), &createResult)
 	userID, ok := createResult["id"].(string)
 	if !ok || userID == "" {
 		t.Skip("Could not get user ID for test")
@@ -130,7 +130,7 @@ func TestResetUserPassword_WithExistingUser(t *testing.T) {
 	}
 
 	var createResult map[string]any
-	json.Unmarshal([]byte(body), &createResult)
+	_ = json.Unmarshal([]byte(body), &createResult)
 	userID, ok := createResult["id"].(string)
 	if !ok || userID == "" {
 		t.Skip("Could not get user ID for test")
@@ -205,7 +205,7 @@ func TestAdjustCredits_Advanced(t *testing.T) {
 			}
 
 			var createResult map[string]any
-			json.Unmarshal([]byte(body), &createResult)
+			_ = json.Unmarshal([]byte(body), &createResult)
 			userID, ok := createResult["id"].(string)
 			if !ok || userID == "" {
 				t.Skip("Could not get user ID for test")
@@ -243,7 +243,7 @@ func TestListCreditTransactions_WithPagination(t *testing.T) {
 	}
 
 	var createResult map[string]any
-	json.Unmarshal([]byte(body), &createResult)
+	_ = json.Unmarshal([]byte(body), &createResult)
 	userID, ok := createResult["id"].(string)
 	if !ok || userID == "" {
 		t.Skip("Could not get user ID for test")
@@ -492,7 +492,7 @@ func TestUpdateUserStatus_Advanced(t *testing.T) {
 	}
 
 	var createResult map[string]any
-	json.Unmarshal([]byte(body), &createResult)
+	_ = json.Unmarshal([]byte(body), &createResult)
 	userID, ok := createResult["id"].(string)
 	if !ok || userID == "" {
 		t.Skip("Could not get user ID for test")
@@ -656,7 +656,7 @@ func TestCreditOverview_More(t *testing.T) {
 	}
 
 	var createResult map[string]any
-	json.Unmarshal([]byte(body), &createResult)
+	_ = json.Unmarshal([]byte(body), &createResult)
 	userID, ok := createResult["id"].(string)
 	if !ok || userID == "" {
 		t.Skip("Could not get user ID for test")

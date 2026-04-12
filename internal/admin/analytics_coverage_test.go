@@ -19,7 +19,7 @@ func TestAnalyticsErrorsVariousRanges(t *testing.T) {
 		Store: config.StoreConfig{Path: storePath, BusyTimeout: time.Second, JournalMode: "WAL"},
 	})
 	now := time.Now().UTC()
-	seedStore.Audits().BatchInsert([]store.AuditEntry{
+	_ = seedStore.Audits().BatchInsert([]store.AuditEntry{
 		{ID: "a1", RequestID: "r1", RouteID: "route-users", ServiceName: "svc-users", Method: "GET", Path: "/users", StatusCode: 500, LatencyMS: 100, ClientIP: "127.0.0.1", CreatedAt: now.Add(-30 * time.Minute)},
 		{ID: "a2", RequestID: "r2", RouteID: "route-users", ServiceName: "svc-users", Method: "POST", Path: "/users", StatusCode: 502, LatencyMS: 200, ClientIP: "127.0.0.1", CreatedAt: now.Add(-15 * time.Minute)},
 	})
@@ -52,7 +52,7 @@ func TestAnalyticsTimeSeriesAggregation(t *testing.T) {
 			ClientIP: "127.0.0.1", CreatedAt: now.Add(-time.Duration(i) * time.Minute),
 		}
 	}
-	seedStore.Audits().BatchInsert(entries)
+	_ = seedStore.Audits().BatchInsert(entries)
 	seedStore.Close()
 
 	granularities := []string{"1m", "5m", "1h", "24h"}
@@ -82,7 +82,7 @@ func TestAnalyticsLatencyPercentiles(t *testing.T) {
 			ClientIP: "127.0.0.1", CreatedAt: now.Add(-time.Duration(i) * time.Minute),
 		}
 	}
-	seedStore.Audits().BatchInsert(entries)
+	_ = seedStore.Audits().BatchInsert(entries)
 	seedStore.Close()
 
 	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/latency?window=24h", token, nil)
@@ -102,7 +102,7 @@ func TestAnalyticsTopRoutesAndConsumers(t *testing.T) {
 	})
 	now := time.Now().UTC()
 	for i := 0; i < 20; i++ {
-		seedStore.Audits().BatchInsert([]store.AuditEntry{
+		_ = seedStore.Audits().BatchInsert([]store.AuditEntry{
 			{ID: "tr" + string(rune(i)), RequestID: "rq" + string(rune(i)), RouteID: "route-users", ServiceName: "svc-users",
 				Method: "GET", Path: "/users", StatusCode: 200, LatencyMS: 50,
 				ClientIP: "127.0.0.1", CreatedAt: now.Add(-time.Duration(i) * time.Minute)},
@@ -129,7 +129,7 @@ func TestAnalyticsThroughputAndStatusCodes(t *testing.T) {
 	now := time.Now().UTC()
 	codes := []int{200, 201, 400, 401, 403, 404, 500, 502, 503}
 	for i, code := range codes {
-		seedStore.Audits().BatchInsert([]store.AuditEntry{
+		_ = seedStore.Audits().BatchInsert([]store.AuditEntry{
 			{ID: "sc" + string(rune(i)), RequestID: "rsc" + string(rune(i)), RouteID: "route-users", ServiceName: "svc-users",
 				Method: "GET", Path: "/users", StatusCode: code, LatencyMS: 50,
 				ClientIP: "127.0.0.1", CreatedAt: now.Add(-time.Duration(i) * time.Minute)},
@@ -155,7 +155,7 @@ func TestAnalyticsOverviewVariousWindows(t *testing.T) {
 		Store: config.StoreConfig{Path: storePath, BusyTimeout: time.Second, JournalMode: "WAL"},
 	})
 	now := time.Now().UTC()
-	seedStore.Audits().BatchInsert([]store.AuditEntry{
+	_ = seedStore.Audits().BatchInsert([]store.AuditEntry{
 		{ID: "ov1", RequestID: "rov1", RouteID: "route-users", ServiceName: "svc-users",
 			Method: "GET", Path: "/users", StatusCode: 200, LatencyMS: 50,
 			ClientIP: "127.0.0.1", CreatedAt: now.Add(-5 * time.Minute)},
@@ -180,7 +180,7 @@ func TestAnalyticsTopRoutes_MultipleWindows(t *testing.T) {
 		Store: config.StoreConfig{Path: storePath, BusyTimeout: time.Second, JournalMode: "WAL"},
 	})
 	now := time.Now().UTC()
-	seedStore.Audits().BatchInsert([]store.AuditEntry{
+	_ = seedStore.Audits().BatchInsert([]store.AuditEntry{
 		{ID: "tr1", RequestID: "r1", RouteID: "route-1", RouteName: "Route One", Method: "GET", Path: "/api/v1", StatusCode: 200, LatencyMS: 10, ClientIP: "127.0.0.1", CreatedAt: now.Add(-5 * time.Minute)},
 		{ID: "tr2", RequestID: "r2", RouteID: "route-2", RouteName: "Route Two", Method: "POST", Path: "/api/v2", StatusCode: 201, LatencyMS: 20, ClientIP: "127.0.0.1", CreatedAt: now.Add(-3 * time.Minute)},
 	})

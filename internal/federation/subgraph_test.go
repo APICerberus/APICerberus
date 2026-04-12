@@ -85,8 +85,8 @@ func TestSubgraphManager_ListSubgraphs(t *testing.T) {
 	manager := NewSubgraphManager()
 
 	// Add multiple subgraphs
-	manager.AddSubgraph(&Subgraph{ID: "users", URL: "http://localhost:4001/graphql"})
-	manager.AddSubgraph(&Subgraph{ID: "posts", URL: "http://localhost:4002/graphql"})
+	_ = manager.AddSubgraph(&Subgraph{ID: "users", URL: "http://localhost:4001/graphql"})
+	_ = manager.AddSubgraph(&Subgraph{ID: "posts", URL: "http://localhost:4002/graphql"})
 
 	subgraphs := manager.ListSubgraphs()
 	if len(subgraphs) != 2 {

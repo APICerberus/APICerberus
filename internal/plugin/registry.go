@@ -774,9 +774,7 @@ func asIntSlice(value any, fallback []int) []int {
 	switch v := value.(type) {
 	case []int:
 		out := make([]int, 0, len(v))
-		for _, item := range v {
-			out = append(out, item)
-		}
+		out = append(out, v...)
 		if len(out) == 0 {
 			return append([]int(nil), fallback...)
 		}

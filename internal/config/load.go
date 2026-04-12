@@ -95,13 +95,9 @@ func setDefaults(cfg *Config) {
 	if cfg.Portal.Session.MaxAge <= 0 {
 		cfg.Portal.Session.MaxAge = 24 * time.Hour
 	}
-	// Portal is disabled by default unless explicitly enabled
-	// This prevents unexpected port binding issues
-	if !cfg.Portal.Enabled {
-		// Keep it false - user must explicitly enable portal
-		// The previous logic that auto-enabled portal based on default values was causing
-		// issues where users couldn't disable the portal
-	}
+	// Portal is disabled by default unless explicitly enabled.
+	// This prevents unexpected port binding issues when users intend to keep it disabled.
+	// If cfg.Portal.Enabled is false, the portal server is simply not started.
 
 	// Cluster defaults
 	if cfg.Cluster.Enabled {

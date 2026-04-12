@@ -167,10 +167,6 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Check for IdP error
 	if errCode := r.URL.Query().Get("error"); errCode != "" {
-		errDesc := r.URL.Query().Get("error_description")
-		if errDesc == "" {
-			errDesc = errCode
-		}
 		http.Redirect(w, r, "/dashboard?login=sso_error&error="+errCode, http.StatusSeeOther)
 		return
 	}

@@ -119,6 +119,8 @@ func asString(value any) string {
 		return ""
 	case string:
 		return strings.TrimSpace(v)
+	case time.Time:
+		return v.UTC().Format(time.RFC3339Nano)
 	case fmt.Stringer:
 		return strings.TrimSpace(v.String())
 	case int:
@@ -141,8 +143,6 @@ func asString(value any) string {
 			return "true"
 		}
 		return "false"
-	case time.Time:
-		return v.UTC().Format(time.RFC3339Nano)
 	default:
 		raw, err := json.Marshal(v)
 		if err == nil {

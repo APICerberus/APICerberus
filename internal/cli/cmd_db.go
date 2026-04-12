@@ -92,7 +92,7 @@ func runDBMigrateApply(args []string) error {
 	}
 	defer s.Close()
 
-	applied, pending, err := s.MigrationStatus()
+	_, pending, err := s.MigrationStatus()
 	if err != nil {
 		return fmt.Errorf("get migration status: %w", err)
 	}
@@ -109,7 +109,7 @@ func runDBMigrateApply(args []string) error {
 
 	// Re-running store.Open already applied migrations during open.
 	// Just report the final status.
-	applied, pending, err = s.MigrationStatus()
+	applied, _, err = s.MigrationStatus()
 	if err != nil {
 		return fmt.Errorf("get migration status: %w", err)
 	}

@@ -178,7 +178,7 @@ func (p *Planner) buildEntityQuery(entity *Entity, field GraphQLField) string {
 
 	// Build the entity representation query
 	sb.WriteString("query ($representations: [_Any!]!) {\n")
-	sb.WriteString(fmt.Sprintf("  _entities(representations: $representations) {\n"))
+	sb.WriteString("  _entities(representations: $representations) {\n")
 	sb.WriteString(fmt.Sprintf("    ... on %s {\n", entity.Name))
 
 	// Add fields

@@ -64,7 +64,7 @@ func isTrustedProxy(ipStr string) bool {
 func RemoteAddrIP(remoteAddr string) string {
 	if idx := strings.LastIndex(remoteAddr, ":"); idx != -1 {
 		// Check for IPv6 like [::1]:8080
-		if strings.Index(remoteAddr, "[") != -1 {
+		if strings.Contains(remoteAddr, "[") {
 			if closeIdx := strings.Index(remoteAddr, "]"); closeIdx != -1 && closeIdx < idx {
 				return remoteAddr[1:closeIdx]
 			}

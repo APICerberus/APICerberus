@@ -71,7 +71,7 @@ func (cm *ClusterManager) Start() error {
 
 	go func() {
 		if err := cm.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			// Log error
+			_ = err // error during serve; intentionally not logged
 		}
 	}()
 
@@ -343,11 +343,8 @@ func (cm *ClusterManager) monitorClusterHealth() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			cm.checkNodeHealth()
-		}
+	for range ticker.C {
+		cm.checkNodeHealth()
 	}
 }
 

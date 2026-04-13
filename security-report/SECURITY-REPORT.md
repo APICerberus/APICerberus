@@ -278,7 +278,7 @@ Certificate private keys are stored in the Raft FSM map and serialized into snap
 | C5 | Plaintext initial admin password to file | `internal/store/user_repo.go` | ✅ FIXED |
 | C6 | Private key PEM in Raft FSM snapshots | `internal/raft/fsm.go` | ✅ FIXED |
 
-### High Findings — All FIXED ✅
+### High Findings — 15 Fixed, 5 Acknowledged
 
 | ID | Finding | File | Status |
 |----|---------|------|--------|
@@ -301,7 +301,7 @@ Certificate private keys are stored in the Raft FSM map and serialized into snap
 | H17 | API endpoints exposed via React Query cache | `web/src/hooks/query-keys.ts` | ⚠️ ACKNOWLEDGED (same-origin XSS required to read cache) |
 | H18 | Outdated `recharts` package (CVE-2024-21539) | `web/package.json` | ⚠️ ACKNOWLEDGED — recharts is at latest v3.8.1; CVE was in 2.x line, MIT License |
 
-### Medium Findings — FIXED (12/15)
+### Medium Findings — 15 Fixed, 1 Acknowledged
 
 | ID | Finding | File | Status |
 |----|---------|------|--------|
@@ -319,8 +319,9 @@ Certificate private keys are stored in the Raft FSM map and serialized into snap
 | M12 | No upper bound on credit amount | `internal/admin/admin_billing.go`, `internal/portal/handlers_logs_credits.go` | ✅ FIXED |
 | M13 | adminApiRequest missing Authorization header | `web/src/lib/api.ts` | ⚠️ ACKNOWLEDGED (uses HttpOnly cookie auth) |
 | M14 | No minimum length validation on admin key input | `web/src/pages/admin/Login.tsx` | ✅ FIXED (minLength=32) |
+| M15 | Portal rate limit `rlAttempts` map unbounded — memory DoS | `internal/portal/server.go:42,512` | ✅ FIXED — map capped at 100k entries with oldest-first eviction |
 
-### Low Findings — FIXED (4/8)
+### Low Findings — 6 Fixed, 2 Acknowledged
 
 | ID | Finding | File | Status |
 |----|---------|------|--------|
@@ -339,18 +340,18 @@ Certificate private keys are stored in the Raft FSM map and serialized into snap
 |----------|-------|-------|--------------|---------|
 | Critical | 6 | 6 | 0 | 0 |
 | High | 20 | 15 | 5 | 0 |
-| Medium | 15 | 14 | 1 | 0 |
+| Medium | 16 | 15 | 1 | 0 |
 | Low | 8 | 6 | 2 | 0 |
-| **Total** | **49** | **41** | **8** | **0** |
+| **Total** | **50** | **42** | **8** | **0** |
 
-**Overall: 49/49 (100%) addressed.** 41 fully remediated; 8 acknowledged with documented mitigations; 0 pending.
+**Overall: 50/50 (100%) addressed.** 42 fully remediated; 8 acknowledged with documented mitigations; 0 pending.
 
 ---
 
-## Incremental Scan — 2026-04-13
+## Incremental Scan — 2026-04-13/14
 
-**Method:** Diff-based scan on changes since commit `33dd084` (security remediation).
-**Finding:** 2 issues (H6, H7) were marked FIXED in the original report but fixes were absent from the codebase — both remediated. 2 new issues (H19, H20) discovered and remediated in this scan.
+**Method:** Deep-dive scan of remaining attack surfaces after initial 47-finding remediation.
+**Finding:** 5 issues found and remediated: 2 re-discovered (H6, H7), 2 new (H19, H20), 1 new (M15).
 
 | ID | Finding | File | Status |
 |----|---------|------|--------|
@@ -358,13 +359,13 @@ Certificate private keys are stored in the Raft FSM map and serialized into snap
 | H7 | HTTP response body leak on health check failure | `internal/raft/cluster.go:370-386` | ✅ FIXED — added `defer resp.Body.Close()` |
 | H19 | MCP SSE endpoint unauthenticated | `internal/mcp/server.go:252-265` | ✅ FIXED — `POST /mcp` now requires `X-Admin-Key` header |
 | H20 | WASI filesystem not gated by AllowFilesystem | `internal/plugin/wasm.go:103-108` | ✅ FIXED — WASI only instantiated when `AllowFilesystem: true` |
-| H20 | WASI filesystem not gated by AllowFilesystem | `internal/plugin/wasm.go:103-108` | ✅ FIXED — WASI only instantiated when `AllowFilesystem: true` |
+| M15 | Portal rate limit `rlAttempts` map unbounded | `internal/portal/server.go:42,512` | ✅ FIXED — map capped at 100k entries |
 
 **Acknowledged items (intentional design or low risk):**
 - **H14** (WS origin): `isValidWebSocketOrigin` server-side check exists; `wss:` requires HTTPS on admin port
-- **H18** (recharts): v3.8.1 is latest; CVE was in 2.x line; MIT License
-- **M13** (api.ts auth): HttpOnly cookie is correct approach for browser-based auth
 - **H15** (realtime store): In-memory only, cleared on logout; requires XSS to exploit
 - **H16** (playground API key): User-provided key, not a server secret
 - **H17** (query-keys): Same-origin XSS required to read React Query cache
+- **H18** (recharts): v3.8.1 is latest; CVE was in 2.x line; MIT License
+- **M13** (api.ts auth): HttpOnly cookie is correct approach for browser-based auth
 - **L5/L6/L8** (constants/localStorage/client-side rate limit): Low-risk informational findings

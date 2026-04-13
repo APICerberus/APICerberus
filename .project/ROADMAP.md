@@ -29,9 +29,9 @@ APICerebrus is a **feature-complete** API Gateway at v1.0.0-rc.1 with:
 **Remaining work items for production maturity:**
 
 ### High Priority
-1. **ServeHTTP refactoring** — `gateway/server.go:191-597` (400+ lines) is the primary maintainability concern
-2. **Type coercion cleanup** — Some duplication remains despite `pkg/coerce` package
-3. **Audit monitoring** — Expose dropped audit entries counter to `/metrics` endpoint ✅
+1. **ServeHTTP refactoring** — Extracted into `serve_auth.go`, `serve_billing.go`, `serve_proxy.go`, `serve_audit.go`, `request_state.go` ✅
+2. **Type coercion cleanup** — Duplicated in 10+ packages (admin, cli, portal, plugin, mcp); deferred for systematic migration
+3. **Audit monitoring** — Exposed dropped audit entries counter to Prometheus via `logRequestAudit()` sync ✅
 
 ### Lint Cleanup
 - **gateway lint** — Cleaned up 3 lint issues: removed dead `writeErrorWithID`, fixed 5 `fmt.Fprintf` patterns, replaced manual map loop with `maps.Copy`
@@ -39,9 +39,10 @@ APICerebrus is a **feature-complete** API Gateway at v1.0.0-rc.1 with:
 - **dead code removal** — Removed 255 lines of dead code: unused `analyticsDone`, `getPipelineResponse`, `QueryOptimizer.enabled`, `batchTimer`, `DynamicConfigManager.reloader`, entire `marketplace_handlers.go` (11 unused handlers) + unused `Server.marketplace` field and `plugin` import
 
 ### Medium Priority
-4. **Error type standardization** — Mix of custom error structs and `fmt.Errorf` across packages
+4. **Error type standardization** — Mix of custom error structs and `fmt.Errorf` across packages (deferred to post-v1.0)
 5. **Load testing validation** — No production-scale load testing performed yet
 6. **GraphQL federation stress test** — Query planner tested but not under heavy load
+7. **Type coercion deduplication** — Duplicated in 10+ packages; deferred for systematic migration
 
 ### Low Priority
 7. **Documentation updates** — README stats appear current but verify periodically
@@ -53,15 +54,15 @@ APICerebrus is a **feature-complete** API Gateway at v1.0.0-rc.1 with:
 
 ### Must-fix items for production readiness
 
-- [ ] **Extract ServeHTTP handler** — Split `gateway/server.go:191-597` (400 lines) into sub-handlers:
+- [x] **Extract ServeHTTP handler** — Split `gateway/server.go:191-597` (400 lines) into sub-handlers:
   - `serve_auth.go` — Authentication phase (40 lines)
   - `serve_billing.go` — Billing pre/post proxy (197 lines)
   - `serve_proxy.go` — Proxy forwarding (172 lines)
   - `serve_audit.go` — Audit logging (114 lines)
   - `request_state.go` — Request state management (111 lines)
-  - `ServeHTTP` orchestrator reduced to ~124 lines
+  - `ServeHTTP` orchestrator reduced to ~130 lines ✅
 
-- [ ] **Expose audit drop counter** — Add `audit_dropped` metric to Prometheus `/metrics` endpoint
+- [x] **Expose audit drop counter** — Add `audit_dropped` metric wired to Prometheus via `logRequestAudit()` sync ✅
 
 - [x] **Verify JWT replay cache bounds** — `JTIReplayCache` is correctly bounded with 10K default, 25% eviction on capacity, and LRU oldest-expiry removal ✅
 

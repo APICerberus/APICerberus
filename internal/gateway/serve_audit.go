@@ -7,6 +7,7 @@ import (
 
 	"github.com/APICerberus/APICerebrus/internal/analytics"
 	"github.com/APICerberus/APICerebrus/internal/audit"
+	"github.com/APICerberus/APICerebrus/internal/metrics"
 )
 
 // logRequestAudit records the request/response in the audit log.
@@ -26,6 +27,16 @@ func logRequestAudit(auditLogger *audit.Logger, r *http.Request, rs *requestStat
 		BlockReason:    rs.blockReason,
 		ProxyErr:       rs.proxyErrForAudit,
 	})
+
+	// Sync dropped audit entries to Prometheus metrics.
+	// AuditDropped counter is pre-registered in GatewayMetrics; get or create it.
+	dropped := auditLogger.Dropped()
+	if dropped > 0 {
+		c := metrics.DefaultRegistry.GetCounter("gateway_audit_dropped_total")
+		if c != nil {
+			c.Add(float64(dropped))
+		}
+	}
 }
 
 // recordAnalytics records the request metrics.

@@ -34,6 +34,14 @@ type Proxy struct {
 	bufPool   sync.Pool
 }
 
+// denyPrivateUpstreams controls whether private/loopback upstream IPs are rejected.
+// It is set once at gateway initialization from cfg.Gateway.DenyPrivateUpstreams.
+var denyPrivateUpstreams bool
+
+// SetDenyPrivateUpstreams configures SSRF protection for upstream IPs.
+// When true, private (10.x, 172.16.x, 192.168.x) and loopback (127.x) IPs are rejected.
+func SetDenyPrivateUpstreams(v bool) { denyPrivateUpstreams = v }
+
 // NewProxy creates a reverse proxy with sensible transport pooling defaults.
 func NewProxy() *Proxy {
 	return &Proxy{
@@ -289,8 +297,8 @@ func buildUpstreamURL(targetAddress, pathValue, rawQuery string) (string, error)
 
 // validateUpstreamHost rejects cloud metadata (169.254.0.0/16) and
 // unspecified (0.0.0.0/::) addresses to prevent SSRF via config.
-// Loopback and private ranges are allowed since they are legitimate
-// upstream targets in development and internal deployments.
+// When denyPrivateUpstreams is true (set via SetDenyPrivateUpstreams),
+// private (10.x, 172.16-31.x, 192.168.x) and loopback (127.x) IPs are also rejected.
 func validateUpstreamHost(host string) error {
 	// Strip port if present
 	h := host
@@ -320,6 +328,20 @@ func validateUpstreamHost(host string) error {
 	// Block unspecified addresses
 	if ip.IsUnspecified() {
 		return fmt.Errorf("upstream address %q is unspecified", host)
+	}
+	// Block private and loopback IPs when deny_private_upstreams is enabled
+	if denyPrivateUpstreams {
+		if ip.IsLoopback() {
+			return fmt.Errorf("upstream address %q is loopback", host)
+		}
+		// Private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+		if ip4 := ip.To4(); ip4 != nil {
+			if ip4[0] == 10 ||
+				(ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31) ||
+				(ip4[0] == 192 && ip4[1] == 168) {
+				return fmt.Errorf("upstream address %q is in private range", host)
+			}
+		}
 	}
 	return nil
 }

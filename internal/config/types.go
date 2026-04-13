@@ -143,7 +143,8 @@ type GatewayConfig struct {
 	MaxHeaderBytes int           `yaml:"max_header_bytes" json:"max_header_bytes"`
 	MaxBodyBytes   int64         `yaml:"max_body_bytes" json:"max_body_bytes"`
 	TrustedProxies []string      `yaml:"trusted_proxies" json:"trusted_proxies"`
-	HTMLErrors     bool          `yaml:"html_errors" json:"html_errors"` // Global HTML error page toggle
+	HTMLErrors            bool     `yaml:"html_errors" json:"html_errors"` // Global HTML error page toggle
+	DenyPrivateUpstreams  bool     `yaml:"deny_private_upstreams" json:"deny_private_upstreams"` // Reject private/loopback upstream IPs in production
 }
 
 type GRPCConfig struct {

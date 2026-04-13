@@ -117,6 +117,9 @@ func New(cfg *config.Config) (*Gateway, error) {
 		return nil, fmt.Errorf("initialize tracer: %w", err)
 	}
 
+	// Apply deny_private_upstreams SSRF protection before building upstreams.
+	SetDenyPrivateUpstreams(cfg.Gateway.DenyPrivateUpstreams)
+
 	g := &Gateway{
 		config:         cfg,
 		router:         router,

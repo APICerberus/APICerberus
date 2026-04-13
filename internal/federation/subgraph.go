@@ -420,6 +420,10 @@ func validateSubgraphURL(rawURL string) error {
 		if ip.IsMulticast() {
 			return fmt.Errorf("subgraph URL targets multicast address %q", host)
 		}
+		// Check for private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+		if ip.IsPrivate() {
+			return fmt.Errorf("subgraph URL targets private address %q", host)
+		}
 	}
 	return nil
 }

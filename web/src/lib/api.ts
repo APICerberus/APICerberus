@@ -40,49 +40,6 @@ export function setAdminAuthenticated(value: boolean) {
   window.sessionStorage.setItem(API_CONFIG.adminAuthStateKey, "true");
 }
 
-export function clearAdminAuthenticated() {
-  if (typeof window === "undefined") {
-    return;
-  }
-  window.sessionStorage.removeItem(API_CONFIG.adminAuthStateKey);
-}
-
-/**
- * POST to /admin/login using a native HTML form submission.
- * The admin key is sent directly in the request body (form-encoded)
- * and never enters JavaScript memory. The server validates it and
- * sets an HttpOnly, SameSite=Strict session cookie.
- *
- * This function is kept for programmatic redirects or external SSO flows
- * where a raw key exchange is still needed. For normal login, the
- * Login.tsx page uses a native <form action="/admin/login"> which
- * completely bypasses JavaScript.
- */
-export async function exchangeAdminKeyForToken(adminApiKey: string): Promise<void> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), API_CONFIG.requestTimeoutMs);
-
-  try {
-    const response = await fetch(resolveUrl("/admin/api/v1/auth/token"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Admin-Key": adminApiKey.trim(),
-      },
-      signal: controller.signal,
-      credentials: "same-origin",
-    });
-
-    const payload = await parseJsonSafe(response);
-    if (!response.ok) {
-      throw new ApiError("Invalid admin key", response.status, "admin_unauthorized", payload);
-    }
-    setAdminAuthenticated(true);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 function withQuery(path: string, query?: Record<string, QueryValue>) {
   if (!query || Object.keys(query).length === 0) {
     return path;
@@ -180,6 +137,3 @@ export async function adminApiRequest<T>(path: string, options: ApiRequestOption
   }
 }
 
-export function isApiError(value: unknown): value is ApiError {
-  return value instanceof ApiError;
-}

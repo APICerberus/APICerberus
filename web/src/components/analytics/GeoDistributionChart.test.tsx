@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { GeoDistributionChart, WorldMapVisualization } from './GeoDistributionChart';
+import { GeoDistributionChart } from './GeoDistributionChart';
 import type { GeoDataPoint } from './types';
 
 const mockGeoData: GeoDataPoint[] = [
@@ -88,20 +88,5 @@ describe('GeoDistributionChart', () => {
     // Should show region breakdown
     expect(screen.getByText('North America')).toBeInTheDocument();
     expect(screen.getByText('Europe')).toBeInTheDocument();
-  });
-});
-
-describe('WorldMapVisualization', () => {
-  it('renders SVG map', () => {
-    const { container } = render(<WorldMapVisualization data={mockGeoData} />);
-
-    expect(container.querySelector('svg')).toBeInTheDocument();
-  });
-
-  it('renders legend', () => {
-    render(<WorldMapVisualization data={mockGeoData} />);
-
-    expect(screen.getByText('Low')).toBeInTheDocument();
-    expect(screen.getByText('High')).toBeInTheDocument();
   });
 });

@@ -13,10 +13,9 @@ func TestValidateCSRFToken_Match(t *testing.T) {
 	t.Parallel()
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
-	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "token-abc"})
 	req.Header.Set(csrfHeaderName, "token-abc")
 
-	if !validateCSRFToken(req) {
+	if !validateCSRFToken(req, "token-abc") {
 		t.Error("expected CSRF validation to pass when tokens match")
 	}
 }
@@ -25,10 +24,9 @@ func TestValidateCSRFToken_Mismatch(t *testing.T) {
 	t.Parallel()
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
-	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "token-abc"})
 	req.Header.Set(csrfHeaderName, "token-xyz")
 
-	if validateCSRFToken(req) {
+	if validateCSRFToken(req, "token-abc") {
 		t.Error("expected CSRF validation to fail when tokens differ")
 	}
 }
@@ -37,7 +35,7 @@ func TestValidateCSRFToken_MissingCookie(t *testing.T) {
 	t.Parallel()
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
-	if validateCSRFToken(req) {
+	if validateCSRFToken(req, "") {
 		t.Error("expected CSRF validation to fail without cookie")
 	}
 }
@@ -46,8 +44,7 @@ func TestValidateCSRFToken_MissingHeader(t *testing.T) {
 	t.Parallel()
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
-	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "token-abc"})
-	if validateCSRFToken(req) {
+	if validateCSRFToken(req, "token-abc") {
 		t.Error("expected CSRF validation to fail without header")
 	}
 }
@@ -56,9 +53,8 @@ func TestValidateCSRFToken_EmptyCookieValue(t *testing.T) {
 	t.Parallel()
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
-	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: ""})
 	req.Header.Set(csrfHeaderName, "token-abc")
-	if validateCSRFToken(req) {
+	if validateCSRFToken(req, "") {
 		t.Error("expected CSRF validation to fail with empty cookie value")
 	}
 }
@@ -67,42 +63,13 @@ func TestValidateCSRFToken_XSRFHeaderFallback(t *testing.T) {
 	t.Parallel()
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
-	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "token-abc"})
 	req.Header.Set("X-XSRF-Token", "token-abc")
 
-	if !validateCSRFToken(req) {
+	if !validateCSRFToken(req, "token-abc") {
 		t.Error("expected CSRF validation to pass with X-XSRF-Token header")
 	}
 }
 
-// --- setPortalSecurityHeaders Tests (0% coverage) ---
-
-func TestSetPortalSecurityHeaders(t *testing.T) {
-	t.Parallel()
-
-	w := httptest.NewRecorder()
-	setPortalSecurityHeaders(w)
-
-	h := w.Header()
-	tests := map[string]string{
-		"X-Content-Type-Options":  "nosniff",
-		"X-Frame-Options":         "DENY",
-		"X-XSS-Protection":        "1; mode=block",
-		"Referrer-Policy":         "strict-origin-when-cross-origin",
-		"Permissions-Policy":      "camera=(), microphone=(), geolocation=(), payment=()",
-	}
-
-	for header, want := range tests {
-		if got := h.Get(header); got != want {
-			t.Errorf("%s = %q, want %q", header, got, want)
-		}
-	}
-
-	csp := h.Get("Content-Security-Policy")
-	if csp == "" {
-		t.Error("expected CSP header to be set")
-	}
-}
 
 // --- me handler without user ---
 

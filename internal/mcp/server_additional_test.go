@@ -149,34 +149,6 @@ func TestExtractAdminError(t *testing.T) {
 	}
 }
 
-func TestAsInt(t *testing.T) {
-	tests := []struct {
-		name     string
-		value    any
-		def      int
-		expected int
-	}{
-		{"int", 42, 0, 42},
-		{"int64", int64(64), 0, 64},
-		{"int32", int32(32), 0, 32},
-		{"float64", float64(3.14), 0, 3},
-		{"string valid", "123", 0, 123},
-		{"string empty", "", 99, 99},
-		{"string whitespace", "   ", 99, 99},
-		{"string invalid", "abc", 99, 99},
-		{"invalid type", "not a number string", 99, 99},
-		{"nil", nil, 99, 99},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := asInt(tt.value, tt.def)
-			if got != tt.expected {
-				t.Errorf("asInt(%v, %d) = %d, want %d", tt.value, tt.def, got, tt.expected)
-			}
-		})
-	}
-}
 
 func TestCloneAnyMap(t *testing.T) {
 	original := map[string]any{
@@ -1223,85 +1195,6 @@ func TestAsString_EdgeCases(t *testing.T) {
 }
 
 // Test asInt edge cases
-func TestAsInt_EdgeCases(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    any
-		fallback int
-		expected int
-	}{
-		{
-			name:     "nil input",
-			input:    nil,
-			fallback: 0,
-			expected: 0,
-		},
-		{
-			name:     "valid int",
-			input:    42,
-			fallback: 0,
-			expected: 42,
-		},
-		{
-			name:     "int32",
-			input:    int32(32),
-			fallback: 0,
-			expected: 32,
-		},
-		{
-			name:     "int64",
-			input:    int64(64),
-			fallback: 0,
-			expected: 64,
-		},
-		{
-			name:     "float64",
-			input:    3.7,
-			fallback: 0,
-			expected: 3,
-		},
-		{
-			name:     "string number",
-			input:    "123",
-			fallback: 0,
-			expected: 123,
-		},
-		{
-			name:     "invalid string",
-			input:    "abc",
-			fallback: 99,
-			expected: 99,
-		},
-		{
-			name:     "empty string with fallback",
-			input:    "",
-			fallback: 42,
-			expected: 42,
-		},
-		{
-			name:     "whitespace string with fallback",
-			input:    "   ",
-			fallback: 42,
-			expected: 42,
-		},
-		{
-			name:     "unsupported type",
-			input:    true,
-			fallback: 0,
-			expected: 0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := asInt(tt.input, tt.fallback)
-			if got != tt.expected {
-				t.Errorf("asInt(%v, %d) = %d, want %d", tt.input, tt.fallback, got, tt.expected)
-			}
-		})
-	}
-}
-
 // Test buildRuntime function
 func TestBuildRuntime(t *testing.T) {
 	t.Run("nil config", func(t *testing.T) {
@@ -1778,7 +1671,6 @@ func TestHandleRequest_ToolsCall(t *testing.T) {
 		params        map[string]any
 		wantError     bool
 		errorContains string
-		wantToolError bool
 	}{
 		{
 			name: "valid tool call",
@@ -1802,7 +1694,8 @@ func TestHandleRequest_ToolsCall(t *testing.T) {
 				"name":      "gateway.services.delete",
 				"arguments": map[string]any{},
 			},
-			wantToolError: true,
+			wantError:      true,
+			errorContains:  "id is required",
 		},
 		{
 			name: "tool execution error - unknown tool in callTool",
@@ -1810,7 +1703,8 @@ func TestHandleRequest_ToolsCall(t *testing.T) {
 				"name":      "unknown.tool.name",
 				"arguments": map[string]any{},
 			},
-			wantToolError: true,
+			wantError:      true,
+			errorContains:  "unknown tool",
 		},
 	}
 
@@ -1831,17 +1725,6 @@ func TestHandleRequest_ToolsCall(t *testing.T) {
 				}
 				if tt.errorContains != "" && !strings.Contains(resp.Error.Message, tt.errorContains) {
 					t.Errorf("Expected error containing %q, got %q", tt.errorContains, resp.Error.Message)
-				}
-				return
-			}
-
-			if tt.wantToolError {
-				if resp.Error != nil {
-					t.Errorf("Expected success response with tool error flag, got RPC error: %v", resp.Error)
-				}
-				result := mustMap(t, resp.Result)
-				if isError, ok := result["isError"].(bool); !ok || !isError {
-					t.Error("Expected tool error flag in result")
 				}
 				return
 			}

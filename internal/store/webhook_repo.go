@@ -299,11 +299,23 @@ func (r *WebhookRepo) scanWebhook(row *sql.Row) (*Webhook, error) {
 		return nil, err
 	}
 
-	_ = json.Unmarshal([]byte(eventsJSON), &webhook.Events)
-	_ = json.Unmarshal([]byte(headersJSON), &webhook.Headers)
-	webhook.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-	webhook.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
-	webhook.LastTriggered, _ = time.Parse(time.RFC3339, lastTriggered)
+	if err := json.Unmarshal([]byte(eventsJSON), &webhook.Events); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal webhook events: %w", err)
+	}
+	if err := json.Unmarshal([]byte(headersJSON), &webhook.Headers); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal webhook headers: %w", err)
+	}
+	if webhook.CreatedAt, err = time.Parse(time.RFC3339, createdAt); err != nil {
+		return nil, fmt.Errorf("failed to parse webhook created_at: %w", err)
+	}
+	if webhook.UpdatedAt, err = time.Parse(time.RFC3339, updatedAt); err != nil {
+		return nil, fmt.Errorf("failed to parse webhook updated_at: %w", err)
+	}
+	if lastTriggered != "" {
+		if webhook.LastTriggered, err = time.Parse(time.RFC3339, lastTriggered); err != nil {
+			return nil, fmt.Errorf("failed to parse webhook last_triggered: %w", err)
+		}
+	}
 
 	return &webhook, nil
 }
@@ -371,7 +383,11 @@ func (r *WebhookRepo) scanDeliveries(rows *sql.Rows) ([]*WebhookDelivery, error)
 		}
 
 		delivery.Payload = json.RawMessage(payloadJSON)
-		delivery.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		if t, err := time.Parse(time.RFC3339, createdAt); err != nil {
+			log.Printf("[WARN] webhook_repo: failed to parse created_at for delivery %s: %v", delivery.ID, err)
+		} else {
+			delivery.CreatedAt = t
+		}
 		if completedAt != "" {
 			t, pErr := time.Parse(time.RFC3339, completedAt)
 			if pErr != nil {

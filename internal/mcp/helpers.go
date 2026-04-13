@@ -3,7 +3,6 @@ package mcp
 import (
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
@@ -126,30 +125,3 @@ func asString(value any) string {
 	}
 }
 
-//lint:ignore U1000 test-only utility used by server_additional_test.go
-func asInt(value any, fallback int) int {
-	switch v := value.(type) {
-	case int:
-		return v
-	case int64:
-		return int(v)
-	case int32:
-		return int(v)
-	case float64:
-		return int(v)
-	case float32:
-		return int(v)
-	case string:
-		v = strings.TrimSpace(v)
-		if v == "" {
-			return fallback
-		}
-		parsed, err := strconv.Atoi(v)
-		if err != nil {
-			return fallback
-		}
-		return parsed
-	default:
-		return fallback
-	}
-}

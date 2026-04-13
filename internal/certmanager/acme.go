@@ -50,6 +50,10 @@ type ACMEProvider struct {
 
 	// Renewal management
 	renewalLocks map[string]time.Time
+
+	// HTTP-01 challenge responses (served by gateway HTTP handler)
+	challengeResponses map[string]string
+	challengeMu        sync.RWMutex
 }
 
 // CachedCertificate holds a certificate with metadata
@@ -302,10 +306,26 @@ func (p *ACMEProvider) completeChallenge(ctx context.Context, authzURL string) e
 	return err
 }
 
-// storeChallengeResponse stores the ACME challenge response
+// storeChallengeResponse stores the ACME HTTP-01 challenge response
+// so it can be served by the gateway's HTTP handler at /.well-known/acme-challenge/
 func (p *ACMEProvider) storeChallengeResponse(token, response string) {
-	// This will be served by the gateway's HTTP handler at /.well-known/acme-challenge/
-	// Implementation depends on your HTTP handler setup
+	p.challengeMu.Lock()
+	defer p.challengeMu.Unlock()
+	if p.challengeResponses == nil {
+		p.challengeResponses = make(map[string]string)
+	}
+	p.challengeResponses[token] = response
+}
+
+// getChallengeResponse retrieves a stored ACME HTTP-01 challenge response
+func (p *ACMEProvider) getChallengeResponse(token string) (string, bool) {
+	p.challengeMu.RLock()
+	defer p.challengeMu.RUnlock()
+	if p.challengeResponses == nil {
+		return "", false
+	}
+	resp, ok := p.challengeResponses[token]
+	return resp, ok
 }
 
 // storeCertificateLocally stores certificate to local disk
@@ -419,7 +439,12 @@ func (p *ACMEProvider) loadOrCreateAccountKey() error {
 				p.accountKey = key
 				return nil
 			}
+			log.Printf("[WARN] acme: failed to parse existing account key: %v, will generate new key", err)
+		} else {
+			log.Printf("[WARN] acme: account key file has no PEM data, generating new key")
 		}
+	} else if !os.IsNotExist(err) {
+		log.Printf("[WARN] acme: failed to read account key file: %v, will generate new key", err)
 	}
 
 	// Create new key

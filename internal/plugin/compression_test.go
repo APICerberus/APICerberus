@@ -1,6 +1,9 @@
 package plugin
 
 import (
+	"bytes"
+	"compress/gzip"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -35,7 +38,14 @@ func TestCompressionGzipAppliedWhenAcceptedAndAboveMinSize(t *testing.T) {
 	if out.Header().Get("Vary") == "" {
 		t.Fatalf("expected Vary header")
 	}
-	body, err := gunzipBytes(out.Body.Bytes())
+	body, err := func() ([]byte, error) {
+		r, err := gzip.NewReader(bytes.NewReader(out.Body.Bytes()))
+		if err != nil {
+			return nil, err
+		}
+		defer r.Close()
+		return io.ReadAll(r)
+	}()
 	if err != nil {
 		t.Fatalf("gunzip response body: %v", err)
 	}

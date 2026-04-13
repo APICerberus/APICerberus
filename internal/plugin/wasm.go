@@ -10,10 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/APICerberus/APICerebrus/internal/config"
-	coerce "github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
@@ -76,7 +75,7 @@ type WASMModule struct {
 	mu        sync.RWMutex
 	compiled  wazero.CompiledModule
 	module    api.Module
-	loaded    bool
+	loaded    atomic.Bool
 	loadTime  time.Time
 }
 
@@ -255,9 +254,9 @@ func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (
 		runtime:   r,
 		compiled:  compiled,
 		module:    inst,
-		loaded:    true,
 		loadTime:  time.Now(),
 	}
+	module.loaded.Store(true)
 
 	return module, nil
 }
@@ -266,7 +265,7 @@ func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (
 // It serializes the context to JSON, calls the WASM export, and deserializes the result.
 // Enforces MaxExecution timeout and MaxMemory limits via wazero.
 func (m *WASMModule) Execute(ctx *PipelineContext) (handled bool, err error) {
-	if m == nil || !m.loaded {
+	if m == nil || !m.loaded.Load() {
 		return false, fmt.Errorf("wasm module not loaded")
 	}
 
@@ -415,7 +414,7 @@ func (m *WASMModule) Close() error {
 	if m.module != nil {
 		_ = m.module.Close(ctx)
 	}
-	m.loaded = false
+	m.loaded.Store(false)
 	return nil
 }
 
@@ -703,140 +702,7 @@ func (wc *WASMContext) Deserialize(data []byte) error {
 	return json.Unmarshal(data, wc)
 }
 
-// WASMHostFunctions provides capability-restricted functions exported to WASM guests.
-type WASMHostFunctions struct {
-	mu sync.RWMutex
-	// Capabilities define which host functions the WASM guest may call.
-	capabilities map[string]bool
-}
-
-// NewWASMHostFunctions creates a new host function provider with default capabilities.
-func NewWASMHostFunctions(capabilities map[string]bool) *WASMHostFunctions {
-	if capabilities == nil {
-		// Default: only allow logging and metadata access
-		capabilities = map[string]bool{
-			"log":         true,
-			"get_metadata": true,
-			"set_metadata": true,
-		}
-	}
-	return &WASMHostFunctions{
-		capabilities: capabilities,
-	}
-}
-
-// HasCapability checks if a capability is granted.
-func (h *WASMHostFunctions) HasCapability(name string) bool {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.capabilities[name]
-}
-
-// Log logs a message from the WASM guest.
-func (h *WASMHostFunctions) Log(level, message string) {
-	if !h.HasCapability("log") {
-		return
-	}
-	fmt.Printf("[WASM:%s] %s\n", level, message)
-}
-
-// GetHeader gets a request header.
-func (h *WASMHostFunctions) GetHeader(ctx *PipelineContext, name string) string {
-	if !h.HasCapability("get_header") {
-		return ""
-	}
-	if ctx == nil || ctx.Request == nil {
-		return ""
-	}
-	return ctx.Request.Header.Get(name)
-}
-
-// SetHeader sets a response header.
-func (h *WASMHostFunctions) SetHeader(ctx *PipelineContext, name, value string) {
-	if !h.HasCapability("set_header") {
-		return
-	}
-	if ctx == nil || ctx.ResponseWriter == nil {
-		return
-	}
-	ctx.ResponseWriter.Header().Set(name, value)
-}
-
-// GetMetadata gets a metadata value.
-func (h *WASMHostFunctions) GetMetadata(ctx *PipelineContext, key string) any {
-	if !h.HasCapability("get_metadata") {
-		return nil
-	}
-	if ctx == nil || ctx.Metadata == nil {
-		return nil
-	}
-	return ctx.Metadata[key]
-}
-
-// SetMetadata sets a metadata value.
-func (h *WASMHostFunctions) SetMetadata(ctx *PipelineContext, key string, value any) {
-	if !h.HasCapability("set_metadata") {
-		return
-	}
-	if ctx == nil {
-		return
-	}
-	if ctx.Metadata == nil {
-		ctx.Metadata = make(map[string]any)
-	}
-	ctx.Metadata[key] = value
-}
-
-// Abort aborts the request processing.
-func (h *WASMHostFunctions) Abort(ctx *PipelineContext, reason string) {
-	if !h.HasCapability("abort") {
-		return
-	}
-	if ctx == nil {
-		return
-	}
-	ctx.Abort(reason)
-}
-
 // ValidateWASMModule validates a WASM module file.
 func ValidateWASMModule(path string) error {
 	return validateWASMModule(path, maxWASMModuleSize)
-}
-
-// buildWASMPlugin creates a PipelinePlugin from WASM configuration.
-//lint:ignore U1000 test-only WASM plugin builder for plugin testing
-func buildWASMPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
-	cfgMap := spec.Config
-
-	moduleID := coerce.AsString(cfgMap["module_id"])
-	if moduleID == "" {
-		return PipelinePlugin{}, fmt.Errorf("wasm module_id is required")
-	}
-
-	modulePath := coerce.AsString(cfgMap["module_path"])
-	if modulePath == "" {
-		modulePath = moduleID + ".wasm"
-	}
-
-	phase := Phase(coerce.AsString(cfgMap["phase"]))
-	if phase == "" {
-		phase = PhasePreProxy
-	}
-
-	priority := coerce.AsInt(cfgMap["priority"], 100)
-
-	// Validate module exists
-	if err := ValidateWASMModule(modulePath); err != nil {
-		// Don't fail if module doesn't exist yet - it might be loaded dynamically
-		fmt.Printf("Warning: WASM module validation failed: %v\n", err)
-	}
-
-	return PipelinePlugin{
-		name:     fmt.Sprintf("wasm-%s", moduleID),
-		phase:    phase,
-		priority: priority,
-		run: func(ctx *PipelineContext) (bool, error) {
-			return false, nil
-		},
-	}, nil
 }

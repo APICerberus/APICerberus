@@ -152,27 +152,6 @@ func asString(value any) string {
 	}
 }
 
-// asBool is a test-only utility kept for output_test.go coverage.
-// It is intentionally not called from production code.
-//lint:ignore U1000 this is a test-only utility function
-func asBool(value any, fallback bool) bool {
-	switch v := value.(type) {
-	case bool:
-		return v
-	case string:
-		switch strings.ToLower(strings.TrimSpace(v)) {
-		case "1", "true", "yes", "on":
-			return true
-		case "0", "false", "no", "off":
-			return false
-		default:
-			return fallback
-		}
-	default:
-		return fallback
-	}
-}
-
 func asInt(value any, fallback int) int {
 	switch v := value.(type) {
 	case int:

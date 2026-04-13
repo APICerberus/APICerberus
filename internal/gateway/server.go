@@ -532,17 +532,6 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 		// close the channel. The non-audit field updates have already been
 		// applied above under the same lock.
 
-		if g.healthCancel != nil {
-			g.healthCancel()
-			base := g.runCtx
-			if base == nil {
-				base = context.Background()
-			}
-			healthCtx, cancel := context.WithCancel(base)
-			g.healthCancel = cancel
-			g.health.Start(healthCtx)
-		}
-
 		g.mu.Unlock()
 		// Wait for the old audit goroutine to finish before reusing the field.
 		if oldAuditDone != nil {
@@ -1068,67 +1057,6 @@ func (g *Gateway) handleHealth(w http.ResponseWriter, r *http.Request) bool {
 	default:
 		return false
 	}
-}
-
-// handleMetrics serves Prometheus-format metrics at /metrics.
-// Returns true when the request was handled (response written).
-//lint:ignore U1000 test-only helper used by health_endpoint_test.go
-func (g *Gateway) handleMetrics(w http.ResponseWriter, r *http.Request) bool {
-	if r.Method != http.MethodGet || r.URL.Path != "/metrics" {
-		return false
-	}
-
-	g.mu.RLock()
-	eng := g.analytics
-	st := g.store
-	auditLogger := g.auditLogger
-	startedAt := g.startedAt
-	g.mu.RUnlock()
-
-	var totalReqs, activeConns, auditDropped int64
-	if eng != nil {
-		ov := eng.Overview()
-		totalReqs = ov.TotalRequests
-		activeConns = ov.ActiveConns
-	}
-	if auditLogger != nil {
-		auditDropped = auditLogger.Dropped()
-	}
-
-	dbReady := 0
-	if st != nil {
-		if err := st.DB().Ping(); err == nil {
-			dbReady = 1
-		}
-	}
-
-	uptime := time.Since(startedAt).Seconds()
-
-	var buf strings.Builder
-	buf.WriteString("# HELP gateway_requests_total Total number of requests processed.\n")
-	buf.WriteString("# TYPE gateway_requests_total counter\n")
-	fmt.Fprintf(&buf, "gateway_requests_total %d\n", totalReqs)
-
-	buf.WriteString("# HELP gateway_active_connections Number of currently active connections.\n")
-	buf.WriteString("# TYPE gateway_active_connections gauge\n")
-	fmt.Fprintf(&buf, "gateway_active_connections %d\n", activeConns)
-
-	buf.WriteString("# HELP gateway_audit_dropped_total Total number of audit log entries dropped.\n")
-	buf.WriteString("# TYPE gateway_audit_dropped_total counter\n")
-	fmt.Fprintf(&buf, "gateway_audit_dropped_total %d\n", auditDropped)
-
-	buf.WriteString("# HELP gateway_database_ready Database connectivity status (1=ready, 0=not ready).\n")
-	buf.WriteString("# TYPE gateway_database_ready gauge\n")
-	fmt.Fprintf(&buf, "gateway_database_ready %d\n", dbReady)
-
-	buf.WriteString("# HELP gateway_uptime_seconds Time since gateway started in seconds.\n")
-	buf.WriteString("# TYPE gateway_uptime_seconds gauge\n")
-	fmt.Fprintf(&buf, "gateway_uptime_seconds %.0f\n", uptime)
-
-	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(buf.String()))
-	return true
 }
 
 // FederationComposer returns the federation Composer (nil when federation is disabled).

@@ -291,11 +291,6 @@ func (r *RateLimit) writeHeaders(w http.ResponseWriter, decision *RateLimitDecis
 	w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", decision.ResetAt.Unix()))
 }
 
-//lint:ignore U1000 test-only helper for rate limit scope key generation
-func (r *RateLimit) scopeKey(in RateLimitRequest) string {
-	return scopeKeyFor(r.scope, r.composite, in)
-}
-
 func scopeKeyFor(scope string, composite []string, in RateLimitRequest) string {
 	switch scope {
 	case "global":

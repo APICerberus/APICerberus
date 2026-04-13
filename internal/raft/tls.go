@@ -126,7 +126,10 @@ func (m *TLSCertificateManager) ExportCACert() ([]byte, error) {
 		return nil, fmt.Errorf("CA not initialized")
 	}
 
-	return pemEncodeCert(m.caCert.Raw), nil
+	return pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: m.caCert.Raw,
+	}), nil
 }
 
 // ImportCACert imports a CA certificate from PEM format.
@@ -143,12 +146,4 @@ func (m *TLSCertificateManager) ImportCACert(pemData []byte) error {
 
 	m.caCert = cert
 	return nil
-}
-
-// pemEncodeCert encodes a certificate to PEM format.
-func pemEncodeCert(cert []byte) []byte {
-	return pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: cert,
-	})
 }

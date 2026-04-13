@@ -546,59 +546,6 @@ func (m *MultiRegionManager) GetRegionAwareTimeout(nodeID string, baseTimeout ti
 	return timeout
 }
 
-// ValidateConfig validates the multi-region configuration.
-func (m *MultiRegionManager) ValidateConfig() error {
-	if !m.config.Enabled {
-		return nil
-	}
-
-	if m.config.RegionID == "" {
-		return fmt.Errorf("region_id is required")
-	}
-
-	if len(m.config.Regions) == 0 {
-		return fmt.Errorf("at least one region must be configured")
-	}
-
-	// Check local region exists
-	foundLocal := false
-	for _, region := range m.config.Regions {
-		if region.ID == m.config.RegionID {
-			foundLocal = true
-			break
-		}
-	}
-	if !foundLocal {
-		return fmt.Errorf("local region %s not found in regions list", m.config.RegionID)
-	}
-
-	// Validate leader preference
-	validPreferences := map[string]bool{
-		"local":          true,
-		"lowest_latency": true,
-		"priority":       true,
-	}
-	if !validPreferences[m.config.LeaderPreference] {
-		return fmt.Errorf("invalid leader_preference: %s", m.config.LeaderPreference)
-	}
-
-	// Validate replication mode
-	validModes := map[string]bool{
-		"sync":  true,
-		"async": true,
-	}
-	if !validModes[m.config.ReplicationMode] {
-		return fmt.Errorf("invalid replication_mode: %s", m.config.ReplicationMode)
-	}
-
-	return nil
-}
-
-// IsRegionAware returns true if this build supports multi-region clustering.
-func IsRegionAware() bool {
-	return true
-}
-
 // ParseRegionID extracts region from node ID (e.g., "node-us-east-1-01" -> "us-east-1").
 func ParseRegionID(nodeID string) string {
 	parts := strings.Split(nodeID, "-")

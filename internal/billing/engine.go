@@ -1,6 +1,7 @@
 package billing
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"math"
@@ -11,6 +12,7 @@ import (
 )
 
 type Engine struct {
+	st     *store.Store
 	users   *store.UserRepo
 	credits *store.CreditRepo
 	cfg     config.BillingConfig
@@ -37,6 +39,7 @@ func NewEngine(st *store.Store, cfg config.BillingConfig) *Engine {
 		return nil
 	}
 	return &Engine{
+		st:     st,
 		users:   st.Users(),
 		credits: st.Credits(),
 		cfg:     cfg,
@@ -142,13 +145,26 @@ func (e *Engine) Deduct(result *PreCheckResult, requestID, routeID string) (int6
 		return result.Balance, nil
 	}
 
-	newBalance, err := e.users.UpdateCreditBalance(result.UserID, -result.Cost)
+	// Use atomic transaction to ensure balance update and transaction log are consistent
+	tx, err := e.st.DB().BeginTx(context.Background(), nil)
+	if err != nil {
+		return 0, fmt.Errorf("begin transaction: %w", err)
+	}
+	var commitErr error
+	defer func() {
+		if commitErr == nil {
+			return
+		}
+		_ = tx.Rollback()
+	}()
+
+	newBalance, err := e.users.UpdateCreditBalanceTx(tx, result.UserID, -result.Cost)
 	if err != nil {
 		return 0, err
 	}
 
 	if e.credits != nil {
-		if err := e.credits.Create(&store.CreditTransaction{
+		if err := e.credits.CreateTx(tx, &store.CreditTransaction{
 			UserID:        result.UserID,
 			Type:          "consume",
 			Amount:        -result.Cost,
@@ -160,6 +176,11 @@ func (e *Engine) Deduct(result *PreCheckResult, requestID, routeID string) (int6
 		}); err != nil {
 			return newBalance, fmt.Errorf("create credit transaction: %w", err)
 		}
+	}
+
+	commitErr = tx.Commit()
+	if commitErr != nil {
+		return 0, fmt.Errorf("commit transaction: %w", commitErr)
 	}
 
 	return newBalance, nil

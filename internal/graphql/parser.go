@@ -388,16 +388,6 @@ func (p *queryParser) parseSelection() (Node, error) {
 	return p.parseField()
 }
 
-// parseFragmentSpread parses a fragment spread.
-//lint:ignore U1000 test-only helper for GraphQL parser unit testing
-func (p *queryParser) parseFragmentSpread() (*FragmentSpread, error) {
-	p.advance(3) // "..."
-	p.skipWhitespace()
-
-	name := p.parseName()
-	return &FragmentSpread{Name: name}, nil
-}
-
 // parseInlineFragment parses an inline fragment.
 func (p *queryParser) parseInlineFragment() (*InlineFragment, error) {
 	frag := &InlineFragment{

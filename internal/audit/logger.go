@@ -319,26 +319,19 @@ func (l *Logger) buildEntry(input LogInput) store.AuditEntry {
 		copy(maskedResponseBody, buf)
 	}
 
-	// Copy header maps so the pooled maps can be reused immediately.
-	var reqHeaders, respHeaders map[string]any
-	if len(reqHeadersMap) > 0 {
-		reqHeaders = make(map[string]any, len(reqHeadersMap))
-		for k, v := range reqHeadersMap {
-			reqHeaders[k] = v
-		}
+	// Copy header maps to local variables BEFORE returning pooled maps.
+	// This ensures the data is preserved even if the function panics.
+	reqHeaders := make(map[string]any, len(reqHeadersMap))
+	for k, v := range reqHeadersMap {
+		reqHeaders[k] = v
 	}
-	if len(respHeadersMap) > 0 {
-		respHeaders = make(map[string]any, len(respHeadersMap))
-		for k, v := range respHeadersMap {
-			respHeaders[k] = v
-		}
+	respHeaders := make(map[string]any, len(respHeadersMap))
+	for k, v := range respHeadersMap {
+		respHeaders[k] = v
 	}
-	if reqHeaders == nil {
-		reqHeaders = map[string]any{}
-	}
-	if respHeaders == nil {
-		respHeaders = map[string]any{}
-	}
+
+	// Now that we have local copies, we can safely return the pooled maps.
+	// The deferred cleanup will clear them for reuse.
 
 	return store.AuditEntry{
 		RequestID:       requestID,

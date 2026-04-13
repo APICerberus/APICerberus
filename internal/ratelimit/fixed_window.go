@@ -72,9 +72,6 @@ func (fw *FixedWindow) windowID(ts time.Time) int64 {
 }
 
 func (fw *FixedWindow) ensureWindow(state *fixedWindowState, currentWindowID int64) {
-	if state.windowID.Load() == currentWindowID {
-		return
-	}
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if state.windowID.Load() == currentWindowID {

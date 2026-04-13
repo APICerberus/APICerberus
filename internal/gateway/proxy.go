@@ -325,6 +325,10 @@ func validateUpstreamHost(host string) error {
 }
 
 func dialUpstreamWebSocket(upstreamURL *url.URL) (net.Conn, error) {
+	// Validate upstream host to prevent SSRF attacks
+	if err := validateUpstreamHost(upstreamURL.Host); err != nil {
+		return nil, err
+	}
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	switch strings.ToLower(upstreamURL.Scheme) {
 	case "https", "wss":

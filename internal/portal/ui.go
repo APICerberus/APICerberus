@@ -53,16 +53,6 @@ func (s *Server) newPortalUIHandler() http.Handler {
 	})
 }
 
-//lint:ignore U1000 test-only security headers utility for portal testing
-func setPortalSecurityHeaders(w http.ResponseWriter) {
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "DENY")
-	w.Header().Set("X-XSS-Protection", "1; mode=block")
-	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'")
-	w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
-}
-
 func (s *Server) resolvePortalAssetPath(cleanPath string) (requested string, serveUI bool) {
 	cleanPath = strings.TrimSpace(cleanPath)
 	if cleanPath == "" || cleanPath == "." {

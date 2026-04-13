@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -142,8 +143,9 @@ func (c *JWKSClient) refresh(ctx context.Context) error {
 		return fmt.Errorf("jwks request failed: status %d", resp.StatusCode)
 	}
 
+	// Limit body size to prevent memory exhaustion attacks (max 1MB)
 	var doc JWKS
-	if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&doc); err != nil {
 		return err
 	}
 

@@ -100,16 +100,18 @@ type FSMCommand struct {
 
 // Command types
 const (
-	CmdAddRoute          = "add_route"
-	CmdDeleteRoute       = "delete_route"
-	CmdAddService        = "add_service"
-	CmdDeleteService     = "delete_service"
-	CmdAddUpstream       = "add_upstream"
-	CmdDeleteUpstream    = "delete_upstream"
-	CmdUpdateRateLimit   = "update_rate_limit"
-	CmdUpdateCredits     = "update_credits"
-	CmdUpdateHealthCheck = "update_health_check"
-	CmdIncrementCounter  = "increment_counter"
+	CmdAddRoute           = "add_route"
+	CmdDeleteRoute        = "delete_route"
+	CmdAddService         = "add_service"
+	CmdDeleteService      = "delete_service"
+	CmdAddUpstream        = "add_upstream"
+	CmdDeleteUpstream     = "delete_upstream"
+	CmdUpdateRateLimit    = "update_rate_limit"
+	CmdUpdateCredits      = "update_credits"
+	CmdUpdateHealthCheck   = "update_health_check"
+	CmdIncrementCounter    = "increment_counter"
+	CmdCertificateUpdate   = "certificate_update"
+	CmdACMERenewalLock    = "acme_renewal_lock"
 )
 
 // NewGatewayFSM creates a new Gateway FSM.
@@ -157,9 +159,9 @@ func (f *GatewayFSM) Apply(entry LogEntry) any {
 		return f.applyUpdateHealthCheck(cmd.Payload)
 	case CmdIncrementCounter:
 		return f.applyIncrementCounter(cmd.Payload)
-	case "certificate_update":
+	case CmdCertificateUpdate:
 		return f.applyCertificateUpdate(cmd.Payload)
-	case "acme_renewal_lock":
+	case CmdACMERenewalLock:
 		return f.applyACMERenewalLock(cmd.Payload)
 	default:
 		return fmt.Errorf("unknown command type: %s", cmd.Type)
@@ -293,6 +295,37 @@ func (f *GatewayFSM) applyIncrementCounter(payload json.RawMessage) error {
 	return nil
 }
 
+// applyCertificateUpdate applies a certificate update to the FSM
+func (f *GatewayFSM) applyCertificateUpdate(payload json.RawMessage) error {
+	var update CertificateUpdateLog
+	if err := json.Unmarshal(payload, &update); err != nil {
+		return fmt.Errorf("failed to unmarshal certificate update: %w", err)
+	}
+	f.Certificates[update.Domain] = &CertificateState{
+		Domain:    update.Domain,
+		CertPEM:   update.CertPEM,
+		KeyPEM:    update.KeyPEM,
+		IssuedAt:  update.IssuedAt,
+		ExpiresAt: update.ExpiresAt,
+		IssuedBy:  update.IssuedBy,
+	}
+	return nil
+}
+
+// applyACMERenewalLock applies an ACME renewal lock to the FSM
+// For now, this is a no-op since the lock is just for coordination
+// The actual lock validation happens at the node level
+func (f *GatewayFSM) applyACMERenewalLock(payload json.RawMessage) error {
+	// ACME renewal locks are coordinated at the node level through the deadline field
+	// The FSM just needs to accept this command type to avoid errors
+	var lock ACMERenewalLock
+	if err := json.Unmarshal(payload, &lock); err != nil {
+		return fmt.Errorf("failed to unmarshal ACME renewal lock: %w", err)
+	}
+	// Lock is tracked - for future use if we want to query lock status
+	return nil
+}
+
 // Query methods (read-only)
 
 // GetRoute returns a route by ID.
@@ -375,31 +408,6 @@ func (f *GatewayFSM) GetClusterStatus() map[string]any {
 		"request_counts":      len(f.RequestCounts),
 		"certificates":        len(f.Certificates),
 	}
-}
-
-// applyCertificateUpdate applies a certificate update to FSM state
-func (f *GatewayFSM) applyCertificateUpdate(payload json.RawMessage) error {
-	var update CertificateUpdateLog
-	if err := json.Unmarshal(payload, &update); err != nil {
-		return err
-	}
-
-	f.Certificates[update.Domain] = &CertificateState{
-		Domain:    update.Domain,
-		CertPEM:   update.CertPEM,
-		KeyPEM:    update.KeyPEM,
-		IssuedAt:  update.IssuedAt,
-		ExpiresAt: update.ExpiresAt,
-		IssuedBy:  update.IssuedBy,
-	}
-	return nil
-}
-
-// applyACMERenewalLock applies an ACME renewal lock to FSM state
-func (f *GatewayFSM) applyACMERenewalLock(payload json.RawMessage) error {
-	// Lock is handled by the leader, this is just a log entry for consistency
-	// No state change needed in FSM for locks
-	return nil
 }
 
 // GetCertificate returns a certificate by domain

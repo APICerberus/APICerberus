@@ -99,6 +99,9 @@ func NewKafkaWriter(cfg config.KafkaConfig) (*KafkaWriter, error) {
 		go kw.retryConnect()
 	}
 
+	// Warn operators that this is using a text protocol fallback, not real Kafka protocol
+	log.Printf("[WARN] audit: using text protocol fallback for Kafka - not compatible with real Kafka brokers. For production, use a proper Kafka client library.")
+
 	// Start background workers
 	for i := 0; i < cfg.Workers; i++ {
 		kw.wg.Add(1)
@@ -386,27 +389,4 @@ func (kw *KafkaWriter) retryConnect() {
 			}
 		}
 	}
-}
-
-// IsHealthy returns true if the Kafka connection is healthy.
-func (kw *KafkaWriter) IsHealthy() bool {
-	if !kw.Enabled() {
-		return false
-	}
-
-	kw.mu.RLock()
-	defer kw.mu.RUnlock()
-
-	if kw.conn == nil {
-		return false
-	}
-
-	// Try a simple operation to check health
-	_ = kw.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond)) // #nosec G104 // Best-effort deadline set.
-	defer func() { _ = kw.conn.SetReadDeadline(time.Time{}) }()         // #nosec G104 // Best-effort reset.
-
-	// Read any pending data (non-blocking check)
-	buf := make([]byte, 1)
-	_, err := kw.conn.Read(buf)
-	return err == nil || err.Error() == "timeout"
 }

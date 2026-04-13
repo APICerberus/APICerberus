@@ -2,7 +2,6 @@ package plugin
 
 import (
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -74,18 +73,3 @@ func normalizeRedirectStatus(code int) int {
 	}
 }
 
-//lint:ignore U1000 test-only helper for redirect URL query string handling
-func appendQueryIfMissing(target, rawQuery string) string {
-	if strings.TrimSpace(target) == "" || strings.TrimSpace(rawQuery) == "" {
-		return target
-	}
-	parsed, err := url.Parse(target)
-	if err != nil {
-		return target
-	}
-	if parsed.RawQuery != "" {
-		return target
-	}
-	parsed.RawQuery = rawQuery
-	return parsed.String()
-}

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
@@ -316,10 +317,11 @@ func (h *FileLogHook) Close() error {
 // AsyncLogHook wraps a LogHook to run asynchronously.
 // Entries are buffered in a channel and drained by a background goroutine.
 type AsyncLogHook struct {
-	ch     chan LogEntry
-	hook   LogHook
-	done   chan struct{}
-	closed chan struct{}
+	ch      chan LogEntry
+	hook    LogHook
+	done    chan struct{}
+	closed  chan struct{}
+	dropped atomic.Int64
 }
 
 // NewAsyncLogHook creates an async hook wrapper with the given buffer size.
@@ -371,9 +373,14 @@ func (ah *AsyncLogHook) Hook() LogHook {
 		select {
 		case ah.ch <- entry:
 		default:
-			// Buffer full — drop silently to avoid blocking the caller.
+			ah.dropped.Add(1)
 		}
 	}
+}
+
+// DroppedCount returns the number of log entries dropped due to full buffer.
+func (ah *AsyncLogHook) DroppedCount() int64 {
+	return ah.dropped.Load()
 }
 
 // Close signals the async hook to drain and stop.
@@ -390,15 +397,6 @@ func (ah *AsyncLogHook) Close() error {
 	case <-time.After(5 * time.Second):
 	}
 	return nil
-}
-
-// FilterLogHook filters logs by level
-func FilterLogHook(minLevel LogLevel) LogHook {
-	return func(level LogLevel, entry LogEntry) {
-		_ = level
-		_ = entry
-		_ = minLevel
-	}
 }
 
 // RequestLogger middleware logs HTTP requests

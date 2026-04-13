@@ -160,12 +160,7 @@ func (s *Server) HandleRequest(ctx context.Context, req JSONRPCRequest) JSONRPCR
 		}
 		result, err := s.callTool(ctx, name, params.Arguments)
 		if err != nil {
-			return successResponse(req.ID, map[string]any{
-				"isError": true,
-				"content": []map[string]any{
-					{"type": "text", "text": err.Error()},
-				},
-			})
+			return errorResponse(req.ID, -32603, err.Error(), nil)
 		}
 		return successResponse(req.ID, map[string]any{
 			"content": []map[string]any{
@@ -315,6 +310,7 @@ func (s *Server) RunSSE(ctx context.Context, addr string) error {
 }
 
 func (s *Server) ensureAdminToken(adminSrv *admin.Server, adminKey string) (string, error) {
+	// First check without lock (racy but fast path)
 	s.mu.RLock()
 	token := s.adminToken
 	s.mu.RUnlock()
@@ -322,6 +318,7 @@ func (s *Server) ensureAdminToken(adminSrv *admin.Server, adminKey string) (stri
 		return token, nil
 	}
 
+	// Slow path: acquire exclusive lock and double-check
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.adminToken != "" {

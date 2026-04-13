@@ -77,6 +77,7 @@ type Node struct {
 	applyCh           chan LogEntry
 	stopCh            chan struct{}
 	stopped           atomic.Bool
+	heartbeatRunning  atomic.Bool
 
 	// State machine interface
 	fsm StateMachine
@@ -360,7 +361,9 @@ func (n *Node) becomeLeader() {
 	}
 
 	// Start sending heartbeats and replicating log
-	go n.sendHeartbeats()
+	if n.heartbeatRunning.CompareAndSwap(false, true) {
+		go n.sendHeartbeats()
+	}
 }
 
 // becomeFollower converts node to follower state.
@@ -374,6 +377,7 @@ func (n *Node) becomeFollower(term uint64) {
 
 // sendHeartbeats sends periodic heartbeats with log entries to all peers.
 func (n *Node) sendHeartbeats() {
+	defer n.heartbeatRunning.Store(false)
 	ticker := time.NewTicker(n.config.HeartbeatInterval)
 	defer ticker.Stop()
 
@@ -707,19 +711,6 @@ func (n *Node) lastLogTerm() uint64 {
 		return 0
 	}
 	return n.Log[len(n.Log)-1].Term
-}
-
-//lint:ignore U1000 test-only helper for verifying log indexing correctness
-func (n *Node) getLogEntry(index uint64) (LogEntry, bool) {
-	if len(n.Log) == 0 {
-		return LogEntry{}, false
-	}
-	baseIndex := n.Log[0].Index
-	if index <= baseIndex || index >= baseIndex+uint64(len(n.Log)) {
-		return LogEntry{}, false
-	}
-	offset := index - baseIndex
-	return n.Log[offset], true
 }
 
 // AddPeer adds a peer to the cluster.

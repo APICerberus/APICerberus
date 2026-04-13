@@ -124,17 +124,6 @@ func (p *requestCoalescingPool) Get(key string) (*coalescedRequest, bool) {
 	req, exists := p.pending[key]
 	p.mu.RUnlock()
 
-	if exists {
-		req.mu.Lock()
-		// Check if request is still valid
-		if time.Since(req.created) < p.window {
-			req.waiters++
-			req.mu.Unlock()
-			return req, true // Join existing request
-		}
-		req.mu.Unlock()
-	}
-
 	// Create new request
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -147,6 +136,8 @@ func (p *requestCoalescingPool) Get(key string) (*coalescedRequest, bool) {
 			req.mu.Unlock()
 			return req, true
 		}
+		// Request expired, remove from pending map to prevent leak
+		delete(p.pending, key)
 		req.mu.Unlock()
 	}
 
@@ -326,17 +317,17 @@ func (p *OptimizedProxy) Forward(ctx *RequestContext, target *config.UpstreamTar
 		return err
 	}
 
-	// Create proxy request
-	proxyReq, err := p.createProxyRequest(ctx.Request, upstreamURL)
+	// Create proxy request with timeout context if configured
+	var proxyReq *http.Request
+	if p.config.ProxyTimeout > 0 {
+		reqCtx, cancel := context.WithTimeout(ctx.Request.Context(), p.config.ProxyTimeout)
+		defer cancel()
+		proxyReq, err = p.createProxyRequest(reqCtx, ctx.Request, upstreamURL)
+	} else {
+		proxyReq, err = p.createProxyRequest(ctx.Request.Context(), ctx.Request, upstreamURL)
+	}
 	if err != nil {
 		return err
-	}
-
-	// Apply per-request upstream timeout
-	if p.config.ProxyTimeout > 0 {
-		reqCtx, cancel := context.WithTimeout(proxyReq.Context(), p.config.ProxyTimeout)
-		defer cancel()
-		proxyReq = proxyReq.WithContext(reqCtx)
 	}
 
 	// Request coalescing for cacheable requests
@@ -432,15 +423,16 @@ func (p *OptimizedProxy) Do(ctx *RequestContext, target *config.UpstreamTarget) 
 		return nil, err
 	}
 
-	proxyReq, err := p.createProxyRequest(ctx.Request, upstreamURL)
+	var proxyReq *http.Request
+	if p.config.ProxyTimeout > 0 {
+		reqCtx, cancel := context.WithTimeout(ctx.Request.Context(), p.config.ProxyTimeout)
+		defer cancel()
+		proxyReq, err = p.createProxyRequest(reqCtx, ctx.Request, upstreamURL)
+	} else {
+		proxyReq, err = p.createProxyRequest(ctx.Request.Context(), ctx.Request, upstreamURL)
+	}
 	if err != nil {
 		return nil, err
-	}
-
-	if p.config.ProxyTimeout > 0 {
-		reqCtx, cancel := context.WithTimeout(proxyReq.Context(), p.config.ProxyTimeout)
-		defer cancel()
-		proxyReq = proxyReq.WithContext(reqCtx)
 	}
 
 	return p.executeRequest(proxyReq)
@@ -488,11 +480,9 @@ func (p *OptimizedProxy) buildUpstreamURL(req *http.Request, targetAddress strin
 }
 
 // createProxyRequest creates the outgoing proxy request.
-func (p *OptimizedProxy) createProxyRequest(req *http.Request, upstreamURL *url.URL) (*http.Request, error) {
-	ctx := req.Context()
-	// Note: We don't set a timeout here because it would require managing the cancel function
-	// The transport has its own timeouts configured
-
+// The ctx parameter allows passing a timeout context directly to avoid race conditions
+// from creating the request first and then modifying its context.
+func (p *OptimizedProxy) createProxyRequest(ctx context.Context, req *http.Request, upstreamURL *url.URL) (*http.Request, error) {
 	proxyReq, err := http.NewRequestWithContext(ctx, req.Method, upstreamURL.String(), req.Body)
 	if err != nil {
 		return nil, err

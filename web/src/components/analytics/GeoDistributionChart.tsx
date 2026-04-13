@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Globe, MapPin } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 export type GeoDataPoint = {
   country: string;
@@ -175,68 +174,5 @@ export function GeoDistributionChart({
         )}
       </CardContent>
     </Card>
-  );
-}
-
-// Simplified world map visualization component
-export function WorldMapVisualization({
-  data,
-  className,
-}: {
-  data: GeoDataPoint[];
-  className?: string;
-}) {
-  const maxRequests = useMemo(() => {
-    return Math.max(...data.map((d) => d.requests), 1);
-  }, [data]);
-
-  const getIntensity = (countryCode: string) => {
-    const countryData = data.find((d) => d.countryCode === countryCode);
-    if (!countryData) return 0;
-    return countryData.requests / maxRequests;
-  };
-
-  return (
-    <div className={cn("relative", className)}>
-      <svg
-        viewBox="0 0 1000 500"
-        className="w-full h-auto"
-        style={{ background: "hsl(var(--muted))" }}
-      >
-        {/* Simplified world map dots */}
-        {WORLD_REGIONS.map((region) => {
-          return (
-            <g key={region.code}>
-              {region.countries.map((country, idx) => {
-                const countryIntensity = getIntensity(country);
-                // Generate pseudo-random positions for demo
-                const x = (idx * 37 + region.code.charCodeAt(0) * 13) % 900 + 50;
-                const y = (idx * 23 + region.code.charCodeAt(0) * 7) % 400 + 50;
-
-                return (
-                  <circle
-                    key={country}
-                    cx={x}
-                    cy={y}
-                    r={3 + countryIntensity * 8}
-                    fill={`hsl(var(--primary) / ${0.2 + countryIntensity * 0.8})`}
-                    className="transition-all duration-500"
-                  />
-                );
-              })}
-            </g>
-          );
-        })}
-      </svg>
-
-      {/* Legend */}
-      <div className="absolute bottom-2 right-2 bg-background/90 backdrop-blur p-2 rounded-lg border text-xs">
-        <div className="flex items-center gap-2">
-          <span>Low</span>
-          <div className="w-20 h-2 rounded-full bg-gradient-to-r from-primary/20 to-primary" />
-          <span>High</span>
-        </div>
-      </div>
-    </div>
   );
 }

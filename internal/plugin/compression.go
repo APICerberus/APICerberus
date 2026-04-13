@@ -3,7 +3,7 @@ package plugin
 import (
 	"bytes"
 	"compress/gzip"
-	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -64,6 +64,7 @@ func (c *Compression) AfterProxy(in *PipelineContext, _ error) {
 
 	compressed, err := gzipBytes(body)
 	if err != nil {
+		log.Printf("[WARN] compression: gzip compression failed: %v", err)
 		return
 	}
 
@@ -111,12 +112,3 @@ func ensureVaryAcceptEncoding(header http.Header) {
 	header.Set("Vary", current+", Accept-Encoding")
 }
 
-//lint:ignore U1000 test-only decompression utility for gzip handler testing
-func gunzipBytes(data []byte) ([]byte, error) {
-	reader, err := gzip.NewReader(bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	defer reader.Close()
-	return io.ReadAll(io.LimitReader(reader, 10<<20))
-}

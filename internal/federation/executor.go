@@ -21,8 +21,7 @@ type Executor struct {
 	subscriptions     map[string]*SubscriptionConnection
 	subscriptionsMu   sync.RWMutex
 	queryCache        *QueryCache
-	circuitBreakers   map[string]*CircuitBreaker
-	circuitBreakersMu sync.RWMutex
+	circuitBreakers   sync.Map
 }
 
 // SubscriptionConnection represents an active subscription to a subgraph.
@@ -78,16 +77,6 @@ const (
 	CircuitHalfOpen
 )
 
-// QueryOptimizer optimizes query execution plans.
-type QueryOptimizer struct{}
-
-// OptimizedPlan represents an optimized execution plan.
-type OptimizedPlan struct {
-	Plan           *Plan
-	ExecutionOrder []string
-	ParallelGroups [][]string
-	EstimatedCost  int
-}
 
 // ExecutionResult represents the result of executing a plan.
 type ExecutionResult struct {
@@ -110,7 +99,6 @@ func NewExecutor() *Executor {
 		},
 		subscriptions:   make(map[string]*SubscriptionConnection),
 		queryCache:      NewQueryCache(1000),
-		circuitBreakers: make(map[string]*CircuitBreaker),
 	}
 }
 
@@ -225,17 +213,13 @@ func (cb *CircuitBreaker) RecordFailure() {
 
 // getCircuitBreaker gets or creates a circuit breaker for a subgraph.
 func (e *Executor) getCircuitBreaker(subgraphID string) *CircuitBreaker {
-	e.circuitBreakersMu.RLock()
-	cb, ok := e.circuitBreakers[subgraphID]
-	e.circuitBreakersMu.RUnlock()
-
-	if !ok {
-		e.circuitBreakersMu.Lock()
-		cb = NewCircuitBreaker(5, 30*time.Second)
-		e.circuitBreakers[subgraphID] = cb
-		e.circuitBreakersMu.Unlock()
+	// Use LoadOrStore for thread-safe get-or-create
+	if cb, ok := e.circuitBreakers.Load(subgraphID); ok {
+		return cb.(*CircuitBreaker)
 	}
 
+	cb := NewCircuitBreaker(5, 30*time.Second)
+	e.circuitBreakers.Store(subgraphID, cb)
 	return cb
 }
 
@@ -675,9 +659,16 @@ func (e *Executor) ExecuteSubscription(ctx context.Context, plan *Plan) (*Subscr
 
 // runSubscription manages the WebSocket subscription connection.
 func (e *Executor) runSubscription(sub *SubscriptionConnection, step *PlanStep) {
-	defer close(sub.Done)
-	defer close(sub.Messages)
-	defer close(sub.Errors)
+	defer func() {
+		// Remove subscription from map when goroutine exits
+		e.subscriptionsMu.Lock()
+		delete(e.subscriptions, sub.ID)
+		e.subscriptionsMu.Unlock()
+
+		close(sub.Done)
+		close(sub.Messages)
+		close(sub.Errors)
+	}()
 
 	// Convert HTTP URL to WebSocket URL
 	wsURL := sub.Subgraph.URL
@@ -802,143 +793,4 @@ func (e *Executor) GetActiveSubscriptions() []string {
 	return ids
 }
 
-// OptimizePlan optimizes the execution plan for better performance.
-func (e *Executor) OptimizePlan(plan *Plan) *OptimizedPlan {
-	optimized := &OptimizedPlan{
-		Plan:           plan,
-		ExecutionOrder: make([]string, 0, len(plan.Steps)),
-		ParallelGroups: make([][]string, 0),
-	}
 
-	// Group steps by dependencies for parallel execution
-	executed := make(map[string]bool)
-	pending := make(map[string]*PlanStep)
-
-	for _, step := range plan.Steps {
-		pending[step.ID] = step
-	}
-
-	for len(pending) > 0 {
-		group := make([]string, 0)
-
-		for id := range pending {
-			// Check if all dependencies are met
-			canExecute := true
-			for _, depID := range plan.DependsOn[id] {
-				if !executed[depID] {
-					canExecute = false
-					break
-				}
-			}
-
-			if canExecute {
-				group = append(group, id)
-			}
-		}
-
-		if len(group) == 0 && len(pending) > 0 {
-			// Deadlock detected, break
-			break
-		}
-
-		for _, id := range group {
-			optimized.ExecutionOrder = append(optimized.ExecutionOrder, id)
-			executed[id] = true
-			delete(pending, id)
-		}
-
-		if len(group) > 0 {
-			optimized.ParallelGroups = append(optimized.ParallelGroups, group)
-		}
-	}
-
-	// Calculate estimated cost based on number of parallel groups
-	optimized.EstimatedCost = len(optimized.ParallelGroups) * 10
-
-	return optimized
-}
-
-// ExecuteOptimized executes an optimized plan.
-func (e *Executor) ExecuteOptimized(ctx context.Context, optimized *OptimizedPlan) (*ExecutionResult, error) {
-	result := &ExecutionResult{
-		Data:   make(map[string]any),
-		Errors: make([]ExecutionError, 0),
-	}
-
-	completedSteps := make(map[string]map[string]any)
-	stepMap := make(map[string]*PlanStep)
-
-	for _, step := range optimized.Plan.Steps {
-		stepMap[step.ID] = step
-	}
-
-	// Execute each parallel group
-	for _, group := range optimized.ParallelGroups {
-		var wg sync.WaitGroup
-		var mu sync.Mutex
-		groupResults := make(map[string]map[string]any)
-		groupErrors := make([]ExecutionError, 0)
-
-		for _, stepID := range group {
-			step := stepMap[stepID]
-			wg.Add(1)
-
-			go func(s *PlanStep) {
-				defer wg.Done()
-
-				// Gather dependency data
-				depData := make(map[string]any)
-				for _, depID := range optimized.Plan.DependsOn[s.ID] {
-					if data, ok := completedSteps[depID]; ok {
-						for k, v := range data {
-							depData[k] = v
-						}
-					}
-				}
-
-				// Check circuit breaker
-				cb := e.getCircuitBreaker(s.Subgraph.ID)
-				if !cb.CanExecute() {
-					mu.Lock()
-					groupErrors = append(groupErrors, ExecutionError{
-						Message: fmt.Sprintf("circuit breaker open for subgraph %s", s.Subgraph.ID),
-						Path:    s.Path,
-					})
-					mu.Unlock()
-					return
-				}
-
-				// Execute step
-				stepData, err := e.executeStep(ctx, s, depData)
-
-				mu.Lock()
-				defer mu.Unlock()
-
-				if err != nil {
-					cb.RecordFailure()
-					groupErrors = append(groupErrors, ExecutionError{
-						Message: fmt.Sprintf("step %s failed: %v", s.ID, err),
-						Path:    s.Path,
-					})
-				} else {
-					cb.RecordSuccess()
-					groupResults[s.ID] = stepData
-				}
-			}(step)
-		}
-
-		wg.Wait()
-
-		// Merge results
-		for id, data := range groupResults {
-			completedSteps[id] = data
-			step := stepMap[id]
-			e.mergeResult(result.Data, data, step.Path)
-		}
-
-		// Append errors
-		result.Errors = append(result.Errors, groupErrors...)
-	}
-
-	return result, nil
-}

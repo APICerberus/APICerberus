@@ -240,13 +240,17 @@ func (s *Server) handleFormLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	clientIP := extractClientIP(r)
+
 	provided := r.FormValue("admin_key")
 	if provided == "" {
+		s.recordFailedAuth(clientIP)
 		http.Redirect(w, r, "/dashboard?login=missing_key", http.StatusSeeOther)
 		return
 	}
 
 	if subtle.ConstantTimeCompare([]byte(provided), []byte(cfg.APIKey)) != 1 {
+		s.recordFailedAuth(clientIP)
 		http.Redirect(w, r, "/dashboard?login=invalid_key", http.StatusSeeOther)
 		return
 	}
@@ -262,7 +266,7 @@ func (s *Server) handleFormLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(cfg.TokenTTL.Seconds()),
 	}
@@ -278,7 +282,7 @@ func (s *Server) handleFormLogout(w http.ResponseWriter, r *http.Request) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})

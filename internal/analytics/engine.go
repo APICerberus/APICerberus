@@ -226,17 +226,6 @@ func (r *RingBuffer[T]) Snapshot(limit int) []T {
 	return out
 }
 
-func (r *RingBuffer[T]) Len() int {
-	if r == nil || r.size == 0 {
-		return 0
-	}
-	written := r.written.Load()
-	if written > r.size {
-		return int(r.size) // #nosec G115 -- ring buffer size is bounded by configured capacity.
-	}
-	return int(written) // #nosec G115
-}
-
 type TimeSeriesStore struct {
 	mu          sync.RWMutex
 	buckets     map[int64]*bucketAggregate

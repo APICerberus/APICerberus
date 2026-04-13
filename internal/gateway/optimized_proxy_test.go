@@ -388,7 +388,7 @@ func TestOptimizedProxy_createProxyRequest(t *testing.T) {
 		req.Header.Set("X-Custom-Header", "value")
 
 		parsedURL, _ := proxy.buildUpstreamURL(req, upstream.Listener.Addr().String(), nil)
-		proxyReq, err := proxy.createProxyRequest(req, parsedURL)
+		proxyReq, err := proxy.createProxyRequest(req.Context(), req, parsedURL)
 		if err != nil {
 			t.Fatalf("createProxyRequest error: %v", err)
 		}
@@ -407,7 +407,7 @@ func TestOptimizedProxy_createProxyRequest(t *testing.T) {
 	t.Run("https request", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "https://localhost:8080/api/test", nil)
 		parsedURL, _ := proxy.buildUpstreamURL(req, upstream.Listener.Addr().String(), nil)
-		proxyReq, err := proxy.createProxyRequest(req, parsedURL)
+		proxyReq, err := proxy.createProxyRequest(req.Context(), req, parsedURL)
 		if err != nil {
 			t.Fatalf("createProxyRequest error: %v", err)
 		}

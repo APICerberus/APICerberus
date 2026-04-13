@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -251,53 +250,6 @@ func (sp *SubscriptionProxy) relayMessages(src *bufio.Reader, dstConn net.Conn, 
 
 // safeClose is used instead of the global closeDone function.
 
-
-// EncodeWSMessage marshals a wsMessage into a graphql-ws JSON frame.
-func EncodeWSMessage(msg *wsMessage) ([]byte, error) {
-	return json.Marshal(msg)
-}
-
-// DecodeWSMessage unmarshals a graphql-ws JSON frame.
-func DecodeWSMessage(data []byte) (*wsMessage, error) {
-	var msg wsMessage
-	if err := json.Unmarshal(data, &msg); err != nil {
-		return nil, err
-	}
-	return &msg, nil
-}
-
-// BuildConnectionAck creates a connection_ack response message.
-func BuildConnectionAck() *wsMessage {
-	return &wsMessage{Type: gqlConnectionAck}
-}
-
-// BuildNext creates a next data message for a subscription.
-func BuildNext(id string, payload json.RawMessage) *wsMessage {
-	return &wsMessage{
-		ID:      id,
-		Type:    gqlNext,
-		Payload: payload,
-	}
-}
-
-// BuildComplete creates a complete message.
-func BuildComplete(id string) *wsMessage {
-	return &wsMessage{
-		ID:   id,
-		Type: gqlComplete,
-	}
-}
-
-// BuildError creates an error message.
-func BuildError(id string, errs []GraphQLError) *wsMessage {
-	payload, _ := json.Marshal(errs)
-	return &wsMessage{
-		ID:      id,
-		Type:    gqlError,
-		Payload: payload,
-	}
-}
-
 // IsSubscriptionRequest checks if an HTTP request is a GraphQL subscription
 // WebSocket upgrade request.
 func IsSubscriptionRequest(r *http.Request) bool {
@@ -359,6 +311,12 @@ func readWSFrame(r *bufio.Reader) (opcode byte, payload []byte, err error) {
 	// Prevent OOM: reject frames exceeding 1 MB
 	if length > maxWebSocketFrameSize {
 		return 0, nil, fmt.Errorf("websocket frame size %d exceeds maximum %d", length, maxWebSocketFrameSize)
+	}
+
+	// RFC 6455: All client-to-server frames MUST be masked.
+	// If a client sends an unmasked frame, the server MUST close the connection.
+	if !masked {
+		return 0, nil, fmt.Errorf("websocket protocol violation: client frame must be masked")
 	}
 
 	var maskKey [4]byte
@@ -460,11 +418,3 @@ func hasGraphQLWSProtocol(r *http.Request) bool {
 	return false
 }
 
-// isBenignClose checks if err represents a normal connection closure.
-//lint:ignore U1000 test-only utility for WebSocket close error classification
-func isBenignClose(err error) bool {
-	if err == nil || errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
-		return true
-	}
-	return strings.Contains(strings.ToLower(err.Error()), "use of closed network connection")
-}

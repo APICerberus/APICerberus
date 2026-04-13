@@ -68,6 +68,7 @@ func (sp *StreamProxy) ProxyServerStream(w http.ResponseWriter, r *http.Request,
 	// Send the single client message.
 	if err := stream.SendMsg(&body); err != nil {
 		writeStreamError(w, err)
+		_ = stream.CloseSend()
 		return
 	}
 
@@ -135,6 +136,7 @@ func (sp *StreamProxy) ProxyClientStream(w http.ResponseWriter, r *http.Request,
 		copy(msgCopy, msg)
 		if err := stream.SendMsg(&msgCopy); err != nil {
 			writeStreamError(w, err)
+			_ = stream.CloseSend()
 			return
 		}
 	}

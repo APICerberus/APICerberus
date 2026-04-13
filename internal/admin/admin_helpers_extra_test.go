@@ -1,50 +1,11 @@
 package admin
 
 import (
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
 	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 )
-
-// --- writeErrorWithID Tests ---
-
-func TestWriteErrorWithID_IncludesRequestID(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.Header.Set("X-Request-ID", "req-abc-123")
-	w := httptest.NewRecorder()
-
-	writeErrorWithID(req, w, http.StatusBadRequest, "bad_input", "Invalid input")
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, w.Code)
-	}
-	body := w.Body.String()
-	if !strings.Contains(body, "req-abc-123") {
-		t.Errorf("expected request_id in response, got: %s", body)
-	}
-	if !strings.Contains(body, "bad_input") {
-		t.Errorf("expected error code in response, got: %s", body)
-	}
-}
-
-func TestWriteErrorWithID_EmptyRequestID(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	w := httptest.NewRecorder()
-
-	writeErrorWithID(req, w, http.StatusInternalServerError, "internal", "Server error")
-
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected status %d, got %d", http.StatusInternalServerError, w.Code)
-	}
-	body := w.Body.String()
-	if !strings.Contains(body, `"request_id":""`) {
-		t.Errorf("expected empty request_id in response, got: %s", body)
-	}
-}
 
 // --- remoteAddrIP Tests ---
 

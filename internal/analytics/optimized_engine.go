@@ -27,7 +27,6 @@ type OptimizedEngineConfig struct {
 
 	// Time series optimization
 	PreallocateBuckets int
-	EnableCompression  bool
 }
 
 // DefaultOptimizedEngineConfig returns sensible defaults.
@@ -42,7 +41,6 @@ func DefaultOptimizedEngineConfig() OptimizedEngineConfig {
 		QueueSize:          100_000,
 		DropOnOverflow:     true,
 		PreallocateBuckets: 1440, // 24 hours of minute buckets
-		EnableCompression:  true,
 	}
 }
 
@@ -230,23 +228,6 @@ func (e *OptimizedEngine) flushBatch() {
 	// Process the batch
 	e.recordBatch(batch)
 	e.batchesSent.Add(1)
-}
-
-// addToBatch adds a metric to the current batch, flushing if necessary.
-//lint:ignore U1000 test-only batch helper for analytics engine testing
-func (e *OptimizedEngine) addToBatch(metric RequestMetric) {
-	e.batchMu.Lock()
-	e.batch = append(e.batch, metric)
-	shouldFlush := len(e.batch) >= e.config.BatchSize
-	e.batchMu.Unlock()
-
-	if shouldFlush {
-		select {
-		case e.batchFlushCh <- struct{}{}:
-		default:
-			// Flush signal already pending
-		}
-	}
 }
 
 // run is the worker's main loop.

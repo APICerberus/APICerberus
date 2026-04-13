@@ -153,6 +153,9 @@ type Cache struct {
 	stopped  atomic.Bool
 	excludes []*regexp.Regexp
 
+	// wg tracks background goroutines for graceful shutdown
+	wg sync.WaitGroup
+
 	// warming tracks URLs currently being warmed to prevent duplicates
 	warmingMu sync.Mutex
 	warming   map[string]bool
@@ -204,6 +207,7 @@ func NewCache(cfg CacheConfig) (*Cache, error) {
 	}
 
 	// Start background cleanup
+	c.wg.Add(1)
 	go c.backgroundCleanup()
 
 	return c, nil
@@ -225,6 +229,7 @@ func (c *Cache) Stop() {
 	}
 	if c.stopped.CompareAndSwap(false, true) {
 		close(c.stopCh)
+		c.wg.Wait()
 	}
 }
 
@@ -793,6 +798,7 @@ func (c *Cache) evictUntilSpaceLocked(needed int64) {
 
 // backgroundCleanup periodically removes expired entries.
 func (c *Cache) backgroundCleanup() {
+	defer c.wg.Done()
 	ticker := time.NewTicker(c.cfg.BackgroundCleanupInterval)
 	defer ticker.Stop()
 

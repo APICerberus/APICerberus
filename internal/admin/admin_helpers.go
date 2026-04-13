@@ -3,6 +3,7 @@ package admin
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -219,15 +220,13 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	})
 }
 
-//lint:ignore U1000 test-only utility for request_id error response testing
-func writeErrorWithID(r *http.Request, w http.ResponseWriter, status int, code, message string) {
-	_ = jsonutil.WriteJSON(w, status, map[string]any{
-		"error": map[string]any{
-			"code":       code,
-			"message":    message,
-			"request_id": strings.TrimSpace(r.Header.Get("X-Request-ID")),
-		},
-	})
+// writeInternalError logs the actual error and sends a generic message to the client.
+// This prevents internal error details (database errors, file paths, etc.) from leaking.
+func writeInternalError(w http.ResponseWriter, code string, err error) {
+	if err != nil {
+		log.Printf("[ERROR] admin: %s: %v", code, err)
+	}
+	writeError(w, http.StatusInternalServerError, code, "An internal error occurred. Please try again later.")
 }
 
 func validateServiceInput(svc config.Service) error {

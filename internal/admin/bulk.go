@@ -1,8 +1,6 @@
 package admin
 
 import (
-	"database/sql"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -58,25 +56,6 @@ type BulkPluginsRequest struct {
 	RouteIDs []string              `json:"route_ids"`
 	Plugins  []config.PluginConfig `json:"plugins"`
 	Mode     string                `json:"mode"` // "append", "replace", "merge"
-}
-
-// BulkTransaction manages a transactional bulk operation
-type BulkTransaction struct {
-	srv       *Server
-	completed bool
-}
-
-// NewBulkTransaction creates a new bulk transaction
-func (s *Server) NewBulkTransaction() *BulkTransaction {
-	return &BulkTransaction{
-		srv:       s,
-		completed: false,
-	}
-}
-
-// Complete marks the transaction as completed successfully
-func (tx *BulkTransaction) Complete() {
-	tx.completed = true
 }
 
 // handleBulkServices handles bulk service creation
@@ -508,79 +487,6 @@ func (s *Server) RegisterBulkRoutes() {
 	s.handle("POST /admin/api/v1/bulk/routes", s.handleBulkRoutes)
 	s.handle("POST /admin/api/v1/bulk/delete", s.handleBulkDelete)
 	s.handle("POST /admin/api/v1/bulk/plugins", s.handleBulkPlugins)
-}
-
-// BulkDatabaseOperation provides transactional database operations
-type BulkDatabaseOperation struct {
-	tx *sql.Tx
-	db *sql.DB
-}
-
-// NewBulkDatabaseOperation starts a new database transaction for bulk operations
-func (s *Server) NewBulkDatabaseOperation() (*BulkDatabaseOperation, error) {
-	store := s.gateway.Store()
-	if store == nil {
-		return nil, errors.New("store not available")
-	}
-
-	db := store.DB()
-	if db == nil {
-		return nil, errors.New("database not available")
-	}
-
-	tx, err := db.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("begin transaction: %w", err)
-	}
-
-	return &BulkDatabaseOperation{
-		tx: tx,
-		db: db,
-	}, nil
-}
-
-// Commit commits the transaction
-func (op *BulkDatabaseOperation) Commit() error {
-	if op.tx == nil {
-		return errors.New("transaction already completed")
-	}
-	err := op.tx.Commit()
-	op.tx = nil
-	return err
-}
-
-// Rollback rolls back the transaction
-func (op *BulkDatabaseOperation) Rollback() error {
-	if op.tx == nil {
-		return nil
-	}
-	err := op.tx.Rollback()
-	op.tx = nil
-	return err
-}
-
-// Exec executes a query within the transaction
-func (op *BulkDatabaseOperation) Exec(query string, args ...any) (sql.Result, error) {
-	if op.tx == nil {
-		return nil, errors.New("transaction not active")
-	}
-	return op.tx.Exec(query, args...)
-}
-
-// QueryRow executes a query returning a single row within the transaction
-func (op *BulkDatabaseOperation) QueryRow(query string, args ...any) *sql.Row {
-	if op.tx == nil {
-		return nil
-	}
-	return op.tx.QueryRow(query, args...)
-}
-
-// Query executes a query within the transaction
-func (op *BulkDatabaseOperation) Query(query string, args ...any) (*sql.Rows, error) {
-	if op.tx == nil {
-		return nil, errors.New("transaction not active")
-	}
-	return op.tx.Query(query, args...)
 }
 
 // BulkImportResult represents the result of a bulk import operation

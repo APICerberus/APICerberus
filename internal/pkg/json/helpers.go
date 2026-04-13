@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 )
 
@@ -34,6 +35,7 @@ func ReadJSON(r *http.Request, target any, maxBytes int64) error {
 func MarshalJSON(v any) string {
 	b, err := json.Marshal(v)
 	if err != nil {
+		log.Printf("[WARN] json: MarshalJSON failed: %v, returning '{}'", err)
 		return "{}"
 	}
 	return string(b)

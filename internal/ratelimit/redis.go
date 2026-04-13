@@ -355,71 +355,69 @@ type slidingWindowResult struct {
 }
 
 // evaluateSlidingWindow executes the sliding window logic in Redis using Redis sorted sets.
+// Uses a Lua script for atomic check-and-add to prevent TOCTOU races.
 func (dsw *DistributedSlidingWindow) evaluateSlidingWindow(key string, now time.Time) (*slidingWindowResult, error) {
 	windowStart := now.Add(-dsw.window).UnixMilli()
 	nowMilli := now.UnixMilli()
 
-	pipe := dsw.client.Pipeline()
+	// Lua script for atomic sliding window rate limiting
+	// This prevents TOCTOU race conditions between check and add
+	luaScript := redis.NewScript(`
+		local key = KEYS[1]
+		local window_start = tonumber(ARGV[1])
+		local now_milli = tonumber(ARGV[2])
+		local request_id = ARGV[3]
+		local limit = tonumber(ARGV[4])
+		local window_ms = tonumber(ARGV[5])
 
-	// Remove old entries outside the window
-	pipe.ZRemRangeByScore(dsw.ctx, key, "0", fmt.Sprintf("%d", windowStart))
+		-- Remove old entries outside the window
+		redis.call('ZREMRANGEBYSCORE', key, '0', window_start)
 
-	// Count current entries in window
-	countCmd := pipe.ZCard(dsw.ctx, key)
+		-- Count current entries in window
+		local count = redis.call('ZCARD', key)
 
-	// Execute pipeline
-	_, err := pipe.Exec(dsw.ctx)
-	if err != nil {
-		return nil, err
-	}
+		if count >= limit then
+			-- Get the oldest entry to calculate reset time
+			local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+			local reset_time
+			if #oldest > 0 then
+				reset_time = oldest[2] + window_ms
+			else
+				reset_time = now_milli + window_ms
+			end
+			return {0, 0, reset_time}
+		end
 
-	count := countCmd.Val()
+		-- Add current request
+		redis.call('ZADD', key, now_milli, request_id)
 
-	if count >= dsw.limit {
-		// Get the oldest entry to calculate reset time
-		rangeResult, err := dsw.client.ZRangeWithScores(dsw.ctx, key, 0, 0).Result()
-		if err != nil {
-			return nil, err
-		}
+		-- Set expiration on the key
+		redis.call('EXPIRE', key, math.ceil(window_ms / 1000) * 2)
 
-		var resetTime time.Time
-		if len(rangeResult) > 0 {
-			oldest := int64(rangeResult[0].Score)
-			resetTime = time.UnixMilli(oldest).Add(dsw.window)
-		} else {
-			resetTime = now.Add(dsw.window)
-		}
+		local remaining = limit - count - 1
+		if remaining < 0 then
+			remaining = 0
+		end
 
-		return &slidingWindowResult{
-			allowed:   false,
-			remaining: 0,
-			resetAt:   resetTime,
-		}, nil
-	}
+		return {1, remaining, now_milli + window_ms}
+	`)
 
-	// Add current request
 	member := fmt.Sprintf("%d:%s", nowMilli, generateRequestID())
-	err = dsw.client.ZAdd(dsw.ctx, key, redis.Z{
-		Score:  float64(nowMilli),
-		Member: member,
-	}).Err()
+	result, err := luaScript.Run(dsw.ctx, dsw.client, []string{key},
+		windowStart, nowMilli, member, dsw.limit, dsw.window.Milliseconds()).Slice()
 
 	if err != nil {
 		return nil, err
 	}
 
-	// Set expiration
-	dsw.client.Expire(dsw.ctx, key, dsw.window*2)
-
-	remaining := int(dsw.limit - count - 1)
-	if remaining < 0 {
-		remaining = 0
-	}
+	allowed := result[0].(int64) == 1
+	remaining := int(result[1].(int64))
+	resetAt := time.UnixMilli(result[2].(int64))
 
 	return &slidingWindowResult{
-		allowed:   true,
+		allowed:   allowed,
 		remaining: remaining,
-		resetAt:   now.Add(dsw.window),
+		resetAt:   resetAt,
 	}, nil
 }
 

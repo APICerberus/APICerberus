@@ -2,16 +2,6 @@ import { WS_CONFIG } from "./constants";
 
 export type WebSocketStatus = "idle" | "connecting" | "open" | "reconnecting" | "closed";
 
-export type WebSocketClientOptions = {
-  url?: string;
-  protocols?: string | string[];
-  reconnect?: boolean;
-  reconnectInitialDelayMs?: number;
-  reconnectMaxDelayMs?: number;
-  reconnectBackoffMultiplier?: number;
-  maxReconnectAttempts?: number;
-};
-
 type MessageListener<T> = (message: T, event: MessageEvent<string>) => void;
 type StatusListener = (status: WebSocketStatus) => void;
 type ErrorListener = (error: Event) => void;
@@ -32,8 +22,24 @@ function resolveWebSocketUrl(overrideUrl?: string) {
 }
 
 export class ReconnectingWebSocketClient<TMessage = unknown> {
-  private readonly options: Required<Omit<WebSocketClientOptions, "url" | "protocols">> &
-    Pick<WebSocketClientOptions, "url" | "protocols">;
+  private readonly options: Required<Omit<{
+    url?: string;
+    protocols?: string | string[];
+    reconnect?: boolean;
+    reconnectInitialDelayMs?: number;
+    reconnectMaxDelayMs?: number;
+    reconnectBackoffMultiplier?: number;
+    maxReconnectAttempts?: number;
+  }, "url" | "protocols">> &
+    Pick<{
+      url?: string;
+      protocols?: string | string[];
+      reconnect?: boolean;
+      reconnectInitialDelayMs?: number;
+      reconnectMaxDelayMs?: number;
+      reconnectBackoffMultiplier?: number;
+      maxReconnectAttempts?: number;
+    }, "url" | "protocols">;
   private ws: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempt = 0;
@@ -43,7 +49,15 @@ export class ReconnectingWebSocketClient<TMessage = unknown> {
   private readonly statusListeners = new Set<StatusListener>();
   private readonly errorListeners = new Set<ErrorListener>();
 
-  constructor(options: WebSocketClientOptions = {}) {
+  constructor(options: {
+    url?: string;
+    protocols?: string | string[];
+    reconnect?: boolean;
+    reconnectInitialDelayMs?: number;
+    reconnectMaxDelayMs?: number;
+    reconnectBackoffMultiplier?: number;
+    maxReconnectAttempts?: number;
+  } = {}) {
     this.options = {
       reconnect: true,
       reconnectInitialDelayMs: WS_CONFIG.reconnectInitialDelayMs,

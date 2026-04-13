@@ -584,17 +584,6 @@ func (br *bodyReader) Close() error {
 
 // Admin API handlers for APQ management
 
-// ListPersistedQueries returns a list of all persisted queries.
-func (m *APQMiddleware) ListPersistedQueries(limit, offset int) []*PersistedQuery {
-	if m.cache == nil {
-		return nil
-	}
-
-	// This is a simplified implementation
-	// In production, you'd want to iterate through the cache
-	return nil
-}
-
 // GetPersistedQuery retrieves a specific persisted query.
 func (m *APQMiddleware) GetPersistedQuery(hash string) (*PersistedQuery, bool) {
 	return m.cache.Get(hash)

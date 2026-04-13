@@ -1,11 +1,10 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
-	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -172,7 +171,7 @@ func TestLoad_ReadFileError(t *testing.T) {
 	if err == nil {
 		t.Error("Load() should return error for non-existent file")
 	}
-	if err != nil && !contains(err.Error(), "read config") {
+	if err != nil && !strings.Contains(err.Error(), "read config") {
 		t.Errorf("Expected 'read config' error, got: %v", err)
 	}
 }
@@ -395,7 +394,7 @@ func TestValidate_NoGatewayAddrs(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "http_addr or gateway.https_addr must be set") {
+	if err == nil || !strings.Contains(err.Error(), "http_addr or gateway.https_addr must be set") {
 		t.Errorf("Expected gateway address error, got: %v", err)
 	}
 }
@@ -412,7 +411,7 @@ func TestValidate_HTTPSPartialTLS(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "cert_file and gateway.tls.key_file must be provided together") {
+	if err == nil || !strings.Contains(err.Error(), "cert_file and gateway.tls.key_file must be provided together") {
 		t.Errorf("Expected TLS cert/key error, got: %v", err)
 	}
 }
@@ -430,7 +429,7 @@ func TestValidate_HTTPSAutoTLSMissingEmail(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "acme_email is required") {
+	if err == nil || !strings.Contains(err.Error(), "acme_email is required") {
 		t.Errorf("Expected ACME email error, got: %v", err)
 	}
 }
@@ -448,7 +447,7 @@ func TestValidate_HTTPSAutoTLSMissingDir(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "acme_dir is required") {
+	if err == nil || !strings.Contains(err.Error(), "acme_dir is required") {
 		t.Errorf("Expected ACME dir error, got: %v", err)
 	}
 }
@@ -461,7 +460,7 @@ func TestValidate_NegativeTimeouts(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "timeouts cannot be negative") {
+	if err == nil || !strings.Contains(err.Error(), "timeouts cannot be negative") {
 		t.Errorf("Expected negative timeout error, got: %v", err)
 	}
 }
@@ -474,7 +473,7 @@ func TestValidate_InvalidMaxHeaderBytes(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "max_header_bytes must be greater than zero") {
+	if err == nil || !strings.Contains(err.Error(), "max_header_bytes must be greater than zero") {
 		t.Errorf("Expected max_header_bytes error, got: %v", err)
 	}
 }
@@ -487,7 +486,7 @@ func TestValidate_InvalidMaxBodyBytes(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "max_body_bytes must be greater than zero") {
+	if err == nil || !strings.Contains(err.Error(), "max_body_bytes must be greater than zero") {
 		t.Errorf("Expected max_body_bytes error, got: %v", err)
 	}
 }
@@ -502,7 +501,7 @@ func TestValidate_AdminUIPathNoPrefix(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "admin.ui_path must start with") {
+	if err == nil || !strings.Contains(err.Error(), "admin.ui_path must start with") {
 		t.Errorf("Expected admin.ui_path error, got: %v", err)
 	}
 }
@@ -517,7 +516,7 @@ func TestValidate_PortalPathPrefixNoPrefix(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "portal.path_prefix must start with") {
+	if err == nil || !strings.Contains(err.Error(), "portal.path_prefix must start with") {
 		t.Errorf("Expected portal.path_prefix error, got: %v", err)
 	}
 }
@@ -535,7 +534,7 @@ func TestValidate_EmptyCookieName(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "cookie_name is required") {
+	if err == nil || !strings.Contains(err.Error(), "cookie_name is required") {
 		t.Errorf("Expected cookie_name error, got: %v", err)
 	}
 }
@@ -554,7 +553,7 @@ func TestValidate_InvalidMaxAge(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "max_age must be greater than zero") {
+	if err == nil || !strings.Contains(err.Error(), "max_age must be greater than zero") {
 		t.Errorf("Expected max_age error, got: %v", err)
 	}
 }
@@ -575,7 +574,7 @@ func TestValidate_PortalEnabledNoAddr(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "portal.addr is required") {
+	if err == nil || !strings.Contains(err.Error(), "portal.addr is required") {
 		t.Errorf("Expected portal.addr error, got: %v", err)
 	}
 }
@@ -590,7 +589,7 @@ func TestValidate_InvalidLoggingLevel(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "logging.level must be one of") {
+	if err == nil || !strings.Contains(err.Error(), "logging.level must be one of") {
 		t.Errorf("Expected logging.level error, got: %v", err)
 	}
 }
@@ -606,7 +605,7 @@ func TestValidate_InvalidLoggingFormat(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "logging.format must be one of") {
+	if err == nil || !strings.Contains(err.Error(), "logging.format must be one of") {
 		t.Errorf("Expected logging.format error, got: %v", err)
 	}
 }
@@ -621,7 +620,7 @@ func TestValidate_EmptyStorePath(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "store.path is required") {
+	if err == nil || !strings.Contains(err.Error(), "store.path is required") {
 		t.Errorf("Expected store.path error, got: %v", err)
 	}
 }
@@ -637,7 +636,7 @@ func TestValidate_NegativeBusyTimeout(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "store.busy_timeout cannot be negative") {
+	if err == nil || !strings.Contains(err.Error(), "store.busy_timeout cannot be negative") {
 		t.Errorf("Expected busy_timeout error, got: %v", err)
 	}
 }
@@ -653,7 +652,7 @@ func TestValidate_InvalidJournalMode(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "store.journal_mode must be one of") {
+	if err == nil || !strings.Contains(err.Error(), "store.journal_mode must be one of") {
 		t.Errorf("Expected journal_mode error, got: %v", err)
 	}
 }
@@ -668,7 +667,7 @@ func TestValidate_NegativeDefaultCost(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "billing.default_cost cannot be negative") {
+	if err == nil || !strings.Contains(err.Error(), "billing.default_cost cannot be negative") {
 		t.Errorf("Expected default_cost error, got: %v", err)
 	}
 }
@@ -685,7 +684,7 @@ func TestValidate_EmptyRouteCostKey(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "billing.route_costs keys cannot be empty") {
+	if err == nil || !strings.Contains(err.Error(), "billing.route_costs keys cannot be empty") {
 		t.Errorf("Expected route_costs key error, got: %v", err)
 	}
 }
@@ -702,7 +701,7 @@ func TestValidate_NegativeRouteCost(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "cannot be negative") {
+	if err == nil || !strings.Contains(err.Error(), "cannot be negative") {
 		t.Errorf("Expected negative route_cost error, got: %v", err)
 	}
 }
@@ -719,7 +718,7 @@ func TestValidate_EmptyMethodMultiplierKey(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "billing.method_multipliers keys cannot be empty") {
+	if err == nil || !strings.Contains(err.Error(), "billing.method_multipliers keys cannot be empty") {
 		t.Errorf("Expected method_multipliers key error, got: %v", err)
 	}
 }
@@ -736,7 +735,7 @@ func TestValidate_InvalidMethodMultiplier(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "must be greater than zero") {
+	if err == nil || !strings.Contains(err.Error(), "must be greater than zero") {
 		t.Errorf("Expected method_multiplier error, got: %v", err)
 	}
 }
@@ -751,7 +750,7 @@ func TestValidate_InvalidZeroBalanceAction(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "zero_balance_action must be one of") {
+	if err == nil || !strings.Contains(err.Error(), "zero_balance_action must be one of") {
 		t.Errorf("Expected zero_balance_action error, got: %v", err)
 	}
 }
@@ -766,7 +765,7 @@ func TestValidate_InvalidAuditBufferSize(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "audit.buffer_size must be greater than zero") {
+	if err == nil || !strings.Contains(err.Error(), "audit.buffer_size must be greater than zero") {
 		t.Errorf("Expected buffer_size error, got: %v", err)
 	}
 }
@@ -782,7 +781,7 @@ func TestValidate_InvalidAuditBatchSize(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "audit.batch_size must be greater than zero") {
+	if err == nil || !strings.Contains(err.Error(), "audit.batch_size must be greater than zero") {
 		t.Errorf("Expected batch_size error, got: %v", err)
 	}
 }
@@ -799,7 +798,7 @@ func TestValidate_InvalidAuditFlushInterval(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "audit.flush_interval must be greater than zero") {
+	if err == nil || !strings.Contains(err.Error(), "audit.flush_interval must be greater than zero") {
 		t.Errorf("Expected flush_interval error, got: %v", err)
 	}
 }
@@ -817,7 +816,7 @@ func TestValidate_InvalidAuditRetentionDays(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "audit.retention_days must be greater than zero") {
+	if err == nil || !strings.Contains(err.Error(), "audit.retention_days must be greater than zero") {
 		t.Errorf("Expected retention_days error, got: %v", err)
 	}
 }
@@ -838,7 +837,7 @@ func TestValidate_InvalidRouteRetentionDays(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "must be greater than zero") {
+	if err == nil || !strings.Contains(err.Error(), "must be greater than zero") {
 		t.Errorf("Expected route_retention_days error, got: %v", err)
 	}
 }
@@ -859,7 +858,7 @@ func TestValidate_EmptyRouteRetentionKey(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "audit.route_retention_days keys cannot be empty") {
+	if err == nil || !strings.Contains(err.Error(), "audit.route_retention_days keys cannot be empty") {
 		t.Errorf("Expected route_retention_days key error, got: %v", err)
 	}
 }
@@ -878,7 +877,7 @@ func TestValidate_EmptyArchiveDir(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "audit.archive_dir is required") {
+	if err == nil || !strings.Contains(err.Error(), "audit.archive_dir is required") {
 		t.Errorf("Expected archive_dir error, got: %v", err)
 	}
 }
@@ -898,7 +897,7 @@ func TestValidate_InvalidCleanupInterval(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "audit.cleanup_interval must be greater than zero") {
+	if err == nil || !strings.Contains(err.Error(), "audit.cleanup_interval must be greater than zero") {
 		t.Errorf("Expected cleanup_interval error, got: %v", err)
 	}
 }
@@ -919,7 +918,7 @@ func TestValidate_InvalidCleanupBatchSize(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "audit.cleanup_batch_size must be greater than zero") {
+	if err == nil || !strings.Contains(err.Error(), "audit.cleanup_batch_size must be greater than zero") {
 		t.Errorf("Expected cleanup_batch_size error, got: %v", err)
 	}
 }
@@ -941,7 +940,7 @@ func TestValidate_NegativeMaxRequestBodyBytes(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "audit.max_request_body_bytes cannot be negative") {
+	if err == nil || !strings.Contains(err.Error(), "audit.max_request_body_bytes cannot be negative") {
 		t.Errorf("Expected max_request_body_bytes error, got: %v", err)
 	}
 }
@@ -963,7 +962,7 @@ func TestValidate_NegativeMaxResponseBodyBytes(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "audit.max_response_body_bytes cannot be negative") {
+	if err == nil || !strings.Contains(err.Error(), "audit.max_response_body_bytes cannot be negative") {
 		t.Errorf("Expected max_response_body_bytes error, got: %v", err)
 	}
 }
@@ -983,7 +982,7 @@ func TestValidate_UpstreamNoName(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "upstreams[0].name is required") {
+	if err == nil || !strings.Contains(err.Error(), "upstreams[0].name is required") {
 		t.Errorf("Expected upstream name error, got: %v", err)
 	}
 }
@@ -1009,7 +1008,7 @@ func TestValidate_DuplicateUpstreamName(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "duplicate upstream name") {
+	if err == nil || !strings.Contains(err.Error(), "duplicate upstream name") {
 		t.Errorf("Expected duplicate upstream error, got: %v", err)
 	}
 }
@@ -1027,7 +1026,7 @@ func TestValidate_UpstreamNoTargets(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "must include at least one target") {
+	if err == nil || !strings.Contains(err.Error(), "must include at least one target") {
 		t.Errorf("Expected upstream targets error, got: %v", err)
 	}
 }
@@ -1047,7 +1046,7 @@ func TestValidate_UpstreamTargetNoAddress(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "address is required") {
+	if err == nil || !strings.Contains(err.Error(), "address is required") {
 		t.Errorf("Expected target address error, got: %v", err)
 	}
 }
@@ -1067,7 +1066,7 @@ func TestValidate_UpstreamTargetInvalidWeight(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "weight must be greater than zero") {
+	if err == nil || !strings.Contains(err.Error(), "weight must be greater than zero") {
 		t.Errorf("Expected target weight error, got: %v", err)
 	}
 }
@@ -1092,7 +1091,7 @@ func TestValidate_UpstreamNegativeHealthCheck(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "health check interval/timeout cannot be negative") {
+	if err == nil || !strings.Contains(err.Error(), "health check interval/timeout cannot be negative") {
 		t.Errorf("Expected health check error, got: %v", err)
 	}
 }
@@ -1119,7 +1118,7 @@ func TestValidate_UpstreamInvalidThresholds(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "health check thresholds must be greater than zero") {
+	if err == nil || !strings.Contains(err.Error(), "health check thresholds must be greater than zero") {
 		t.Errorf("Expected health check threshold error, got: %v", err)
 	}
 }
@@ -1146,7 +1145,7 @@ func TestValidate_ServiceNoName(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "services[0].name is required") {
+	if err == nil || !strings.Contains(err.Error(), "services[0].name is required") {
 		t.Errorf("Expected service name error, got: %v", err)
 	}
 }
@@ -1178,7 +1177,7 @@ func TestValidate_DuplicateServiceName(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "duplicate service name") {
+	if err == nil || !strings.Contains(err.Error(), "duplicate service name") {
 		t.Errorf("Expected duplicate service error, got: %v", err)
 	}
 }
@@ -1205,7 +1204,7 @@ func TestValidate_ServiceInvalidProtocol(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "protocol must be one of") {
+	if err == nil || !strings.Contains(err.Error(), "protocol must be one of") {
 		t.Errorf("Expected service protocol error, got: %v", err)
 	}
 }
@@ -1224,7 +1223,7 @@ func TestValidate_ServiceNoUpstream(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "upstream is required") {
+	if err == nil || !strings.Contains(err.Error(), "upstream is required") {
 		t.Errorf("Expected service upstream error, got: %v", err)
 	}
 }
@@ -1251,7 +1250,7 @@ func TestValidate_ServiceUnknownUpstream(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "references unknown upstream") {
+	if err == nil || !strings.Contains(err.Error(), "references unknown upstream") {
 		t.Errorf("Expected unknown upstream error, got: %v", err)
 	}
 }
@@ -1285,7 +1284,7 @@ func TestValidate_RouteNoName(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "routes[0].name is required") {
+	if err == nil || !strings.Contains(err.Error(), "routes[0].name is required") {
 		t.Errorf("Expected route name error, got: %v", err)
 	}
 }
@@ -1304,7 +1303,7 @@ func TestValidate_RouteNoService(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "service is required") {
+	if err == nil || !strings.Contains(err.Error(), "service is required") {
 		t.Errorf("Expected route service error, got: %v", err)
 	}
 }
@@ -1338,7 +1337,7 @@ func TestValidate_RouteUnknownService(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "references unknown service") {
+	if err == nil || !strings.Contains(err.Error(), "references unknown service") {
 		t.Errorf("Expected unknown service error, got: %v", err)
 	}
 }
@@ -1372,7 +1371,7 @@ func TestValidate_RouteNoPaths(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "must include at least one path") {
+	if err == nil || !strings.Contains(err.Error(), "must include at least one path") {
 		t.Errorf("Expected route paths error, got: %v", err)
 	}
 }
@@ -1407,7 +1406,7 @@ func TestValidate_RouteInvalidMethod(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "has invalid method") {
+	if err == nil || !strings.Contains(err.Error(), "has invalid method") {
 		t.Errorf("Expected route method error, got: %v", err)
 	}
 }
@@ -1444,7 +1443,7 @@ func TestValidate_RoutePluginNoName(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "plugins[0].name is required") {
+	if err == nil || !strings.Contains(err.Error(), "plugins[0].name is required") {
 		t.Errorf("Expected route plugin name error, got: %v", err)
 	}
 }
@@ -1459,7 +1458,7 @@ func TestValidate_GlobalPluginNoName(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "global_plugins[0].name is required") {
+	if err == nil || !strings.Contains(err.Error(), "global_plugins[0].name is required") {
 		t.Errorf("Expected global plugin name error, got: %v", err)
 	}
 }
@@ -1476,7 +1475,7 @@ func TestValidate_ConsumerNoName(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "consumers[0].name is required") {
+	if err == nil || !strings.Contains(err.Error(), "consumers[0].name is required") {
 		t.Errorf("Expected consumer name error, got: %v", err)
 	}
 }
@@ -1496,7 +1495,7 @@ func TestValidate_DuplicateConsumerName(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "duplicate consumer name") {
+	if err == nil || !strings.Contains(err.Error(), "duplicate consumer name") {
 		t.Errorf("Expected duplicate consumer error, got: %v", err)
 	}
 }
@@ -1516,7 +1515,7 @@ func TestValidate_ConsumerAPIKeyNoKey(t *testing.T) {
 		},
 	}
 	err := validate(cfg)
-	if err == nil || !contains(err.Error(), "api_keys[0].key is required") {
+	if err == nil || !strings.Contains(err.Error(), "api_keys[0].key is required") {
 		t.Errorf("Expected api key error, got: %v", err)
 	}
 }
@@ -2062,177 +2061,6 @@ func TestGenerateIDs_GeneratesNew(t *testing.T) {
 	}
 }
 
-// ==================== DynamicConfigManager Tests ====================
-
-func TestDynamicConfigManager_SaveVersionHistoryLimit(t *testing.T) {
-	config := &Config{Gateway: GatewayConfig{HTTPAddr: ":8080"}}
-	reloader := func(cfg *Config) error { return nil }
-	manager, _ := NewDynamicConfigManager(config, reloader)
-
-	// Add more than maxHistory versions
-	for i := 0; i < 15; i++ {
-		newConfig := &Config{Gateway: GatewayConfig{HTTPAddr: ":" + strconv.Itoa(9000+i)}}
-		_ = manager.UpdateConfig(newConfig, "user1")
-	}
-
-	history := manager.GetHistory()
-	if len(history) != 10 { // Should be limited to maxHistory
-		t.Errorf("history length = %d, want 10", len(history))
-	}
-}
-
-// ==================== ConfigReloader Tests ====================
-
-func TestConfigReloader_Start(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "test.yaml")
-
-	configContent := `
-gateway:
-  http_addr: ":8080"
-admin:
-  api_key: "test-admin-key"
-  token_secret: "test-admin-token-secret-at-least-32-chars-long"
-`
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatalf("Failed to create test config: %v", err)
-	}
-
-	reloader := func(cfg *Config) error { return nil }
-	cr, err := NewConfigReloader(configPath, reloader)
-	if err != nil {
-		t.Fatalf("NewConfigReloader() error = %v", err)
-	}
-	defer cr.Stop()
-
-	// Start the reloader
-	cr.Start()
-
-	// Give it time to start
-	time.Sleep(100 * time.Millisecond)
-}
-
-func TestConfigReloader_WatchEvents(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "test.yaml")
-
-	configContent := `
-gateway:
-  http_addr: ":8080"
-admin:
-  api_key: "test-admin-key"
-  token_secret: "test-admin-token-secret-at-least-32-chars-long"
-`
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatalf("Failed to create test config: %v", err)
-	}
-
-	reloaderCalled := make(chan bool, 1)
-	reloader := func(cfg *Config) error {
-		reloaderCalled <- true
-		return nil
-	}
-
-	cr, err := NewConfigReloader(configPath, reloader)
-	if err != nil {
-		t.Fatalf("NewConfigReloader() error = %v", err)
-	}
-	defer cr.Stop()
-
-	cr.SetDebounceTime(100 * time.Millisecond)
-	cr.Start()
-
-	// Modify the file
-	time.Sleep(50 * time.Millisecond)
-	newContent := configContent + "# modified\n"
-	if err := os.WriteFile(configPath, []byte(newContent), 0644); err != nil {
-		t.Fatalf("Failed to modify config: %v", err)
-	}
-
-	// Wait for reload
-	select {
-	case <-reloaderCalled:
-		// Success
-	case <-time.After(2 * time.Second):
-		t.Error("Timeout waiting for reloader to be called")
-	}
-}
-
-func TestConfigReloader_HandleChangeValidationError(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "test.yaml")
-
-	// Create an invalid config (missing required fields)
-	configContent := `
-gateway:
-  http_addr: ""
-  https_addr: ""
-admin:
-  api_key: "test-admin-key"
-  token_secret: "test-admin-token-secret-at-least-32-chars-long"
-`
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatalf("Failed to create test config: %v", err)
-	}
-
-	reloader := func(cfg *Config) error { return nil }
-	cr, err := NewConfigReloader(configPath, reloader)
-	if err != nil {
-		t.Fatalf("NewConfigReloader() error = %v", err)
-	}
-	defer cr.Stop()
-
-	// Trigger manual reload - should fail validation but not panic
-	_ = cr.TriggerManualReload()
-
-	// Give it time to process
-	time.Sleep(200 * time.Millisecond)
-}
-
-func TestConfigReloader_HandleChangeReloaderError(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "test.yaml")
-
-	configContent := `
-gateway:
-  http_addr: ":8080"
-admin:
-  api_key: "test-admin-key"
-  token_secret: "test-admin-token-secret-at-least-32-chars-long"
-`
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatalf("Failed to create test config: %v", err)
-	}
-
-	reloaderCalled := make(chan bool, 1)
-	reloader := func(cfg *Config) error {
-		reloaderCalled <- true
-		return nil // Return error to test error path
-	}
-
-	cr, err := NewConfigReloader(configPath, reloader)
-	if err != nil {
-		t.Fatalf("NewConfigReloader() error = %v", err)
-	}
-	defer cr.Stop()
-
-	cr.SetDebounceTime(50 * time.Millisecond)
-	cr.Start()
-
-	// Trigger manual reload
-	_ = cr.TriggerManualReload()
-
-	// Wait for reload
-	select {
-	case <-reloaderCalled:
-		// Success
-	case <-time.After(2 * time.Second):
-		t.Error("Timeout waiting for reloader to be called")
-	}
-}
-
-// ==================== Helper Functions ====================
-
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || containsInternal(s, substr))
 }
@@ -2246,45 +2074,14 @@ func containsInternal(s, substr string) bool {
 	return false
 }
 
-// Test ConfigReloader with reloader error
-func TestConfigReloader_ReloaderError(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "test.yaml")
-
-	configContent := `
-gateway:
-  http_addr: ":8080"
-admin:
-  api_key: "test-admin-key"
-  token_secret: "test-admin-token-secret-at-least-32-chars-long"
-`
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatalf("Failed to create test config: %v", err)
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
 	}
-
-	reloaderCalled := make(chan bool, 1)
-	reloader := func(cfg *Config) error {
-		reloaderCalled <- true
-		return fmt.Errorf("reloader error")
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
 	}
-
-	cr, err := NewConfigReloader(configPath, reloader)
-	if err != nil {
-		t.Fatalf("NewConfigReloader() error = %v", err)
-	}
-	defer cr.Stop()
-
-	cr.SetDebounceTime(50 * time.Millisecond)
-	cr.Start()
-
-	// Trigger manual reload
-	_ = cr.TriggerManualReload()
-
-	// Wait for reload to be called (even though it returns an error)
-	select {
-	case <-reloaderCalled:
-		// Success - reloader was called even though it returned an error
-	case <-time.After(2 * time.Second):
-		t.Error("Timeout waiting for reloader to be called")
-	}
+	return true
 }

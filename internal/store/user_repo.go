@@ -454,6 +454,41 @@ func (r *UserRepo) UpdateCreditBalance(userID string, delta int64) (int64, error
 	return newBalance, nil
 }
 
+// UpdateCreditBalanceTx updates credit balance within an existing transaction.
+func (r *UserRepo) UpdateCreditBalanceTx(tx *sql.Tx, userID string, delta int64) (int64, error) {
+	if r == nil || tx == nil {
+		return 0, errors.New("user repo or transaction is nil")
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return 0, errors.New("user id is required")
+	}
+
+	var newBalance int64
+	now := r.now().UTC().Format(time.RFC3339Nano)
+	updateErr := tx.QueryRow(`
+		UPDATE users
+		   SET credit_balance = credit_balance + ?, updated_at = ?
+		 WHERE id = ? AND credit_balance + ? >= 0
+		RETURNING credit_balance
+	`, delta, now, userID, delta).Scan(&newBalance)
+	if updateErr == nil {
+		return newBalance, nil
+	}
+	if !errors.Is(updateErr, sql.ErrNoRows) {
+		return 0, fmt.Errorf("update credit balance: %w", updateErr)
+	}
+
+	var exists int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM users WHERE id = ?`, userID).Scan(&exists); err != nil {
+		return 0, fmt.Errorf("check user for credit update: %w", err)
+	}
+	if exists == 0 {
+		return 0, sql.ErrNoRows
+	}
+	return 0, ErrInsufficientCredits
+}
+
 func HashPassword(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {

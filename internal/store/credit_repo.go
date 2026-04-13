@@ -111,6 +111,56 @@ func (r *CreditRepo) Create(txn *CreditTransaction) error {
 	return nil
 }
 
+// CreateTx creates a credit transaction within an existing transaction.
+func (r *CreditRepo) CreateTx(tx *sql.Tx, txn *CreditTransaction) error {
+	if r == nil || tx == nil {
+		return errors.New("credit repo or transaction is nil")
+	}
+	if txn == nil {
+		return errors.New("credit transaction is nil")
+	}
+	txn.UserID = strings.TrimSpace(txn.UserID)
+	if txn.UserID == "" {
+		return errors.New("credit transaction user id is required")
+	}
+	txn.Type = strings.TrimSpace(strings.ToLower(txn.Type))
+	if txn.Type == "" {
+		txn.Type = "consume"
+	}
+	if strings.TrimSpace(txn.ID) == "" {
+		id, err := uuid.NewString()
+		if err != nil {
+			return err
+		}
+		txn.ID = id
+	}
+	if txn.CreatedAt.IsZero() {
+		txn.CreatedAt = r.now().UTC()
+	}
+
+	_, err := tx.Exec(`
+		INSERT INTO credit_transactions(
+			id, user_id, type, amount, balance_before, balance_after,
+			description, request_id, route_id, created_at
+		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`,
+		txn.ID,
+		txn.UserID,
+		txn.Type,
+		txn.Amount,
+		txn.BalanceBefore,
+		txn.BalanceAfter,
+		strings.TrimSpace(txn.Description),
+		strings.TrimSpace(txn.RequestID),
+		strings.TrimSpace(txn.RouteID),
+		txn.CreatedAt.UTC().Format(time.RFC3339Nano),
+	)
+	if err != nil {
+		return fmt.Errorf("insert credit transaction: %w", err)
+	}
+	return nil
+}
+
 func (r *CreditRepo) ListByUser(userID string, opts CreditListOptions) (*CreditListResult, error) {
 	if r == nil || r.db == nil {
 		return nil, errors.New("credit repo is not initialized")

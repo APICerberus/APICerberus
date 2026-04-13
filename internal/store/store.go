@@ -287,19 +287,6 @@ func (s *Store) MigrationStatus() ([]migrations.Migration, []migrations.Migratio
 	return migrations.Status(s.db, migrationsList)
 }
 
-//lint:ignore U1000 test-only helper for verifying migration applied status
-func (s *Store) isMigrationApplied(version int) (bool, error) {
-	var one int
-	err := s.db.QueryRow(`SELECT 1 FROM schema_migrations WHERE version = ?`, version).Scan(&one)
-	if err == nil {
-		return true, nil
-	}
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	return false, fmt.Errorf("check migration %d: %w", version, err)
-}
-
 func (s *Store) applyPragmas() error {
 	if s == nil || s.db == nil {
 		return errors.New("store is not initialized")

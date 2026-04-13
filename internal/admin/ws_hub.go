@@ -238,18 +238,6 @@ func (h *WebSocketHub) Unsubscribe(connID string, topic string) {
 	}
 }
 
-// GetMetrics returns a snapshot of current metrics
-func (h *WebSocketHub) GetMetrics() WebSocketMetrics {
-	return WebSocketMetrics{
-		TotalConnections:    atomic.Int64{},
-		ActiveConnections:   atomic.Int64{},
-		MessagesSent:        atomic.Int64{},
-		MessagesReceived:    atomic.Int64{},
-		BroadcastsDelivered: atomic.Int64{},
-		Errors:              atomic.Int64{},
-	}
-}
-
 // MetricsSnapshot returns a point-in-time snapshot of all metrics as plain int64 values.
 func (h *WebSocketHub) MetricsSnapshot() (totalConn, activeConn, msgSent, msgRecv, broadcasts, errors int64) {
 	return h.metrics.TotalConnections.Load(),

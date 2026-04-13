@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -250,6 +251,18 @@ func (s *Server) RunStdio(ctx context.Context) error {
 func (s *Server) RunSSE(ctx context.Context, addr string) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /mcp", func(w http.ResponseWriter, r *http.Request) {
+		// Require X-Admin-Key header matching the configured admin key.
+		// Stdio transport is inherently local; SSE transport is network-accessible and needs auth.
+		s.mu.RLock()
+		adminKey := ""
+		if s.cfg != nil {
+			adminKey = s.cfg.Admin.APIKey
+		}
+		s.mu.RUnlock()
+		if adminKey == "" || !secureCompare(r.Header.Get("X-Admin-Key"), adminKey) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
 		var req JSONRPCRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.Header().Set("Content-Type", "application/json")
@@ -434,4 +447,9 @@ func extractAdminError(payload any, status int) string {
 		return message
 	}
 	return code + ": " + message
+}
+
+// secureCompare compares two strings in constant time to prevent timing attacks.
+func secureCompare(a, b string) bool {
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }

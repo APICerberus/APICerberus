@@ -100,8 +100,12 @@ func NewWASMRuntime(cfg WASMConfig) (*WASMRuntime, error) {
 		WithCoreFeatures(api.CoreFeaturesV2).
 		WithMemoryLimitPages(uint32(cfg.MaxMemory)/65536))
 
-	// Instantiate WASI (required by most WASM compilers)
-	wasi_snapshot_preview1.MustInstantiate(ctx, rt)
+	// Instantiate WASI only when filesystem access is explicitly allowed.
+	// When AllowFilesystem is false, WASI functions are unavailable to plugins,
+	// preventing arbitrary filesystem access via WASI calls even if a module tries.
+	if cfg.AllowFilesystem {
+		wasi_snapshot_preview1.MustInstantiate(ctx, rt)
+	}
 
 	return &WASMRuntime{
 		config:  cfg,

@@ -1573,7 +1573,13 @@ func TestRunSSE_HTTPRequests(t *testing.T) {
 	// Test POST /mcp endpoint
 	t.Run("POST /mcp", func(t *testing.T) {
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
-		resp, err := http.Post("http://"+addr+"/mcp", "application/json", strings.NewReader(reqBody))
+		req, err := http.NewRequest("POST", "http://"+addr+"/mcp", strings.NewReader(reqBody))
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Admin-Key", "test-admin-key")
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("POST /mcp failed: %v", err)
 		}
@@ -1599,7 +1605,13 @@ func TestRunSSE_HTTPRequests(t *testing.T) {
 	// Test POST /mcp with invalid JSON
 	t.Run("POST /mcp invalid JSON", func(t *testing.T) {
 		reqBody := `{invalid json}`
-		resp, err := http.Post("http://"+addr+"/mcp", "application/json", strings.NewReader(reqBody))
+		req, err := http.NewRequest("POST", "http://"+addr+"/mcp", strings.NewReader(reqBody))
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Admin-Key", "test-admin-key")
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("POST /mcp failed: %v", err)
 		}
@@ -1616,6 +1628,20 @@ func TestRunSSE_HTTPRequests(t *testing.T) {
 
 		if result.Error == nil {
 			t.Error("Expected error for invalid JSON")
+		}
+	})
+
+	// Test POST /mcp without X-Admin-Key returns 401
+	t.Run("POST /mcp unauthorized", func(t *testing.T) {
+		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
+		resp, err := http.Post("http://"+addr+"/mcp", "application/json", strings.NewReader(reqBody))
+		if err != nil {
+			t.Fatalf("POST /mcp failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Errorf("Expected status 401, got %d", resp.StatusCode)
 		}
 	})
 

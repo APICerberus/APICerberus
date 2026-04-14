@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"strings"
 	"sync"
@@ -236,6 +237,9 @@ func (s *Server) registerRoutes() {
 	// Register webhook routes
 	s.RegisterWebhookRoutes()
 
+	// Register pprof profiling endpoints (behind admin auth)
+	s.registerPprofRoutes()
+
 	if s.dashboardFS != nil {
 		s.mux.Handle("/", s.newDashboardHandler())
 	}
@@ -243,6 +247,17 @@ func (s *Server) registerRoutes() {
 
 func (s *Server) handle(pattern string, handler http.HandlerFunc) {
 	s.mux.HandleFunc(pattern, s.withAdminBearerAuth(handler))
+}
+
+// registerPprofRoutes registers Go runtime profiling endpoints behind admin auth.
+// Access via: GET /admin/debug/pprof/{profile}
+func (s *Server) registerPprofRoutes() {
+	auth := s.withAdminBearerAuth
+	s.mux.HandleFunc("GET /admin/debug/pprof/", auth(pprof.Index))
+	s.mux.HandleFunc("GET /admin/debug/pprof/cmdline", auth(pprof.Cmdline))
+	s.mux.HandleFunc("GET /admin/debug/pprof/profile", auth(pprof.Profile))
+	s.mux.HandleFunc("GET /admin/debug/pprof/symbol", auth(pprof.Symbol))
+	s.mux.HandleFunc("GET /admin/debug/pprof/trace", auth(pprof.Trace))
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {

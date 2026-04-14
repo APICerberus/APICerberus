@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"time"
@@ -86,7 +87,7 @@ func (s *H2CServer) Start() error {
 	go func() {
 		if err := s.server.Serve(listener); err != nil && err != http.ErrServerClosed {
 			// Log error but don't block
-			fmt.Printf("h2c server error: %v\n", err)
+			log.Printf("[ERROR] h2c server error: %v", err)
 		}
 	}()
 

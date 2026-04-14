@@ -21,6 +21,7 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/config"
 	"github.com/APICerberus/APICerebrus/internal/federation"
 	grpcpkg "github.com/APICerberus/APICerebrus/internal/grpc"
+	"github.com/APICerberus/APICerebrus/internal/metrics"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 	"github.com/APICerberus/APICerebrus/internal/plugin"
@@ -1029,6 +1030,9 @@ func (g *Gateway) handleHealth(w http.ResponseWriter, r *http.Request) bool {
 			"dropped_entries": dropped,
 			"audit_enabled":   logger != nil,
 		})
+		return true
+	case "/metrics":
+		metrics.DefaultRegistry.PrometheusHandler().ServeHTTP(w, r)
 		return true
 	default:
 		return false

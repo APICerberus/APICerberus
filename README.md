@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://go.dev/"><img src="https://img.shields.io/badge/go-1.26%2B-00ADD8.svg?style=flat-square&logo=go" alt="Go Version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License"></a>
-  <a href="#"><img src="https://img.shields.io/badge/coverage-85%25-brightgreen.svg?style=flat-square" alt="Coverage"></a>
+  <a href="#"><img src="https://img.shields.io/badge/coverage-75%25-brightgreen.svg?style=flat-square" alt="Coverage"></a>
   <a href="#"><img src="https://img.shields.io/badge/tests-214%20files-blue.svg?style=flat-square" alt="Tests"></a>
   <a href="#"><img src="https://img.shields.io/badge/status-v1.0.0--rc.1-yellow.svg?style=flat-square" alt="Status"></a>
 </p>
@@ -43,7 +43,7 @@ APICerebrus is a high-performance, production-ready API Gateway built in Go. It 
 | Go Source Files | 180 |
 | Test Files | 214 |
 | Packages | 39 |
-| Lines of Code | ~150,000+ |
+| Lines of Code | ~55,000 (production Go) |
 | CLI Commands | 14+ (with subcommands) |
 | Admin API Endpoints | 90+ |
 | MCP Tools | 43 |
@@ -59,7 +59,7 @@ APICerebrus is a high-performance, production-ready API Gateway built in Go. It 
 | HTTP/HTTPS Reverse Proxy | High-performance request forwarding with keep-alive | ✅ |
 | WebSocket Support | Full bidirectional WebSocket proxying | ✅ |
 | Radix Tree Router | O(k) path matching with parameter extraction | ✅ |
-| 10 Load Balancing Algorithms | Round Robin, Weighted Round Robin, Least Connections, IP Hash, Consistent Hash, Adaptive, Least Latency, Health Weighted, SubnetAware, Random | ✅ |
+| 11 Load Balancing Algorithms | Round Robin, Weighted Round Robin, Least Connections, IP Hash, Consistent Hash, Adaptive, Least Latency, Health Weighted, SubnetAware, Weighted Least Connections, Random | ✅ |
 | Health Checks | Active and passive health monitoring | ✅ |
 | Circuit Breaker | Automatic failure detection and recovery | ✅ |
 | Request/Response Transforms | Header/body modification and validation | ✅ |

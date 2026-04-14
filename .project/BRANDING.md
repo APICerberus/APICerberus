@@ -26,12 +26,12 @@
 
 | Type | Text |
 |------|------|
-| Primary | Three-headed guardian for your APIs — Zero dependencies, single binary, full control. |
-| Short | Guard your APIs. Zero deps. One binary. |
+| Primary | Three-headed guardian for your APIs — Minimal dependencies, single binary, full control. |
+| Short | Guard your APIs. Minimal deps. One binary. |
 | Technical | Full-stack API Gateway & Management Platform in pure Go. |
 | Mythological | Three heads. One binary. No API passes unguarded. |
 | Commercial | API Gateway + User Management + Credit Billing — all in one binary. |
-| Turkish | Three-headed guardian for your APIs — Zero dependencies, single binary, full control. |
+| Turkish | Three-headed guardian for your APIs — Minimal dependencies, single binary, full control. |
 
 ### 1.3 Brand Story
 
@@ -44,7 +44,7 @@ API Cerberus's three heads:
 
 No API request passes uncontrolled. Auth, rate limiting, credit billing, audit logging — all in a single binary, with minimal, curated external dependencies.
 
-Against Kong's 200+ dependencies: 0. Against Tyk's Redis requirement: embedded SQLite. Against KrakenD's missing UI: full Admin Panel + User Portal.
+Against Kong's 200+ dependencies: 22 curated Go modules. Against Tyk's Redis requirement: embedded SQLite. Against KrakenD's missing UI: full Admin Panel + User Portal.
 
 ---
 
@@ -114,10 +114,10 @@ Card Glow (dark):     box-shadow: 0 0 40px rgba(124, 58, 237, 0.15)
 
 | Usage | Font | Weight | Fallback |
 |-------|------|--------|----------|
-| Headings | Geist Sans | 600 (Semibold), 700 (Bold) | Inter, system-ui, sans-serif |
-| Body | Geist Sans | 400 (Regular), 500 (Medium) | Inter, system-ui, sans-serif |
-| Code / Mono | Geist Mono | 400, 500 | JetBrains Mono, monospace |
-| Logo wordmark | Geist Sans | 700 (Bold) | — |
+| Headings | Inter Variable | 600 (Semibold), 700 (Bold) | system-ui, sans-serif |
+| Body | Inter Variable | 400 (Regular), 500 (Medium) | system-ui, sans-serif |
+| Code / Mono | JetBrains Mono Variable | 400, 500 | Fira Code, monospace |
+| Logo wordmark | Inter Variable | 700 (Bold) | — |
 
 ### 3.2 Type Scale (Dashboard)
 
@@ -226,7 +226,7 @@ LEFT COLUMN (3 items with icons):
 📊 Analytics Dashboard (chart icon)
 
 RIGHT COLUMN (3 items with icons):
-⚡ Zero Dependencies (lightning icon)
+⚡ Minimal Dependencies (lightning icon)
 🔄 10 Load Balancers (arrows icon)
 🤖 MCP Server (robot icon)
 
@@ -252,7 +252,7 @@ streams of data flowing through it (HTTP in blue, gRPC in green, GraphQL
 in purple). A geometric Cerberus guardian silhouette watches over the streams.
 
 BOTTOM GRID (2×3):
-"Zero Deps" | "Single Binary"
+"Minimal Deps" | "Single Binary"
 "Credit System" | "User Portal"
 "Audit Logs" | "10 LB Algos"
 
@@ -276,7 +276,7 @@ circuit-board aesthetic. Slightly tilted for dynamism.
 RIGHT SIDE: Clean text layout:
 Line 1: "API Cerberus" (large, bold, white)
 Line 2: "API Gateway & Management Platform" (medium, purple #A855F7)
-Line 3: "Zero deps • Single binary • Full control" (small, slate #94A3B8)
+Line 3: "Minimal deps • Single binary • Full control" (small, slate #94A3B8)
 
 BOTTOM: Subtle horizontal line of floating tech badges/icons representing
 features: lock, chart, globe, credit card, terminal, plug — in muted
@@ -325,7 +325,7 @@ TOP: "API Cerberus vs Kong vs Tyk vs KrakenD" in bold white.
 
 CENTER: Four columns comparison table with visual indicators:
 Column 1 (API Cerberus — highlighted purple glow):
-✅ 0 Dependencies
+✅ 22 Curated Dependencies
 ✅ Built-in UI
 ✅ Credit System
 ✅ User Portal
@@ -395,10 +395,10 @@ culture aesthetic. Dark purple and blue tones.
 
 ```markdown
 <!-- Badges for README.md -->
-![Version](https://img.shields.io/badge/version-0.0.1-purple?style=flat-square)
-![Go](https://img.shields.io/badge/Go-1.23-00ADD8?style=flat-square&logo=go)
+![Version](https://img.shields.io/badge/version-v1.0.0--rc.1-purple?style=flat-square)
+![Go](https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![Zero Deps](https://img.shields.io/badge/dependencies-0-brightgreen?style=flat-square)
+![Minimal Deps](https://img.shields.io/badge/dependencies-22-brightgreen?style=flat-square)
 ![Single Binary](https://img.shields.io/badge/deploy-single%20binary-purple?style=flat-square)
 ![React](https://img.shields.io/badge/UI-React%2019-61DAFB?style=flat-square&logo=react)
 ![Tailwind](https://img.shields.io/badge/CSS-Tailwind%204.1-06B6D4?style=flat-square&logo=tailwindcss)
@@ -414,7 +414,7 @@ culture aesthetic. Dark purple and blue tones.
 ```
 🔱 API Cerberus v0.0.1 is live!
 
-Against Kong's 200+ dependencies: 0.
+Against Kong's 200+ dependencies: 22 curated Go modules.
 Against Tyk's Redis: embedded SQLite.
 Against KrakenD's missing UI: full dashboard.
 
@@ -424,7 +424,7 @@ Three-headed API Gateway:
 📊 Admin Panel + User Portal
 🤖 MCP Server (Claude Code ready)
 
-Single binary. Zero dependencies. Pure Go.
+Single binary. Minimal dependencies. Pure Go.
 
 github.com/APICerberus/APICerberus
 
@@ -496,7 +496,7 @@ When you want to escape dependency hell:
 
 github.com/APICerberus/APICerberus
 
-#APICerberus #ZeroDeps #NOFORKANYMORE
+#APICerberus #MinimalDeps #NOFORKANYMORE
 ```
 
 ### 7.5 Architecture Post
@@ -565,7 +565,7 @@ Want Dev portal? Buy Enterprise plan.
 Want audit logs? Write a plugin.
 
 3/ API Cerberus is different:
-- 0 dependencies
+- 22 dependencies
 - Built-in billing (credit system)
 - Built-in dev portal + playground
 - Built-in audit logging
@@ -677,7 +677,7 @@ Sections:
 
 **Zero dependencies • Single binary • Full control**
 
-[![Version](badge)](#) [![Go](badge)](#) [![License](badge)](#) [![Zero Deps](badge)](#)
+[![Version](badge)](#) [![Go](badge)](#) [![License](badge)](#) [![Minimal Deps](badge)](#)
 
 [Documentation](https://docs.apicerberus.com) •
 [Quick Start](#quick-start) •

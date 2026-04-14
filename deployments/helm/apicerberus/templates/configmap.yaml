@@ -6,77 +6,101 @@ metadata:
     {{- include "apicerberus.labels" . | nindent 4 }}
 data:
   apicerberus.yaml: |
-    version: "1.0"
-
-    server:
-      address: "{{ .Values.config.server.address }}"
-      read_timeout: {{ .Values.config.server.read_timeout }}
-      write_timeout: {{ .Values.config.server.write_timeout }}
-      idle_timeout: {{ .Values.config.server.idle_timeout }}
-      max_header_bytes: {{ .Values.config.server.max_header_bytes }}
-
-    https:
-      enabled: {{ .Values.config.https.enabled }}
-      {{- if .Values.config.https.enabled }}
-      address: "{{ .Values.config.https.address }}"
-      cert_file: "{{ .Values.config.https.cert_file }}"
-      key_file: "{{ .Values.config.https.key_file }}"
+    gateway:
+      http_addr: "{{ .Values.config.gateway.http_addr }}"
+      https_addr: "{{ .Values.config.gateway.https_addr }}"
+      {{- if .Values.config.gateway.https_addr }}
+      tls:
+        auto: {{ .Values.config.gateway.tls.auto }}
+        cert_file: "{{ .Values.config.gateway.tls.cert_file }}"
+        key_file: "{{ .Values.config.gateway.tls.key_file }}"
+        min_version: "{{ .Values.config.gateway.tls.min_version }}"
       {{- end }}
+      grpc:
+        enabled: {{ .Values.config.gateway.grpc.enabled }}
+        addr: "{{ .Values.config.gateway.grpc.addr }}"
+        enable_web: {{ .Values.config.gateway.grpc.enable_web }}
+        enable_transcoding: {{ .Values.config.gateway.grpc.enable_transcoding }}
+      read_timeout: "{{ .Values.config.gateway.read_timeout }}"
+      write_timeout: "{{ .Values.config.gateway.write_timeout }}"
+      idle_timeout: "{{ .Values.config.gateway.idle_timeout }}"
+      max_header_bytes: {{ .Values.config.gateway.max_header_bytes }}
+      max_body_bytes: {{ .Values.config.gateway.max_body_bytes }}
+      trusted_proxies:
+        {{- toYaml .Values.config.gateway.trusted_proxies | nindent 8 }}
+
+    admin:
+      addr: "{{ .Values.config.admin.addr }}"
+      api_key: "{{ .Values.config.admin.api_key }}"
+      token_secret: "{{ .Values.config.admin.token_secret }}"
+      allowed_origins:
+        {{- toYaml .Values.config.admin.allowed_origins | nindent 8 }}
+      ui_enabled: {{ .Values.config.admin.ui_enabled }}
+      ui_path: "{{ .Values.config.admin.ui_path }}"
+
+    portal:
+      enabled: {{ .Values.config.portal.enabled }}
+      addr: "{{ .Values.config.portal.addr }}"
+      path_prefix: "{{ .Values.config.portal.path_prefix }}"
+      session:
+        secret: "{{ .Values.config.portal.session.secret }}"
+        cookie_name: "{{ .Values.config.portal.session.cookie_name }}"
+        max_age: "{{ .Values.config.portal.session.max_age }}"
+        secure: {{ .Values.config.portal.session.secure }}
 
     logging:
       level: "{{ .Values.config.logging.level }}"
       format: "{{ .Values.config.logging.format }}"
       output: "{{ .Values.config.logging.output }}"
 
-    auth:
-      jwt:
-        enabled: {{ .Values.config.auth.jwt.enabled }}
-        issuer: "{{ .Values.config.auth.jwt.issuer }}"
-        expiry: "{{ .Values.config.auth.jwt.expiry }}"
-      api_key:
-        enabled: {{ .Values.config.auth.api_key.enabled }}
-        header: "{{ .Values.config.auth.api_key.header }}"
+    store:
+      path: "{{ .Values.config.store.path }}"
+      busy_timeout: "{{ .Values.config.store.busy_timeout }}"
+      journal_mode: "{{ .Values.config.store.journal_mode }}"
+      foreign_keys: {{ .Values.config.store.foreign_keys }}
+      max_open_conns: {{ .Values.config.store.max_open_conns }}
+      synchronous: "{{ .Values.config.store.synchronous }}"
 
-    rate_limiting:
-      enabled: {{ .Values.config.rate_limiting.enabled }}
-      requests_per_second: {{ .Values.config.rate_limiting.requests_per_second }}
-      burst_size: {{ .Values.config.rate_limiting.burst_size }}
-      per_user: {{ .Values.config.rate_limiting.per_user }}
-      per_ip: {{ .Values.config.rate_limiting.per_ip }}
-
-    cache:
-      enabled: {{ .Values.config.cache.enabled }}
-      max_size: {{ .Values.config.cache.max_size }}
-      ttl: "{{ .Values.config.cache.ttl }}"
-      max_item_size: {{ .Values.config.cache.max_item_size }}
-
-    metrics:
-      enabled: {{ .Values.config.metrics.enabled }}
-      endpoint: "{{ .Values.config.metrics.endpoint }}"
-      port: {{ .Values.config.metrics.port }}
+    billing:
+      enabled: {{ .Values.config.billing.enabled }}
+      default_cost: {{ .Values.config.billing.default_cost }}
+      test_mode_enabled: {{ .Values.config.billing.test_mode_enabled }}
+      zero_balance_action: "{{ .Values.config.billing.zero_balance_action }}"
 
     tracing:
       enabled: {{ .Values.config.tracing.enabled }}
       service_name: "{{ .Values.config.tracing.service_name }}"
-      sample_rate: {{ .Values.config.tracing.sample_rate }}
-      {{- if .Values.config.tracing.endpoint }}
-      endpoint: "{{ .Values.config.tracing.endpoint }}"
+      exporter: "{{ .Values.config.tracing.exporter }}"
+      sampling_rate: {{ .Values.config.tracing.sampling_rate }}
+      {{- if .Values.config.tracing.otlp_endpoint }}
+      otlp_endpoint: "{{ .Values.config.tracing.otlp_endpoint }}"
       {{- end }}
 
-    raft:
-      enabled: {{ .Values.config.raft.enabled }}
+    redis:
+      enabled: {{ .Values.config.redis.enabled }}
+      address: "{{ .Values.config.redis.address }}"
+      fallback_to_local: {{ .Values.config.redis.fallback_to_local }}
+
+    audit:
+      enabled: {{ .Values.config.audit.enabled }}
+      buffer_size: {{ .Values.config.audit.buffer_size }}
+      batch_size: {{ .Values.config.audit.batch_size }}
+      flush_interval: "{{ .Values.config.audit.flush_interval }}"
+      retention_days: {{ .Values.config.audit.retention_days }}
+
+    {{- if .Values.config.cluster.enabled }}
+    cluster:
+      enabled: true
       node_id: "{{ include "apicerberus.raftNodeID" . }}"
-      bind_address: "{{ .Values.config.raft.bind_address }}"
+      bind_address: "{{ .Values.config.cluster.bind_address }}"
       peers:
-        {{- toYaml .Values.config.raft.peers | nindent 8 }}
+        {{- toYaml .Values.config.cluster.peers | nindent 8 }}
+    {{- end }}
 
-    federation:
-      enabled: {{ .Values.config.federation.enabled }}
-      endpoint: "{{ .Values.config.federation.endpoint }}"
-      introspection: {{ .Values.config.federation.introspection }}
-      query_batching: {{ .Values.config.federation.query_batching }}
-      parallel_execution: {{ .Values.config.federation.parallel_execution }}
+    auth:
+      api_key:
+        key_names:
+          {{- toYaml .Values.config.auth.api_key.key_names | nindent 10 }}
 
-    admin:
-      enabled: {{ .Values.config.admin.enabled }}
-      address: "{{ .Values.config.admin.address }}"
+    global_plugins:
+      {{- toYaml .Values.config.global_plugins | nindent 6 }}

@@ -27,33 +27,48 @@ patches:
       - op: replace
         path: /data/apicerberus.yaml
         value: |
-          server:
-            address: "0.0.0.0:8080"
+          gateway:
+            http_addr: ":8080"
             read_timeout: "30s"
             write_timeout: "30s"
             idle_timeout: "120s"
+            grpc:
+              enabled: true
+              addr: ":50051"
+          admin:
+            addr: ":9876"
+            ui_enabled: true
+            ui_path: "/dashboard"
+          portal:
+            enabled: true
+            addr: ":9877"
+            path_prefix: "/portal"
           logging:
             level: "debug"
             format: "text"
+            output: "stdout"
+          store:
+            path: "/data/apicerberus.db"
+            journal_mode: "WAL"
+          billing:
+            enabled: true
+            default_cost: 1
+            test_mode_enabled: true
+          tracing:
+            enabled: false
+          redis:
+            enabled: false
+            fallback_to_local: true
+          audit:
+            enabled: true
+            retention_days: 7
+          cluster:
+            enabled: false
           auth:
-            jwt:
-              enabled: true
-              issuer: "apicerberus-dev"
-              expiry: "24h"
-          rate_limiting:
-            enabled: true
-            requests_per_second: 100
-            burst_size: 150
-          metrics:
-            enabled: true
-            endpoint: "/metrics"
-            port: 9876
-          admin:
-            enabled: true
-            address: "0.0.0.0:9876"
-          portal:
-            enabled: true
-            address: "0.0.0.0:9877"
+            api_key:
+              key_names:
+                - "X-API-Key"
+          global_plugins: []
 
   - target:
       kind: Deployment

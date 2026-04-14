@@ -1,5 +1,14 @@
 # APICerebrus Alerting Rules
 # Prometheus alerting rules for APICerebrus API Gateway
+#
+# Metric naming follows the gateway_* prefix as defined in internal/metrics/prometheus.go:
+#   - gateway_requests_total{method, status}
+#   - gateway_request_duration_seconds{method, route}
+#   - gateway_auth_success_total / gateway_auth_failures_total
+#   - gateway_rate_limit_hits_total / gateway_rate_limit_exceeds_total
+#   - gateway_backend_errors_total{service, target}
+#   - gateway_active_connections
+#   - gateway_audit_dropped_total
 
 groups:
   - name: apicerberus-critical
@@ -16,7 +25,6 @@ groups:
         annotations:
           summary: "APICerebrus Gateway is down"
           description: "APICerebrus Gateway has been down for more than 1 minute on {{ $labels.instance }}"
-          runbook_url: "https://wiki.internal/apicerberus/runbooks/gateway-down"
 
       # Critical: Admin API Down
       - alert: APICerebrusAdminDown
@@ -28,15 +36,15 @@ groups:
           component: admin
         annotations:
           summary: "APICerebrus Admin API is down"
-          description: "APICerebrus Admin API has been down for more than 2 minutes"
+          description: "APICereberus Admin API has been down for more than 2 minutes"
 
-      # Critical: High Error Rate
+      # Critical: High Error Rate (>10% 5xx)
       - alert: APICerebrusHighErrorRate
         expr: |
           (
-            sum(rate(http_requests_total{service="apicerberus",status=~"5.."}[5m]))
+            sum(rate(gateway_requests_total{status=~"5.."}[5m]))
             /
-            sum(rate(http_requests_total{service="apicerberus"}[5m]))
+            sum(rate(gateway_requests_total[5m]))
           ) > 0.1
         for: 2m
         labels:
@@ -46,26 +54,26 @@ groups:
           summary: "High error rate detected"
           description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes"
 
-      # Critical: Database Connection Issues
-      - alert: APICerebrusDatabaseError
-        expr: increase(db_errors_total[5m]) > 10
+      # Critical: Audit Log Dropped Entries
+      - alert: APICerebrusAuditDropped
+        expr: increase(gateway_audit_dropped_total[5m]) > 100
         for: 1m
         labels:
           severity: critical
           service: apicerberus
-          component: database
+          component: audit
         annotations:
-          summary: "Database errors detected"
-          description: "{{ $value }} database errors in the last 5 minutes"
+          summary: "Audit log entries are being dropped"
+          description: "{{ $value }} audit entries dropped in the last 5 minutes due to buffer overflow"
 
   - name: apicerberus-warning
     interval: 30s
     rules:
-      # Warning: High Latency
+      # Warning: High Latency (p95 > 1s)
       - alert: APICerebrusHighLatency
         expr: |
           histogram_quantile(0.95,
-            sum(rate(http_request_duration_seconds_bucket{service="apicerberus"}[5m])) by (le)
+            sum(rate(gateway_request_duration_seconds_bucket[5m])) by (le)
           ) > 1
         for: 5m
         labels:
@@ -77,7 +85,7 @@ groups:
 
       # Warning: Rate Limiting Triggered
       - alert: APICerebrusRateLimiting
-        expr: increase(rate_limit_hits_total[5m]) > 100
+        expr: increase(gateway_rate_limit_exceeds_total[5m]) > 100
         for: 5m
         labels:
           severity: warning
@@ -86,16 +94,28 @@ groups:
           summary: "Rate limiting is active"
           description: "{{ $value }} rate limit hits in the last 5 minutes"
 
-      # Warning: High Memory Usage
-      - alert: APICerebrusHighMemoryUsage
-        expr: (process_resident_memory_bytes / 1024 / 1024) > 1024
+      # Warning: Backend Errors
+      - alert: APICerebrusBackendErrors
+        expr: increase(gateway_backend_errors_total[5m]) > 50
         for: 5m
         labels:
           severity: warning
           service: apicerberus
         annotations:
-          summary: "High memory usage"
-          description: "Memory usage is {{ $value }}MB"
+          summary: "Backend errors detected"
+          description: "{{ $value }} backend errors in the last 5 minutes"
+
+      # Warning: High Authentication Failures
+      - alert: APICerebrusAuthFailures
+        expr: increase(gateway_auth_failures_total[5m]) > 200
+        for: 5m
+        labels:
+          severity: warning
+          service: apicerberus
+          component: security
+        annotations:
+          summary: "High authentication failure rate"
+          description: "{{ $value }} authentication failures in the last 5 minutes — possible brute force attack"
 
       # Warning: Disk Space Low
       - alert: APICerebrusDiskSpaceLow
@@ -108,23 +128,12 @@ groups:
           summary: "Low disk space"
           description: "Disk space is below 10%"
 
-      # Warning: Certificate Expiring Soon
-      - alert: APICerebrusCertificateExpiring
-        expr: (ssl_certificate_expiry_seconds - time()) / 86400 < 30
-        for: 1h
-        labels:
-          severity: warning
-          service: apicerberus
-        annotations:
-          summary: "SSL certificate expiring soon"
-          description: "Certificate expires in {{ $value }} days"
-
   - name: apicerberus-info
     interval: 1m
     rules:
       # Info: High Request Volume
       - alert: APICerebrusHighRequestVolume
-        expr: sum(rate(http_requests_total{service="apicerberus"}[5m])) > 10000
+        expr: sum(rate(gateway_requests_total[5m])) > 10000
         for: 10m
         labels:
           severity: info
@@ -132,24 +141,3 @@ groups:
         annotations:
           summary: "High request volume"
           description: "Request rate is {{ $value }} req/s"
-
-      # Info: Audit Log Backup Needed
-      - alert: APICerebrusAuditLogSize
-        expr: audit_log_size_bytes / 1024 / 1024 / 1024 > 10
-        for: 1h
-        labels:
-          severity: info
-          service: apicerberus
-        annotations:
-          summary: "Large audit log size"
-          description: "Audit logs are {{ $value }}GB, consider archiving"
-
-      # Info: Configuration Reload
-      - alert: APICerebrusConfigReloaded
-        expr: increase(config_reloads_total[1h]) > 0
-        labels:
-          severity: info
-          service: apicerberus
-        annotations:
-          summary: "Configuration reloaded"
-          description: "APICerebrus configuration was reloaded"

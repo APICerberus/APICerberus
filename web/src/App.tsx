@@ -5,6 +5,7 @@ import { PortalLayout } from "@/components/layout/PortalLayout";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
 import { BrandingProvider } from "@/components/layout/BrandingProvider";
 import { NAV_ITEMS } from "@/components/layout/navigation";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePortalMe } from "@/hooks/use-portal";
@@ -244,5 +245,5 @@ export function App() {
   const location = useLocation();
   const portalMode = location.pathname === PORTAL_ROUTES.base || location.pathname.startsWith(`${PORTAL_ROUTES.base}/`);
 
-  return <BrandingProvider><ThemeProvider>{portalMode ? <PortalRoutesView /> : <AdminRoutesView />}</ThemeProvider></BrandingProvider>;
+  return <BrandingProvider><ThemeProvider>{portalMode ? <ErrorBoundary><PortalRoutesView /></ErrorBoundary> : <ErrorBoundary><AdminRoutesView /></ErrorBoundary>}</ThemeProvider></BrandingProvider>;
 }

@@ -20,6 +20,7 @@ Complete reference for the APICerebrus Admin REST API.
 - [Advanced Analytics](#advanced-analytics)
 - [GraphQL Admin API](#graphql-admin-api)
 - [WebSocket](#websocket)
+- [Portal API](#portal-api)
 - [Error Handling](#error-handling)
 
 ---
@@ -1783,6 +1784,120 @@ mutation {
 - Advanced analytics (forecasting, anomaly detection)
 - 20+ plugin pipeline with 5 execution phases
 - 11 load balancing algorithms including SubnetAware
+
+---
+
+## Portal API
+
+The User Portal API provides self-service endpoints for API consumers. It runs on a separate port (default 9877) and uses session-based authentication with CSRF protection.
+
+**Base URL:** `http://localhost:9877/portal/api/v1`
+
+**Authentication:** Session cookie (`apicerberus_session`) set by login. CSRF token required for state-changing operations via `X-CSRF-Token` header.
+
+### Authentication
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/login` | Login with email/password |
+| POST | `/auth/logout` | Logout and clear session |
+| GET | `/auth/me` | Get current user profile |
+| GET | `/auth/csrf` | Refresh CSRF token |
+| PUT | `/auth/password` | Change password |
+
+### API Keys
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api-keys` | List my API keys |
+| POST | `/api-keys` | Create new API key |
+| PUT | `/api-keys/{id}` | Rename API key |
+| DELETE | `/api-keys/{id}` | Revoke API key |
+
+### APIs
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/apis` | List APIs I have access to |
+| GET | `/apis/{routeId}` | Get API detail |
+
+### Playground
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/playground/send` | Send test request |
+| GET | `/playground/templates` | List saved templates |
+| POST | `/playground/templates` | Save template |
+| DELETE | `/playground/templates/{id}` | Delete template |
+
+### Usage & Analytics
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/usage/overview` | Usage overview stats |
+| GET | `/usage/timeseries` | Usage over time |
+| GET | `/usage/top-endpoints` | Top endpoints by usage |
+| GET | `/usage/errors` | Error statistics |
+
+### Logs
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/logs` | List my request logs |
+| GET | `/logs/{id}` | Get log detail |
+| GET | `/logs/export` | Export logs (CSV/JSON) |
+
+### Credits
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/credits/balance` | Current credit balance |
+| GET | `/credits/transactions` | Transaction history |
+| GET | `/credits/forecast` | Usage forecast |
+| POST | `/credits/purchase` | Purchase credits |
+
+### Security
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/security/ip-whitelist` | List my IP whitelist |
+| POST | `/security/ip-whitelist` | Add IP to whitelist |
+| DELETE | `/security/ip-whitelist/{ip}` | Remove IP from whitelist |
+| GET | `/security/activity` | Recent security activity |
+
+### Settings
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/settings/profile` | Get profile settings |
+| PUT | `/settings/profile` | Update profile |
+| PUT | `/settings/notifications` | Update notification preferences |
+
+### Example Requests
+
+```bash
+# Login
+curl -X POST http://localhost:9877/portal/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "secret"}'
+
+# List my API keys
+curl -H "X-CSRF-Token: <token>" \
+  -b "apicerberus_session=<session>" \
+  http://localhost:9877/portal/api/v1/api-keys
+
+# Create API key
+curl -X POST \
+  -H "X-CSRF-Token: <token>" \
+  -H "Content-Type: application/json" \
+  -b "apicerberus_session=<session>" \
+  -d '{"name": "Production Key", "mode": "live"}' \
+  http://localhost:9877/portal/api/v1/api-keys
+
+# Check credit balance
+curl -b "apicerberus_session=<session>" \
+  http://localhost:9877/portal/api/v1/credits/balance
+```
 
 ---
 

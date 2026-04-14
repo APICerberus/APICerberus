@@ -95,6 +95,10 @@ docker:
 docker-push:
 	@bash scripts/build-docker.sh --tag $(VERSION) --push
 
+# Aliases
+docker-build: docker
+docker-build-push: docker-push
+
 docker-compose-up:
 	@docker-compose -f docker-compose.yml up -d
 
@@ -172,13 +176,6 @@ deploy-k8s-staging:
 
 deploy-k8s-prod:
 	@bash scripts/deploy-k8s.sh production
-
-# Docker targets
-docker-build:
-	@bash scripts/build-docker.sh --tag $(VERSION)
-
-docker-build-push:
-	@bash scripts/build-docker.sh --tag $(VERSION) --push
 
 # Release targets
 release:

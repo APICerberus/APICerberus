@@ -14,24 +14,13 @@ env:
   NODE_VERSION: '20'
 
 jobs:
-  create-release-and-upload:
-    name: Create Release & Upload
+  goreleaser:
+    name: GoReleaser Build & Publish
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - os: linux
-            arch: amd64
-          - os: linux
-            arch: arm64
-          - os: darwin
-            arch: amd64
-          - os: darwin
-            arch: arm64
-          - os: windows
-            arch: amd64
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set up Go
       uses: actions/setup-go@v5
@@ -49,90 +38,14 @@ jobs:
           cd web && npm ci && npm run build
         fi
 
-    - name: Build binary
+    - name: Run GoReleaser
+      uses: goreleaser/goreleaser-action@v6
+      with:
+        distribution: goreleaser
+        version: '~> v2'
+        args: release --clean
       env:
-        GOOS: ${{ matrix.os }}
-        GOARCH: ${{ matrix.arch }}
-      run: |
-        OUTPUT="apicerberus-${{ matrix.os }}-${{ matrix.arch }}"
-        if [ "${{ matrix.os }}" = "windows" ]; then
-          OUTPUT="${OUTPUT}.exe"
-        fi
-        go build -ldflags="-s -w -X github.com/APICerberus/APICerebrus/internal/version.Version=${{ github.ref_name }} -X github.com/APICerberus/APICerebrus/internal/version.Commit=${{ github.sha }} -X github.com/APICerberus/APICerebrus/internal/version.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o "${OUTPUT}" ./cmd/apicerberus
-
-    - name: Create archive
-      run: |
-        ARCHIVE="apicerberus-${{ matrix.os }}-${{ matrix.arch }}"
-        if [ "${{ matrix.os }}" = "windows" ]; then
-          zip "${ARCHIVE}.zip" "${ARCHIVE}.exe"
-          echo "ASSET=${ARCHIVE}.zip" >> $GITHUB_ENV
-        else
-          tar -czf "${ARCHIVE}.tar.gz" "${ARCHIVE}"
-          echo "ASSET=${ARCHIVE}.tar.gz" >> $GITHUB_ENV
-        fi
-
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: apicerberus-${{ matrix.os }}-${{ matrix.arch }}
-        path: ${{ env.ASSET }}
-        retention-days: 5
-
-  create-release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    needs: create-release-and-upload
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: artifacts
-
-    - name: Generate changelog
-      id: changelog
-      run: |
-        PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
-        if [ -n "$PREV_TAG" ]; then
-          CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${PREV_TAG}..HEAD)
-        else
-          CHANGELOG=$(git log --pretty=format:"- %s (%h)" -20)
-        fi
-        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-        echo "$CHANGELOG" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      with:
-        body: |
-          ## Changes
-          ${{ steps.changelog.outputs.CHANGELOG }}
-
-          ## Installation
-
-          ### Docker
-          ```bash
-          docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-          ```
-
-          ### Binary
-          Download the appropriate binary for your platform from the assets below.
-
-          ### Helm
-          ```bash
-          helm repo add apicerberus https://charts.apicerberus.com
-          helm install apicerberus apicerberus/apicerberus --version ${{ github.ref_name }}
-          ```
-        draft: false
-        prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
-        generate_release_notes: false
-        make_latest: true
-        files: |
-          artifacts/**/*
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker-release:
     name: Docker Release

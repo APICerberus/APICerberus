@@ -474,7 +474,7 @@ This is neither Postman nor Swagger UI — above both.
 #APICerberus #DevPortal #APIManagement
 ```
 
-### 7.4 Feature Highlight — Zero Dependencies
+### 7.4 Feature Highlight — Minimal Dependencies
 
 ```
 How many lines in your go.mod?
@@ -602,7 +602,7 @@ github.com/APICerberus/APICerberus
 
 ```
 Color scheme: Same as dashboard (purple primary, dark background)
-Font: Geist Sans + Geist Mono
+Font: Inter Variable + JetBrains Mono Variable
 Framework: VitePress or Starlight (Astro)
 
 Sections:
@@ -675,7 +675,7 @@ Sections:
 
 ### Three-headed guardian for your APIs
 
-**Zero dependencies • Single binary • Full control**
+**Minimal dependencies • Single binary • Full control**
 
 [![Version](badge)](#) [![Go](badge)](#) [![License](badge)](#) [![Minimal Deps](badge)](#)
 
@@ -770,11 +770,11 @@ CHANGELOG.md
 
 ```
 Background:      #0F172A (dark) with subtle radial purple glow at top-center
-Title font:      Geist Sans Bold, #FFFFFF
-Body font:       Geist Sans Regular, #CBD5E1 (Slate 300)
+Title font:      Inter Variable Bold, #FFFFFF
+Body font:       Inter Variable Regular, #CBD5E1 (Slate 300)
 Accent elements: #6B21A8 lines, #A855F7 highlights
-Code blocks:     Geist Mono, #A855F7 on #1E293B rounded card
-Slide numbers:   Bottom-right, Geist Mono, #475569 (Slate 700)
+Code blocks:     JetBrains Mono Variable, #A855F7 on #1E293B rounded card
+Slide numbers:   Bottom-right, JetBrains Mono Variable, #475569 (Slate 700)
 
 Title Slide:
 - Logo (centered)
@@ -821,7 +821,7 @@ API Cerberus — Three-headed guardian for your APIs
 | Technical depth when needed | Oversimplify or dumb down |
 | Show, don't tell (benchmarks, code) | Vague marketing claims |
 | Acknowledge competitors' strengths | Pretend competitors don't exist |
-| Use data (0 deps, 50K req/sec) | Use subjective superlatives |
+| Use data (16 deps, 50K req/sec) | Use subjective superlatives |
 | Turkish + English mix naturally | Force one language |
 | Reference mythology naturally | Overdo mythological metaphors |
 

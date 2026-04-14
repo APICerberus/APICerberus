@@ -1,0 +1,76 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "apicerberus.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "apicerberus.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "apicerberus.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow probes from kube-system
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: {{ .Values.service.httpPort }}
+          protocol: TCP
+    # Allow gateway traffic
+    - ports:
+        - port: {{ .Values.service.httpPort }}
+          protocol: TCP
+        {{- if .Values.service.tlsPort }}
+        - port: {{ .Values.service.tlsPort }}
+          protocol: TCP
+        {{- end }}
+        - port: {{ .Values.service.adminPort }}
+          protocol: TCP
+        {{- if .Values.service.portalPort }}
+        - port: {{ .Values.service.portalPort }}
+          protocol: TCP
+        {{- end }}
+        {{- if .Values.service.grpcPort }}
+        - port: {{ .Values.service.grpcPort }}
+          protocol: TCP
+        {{- end }}
+    {{- range .Values.networkPolicy.ingress }}
+    - {{ toYaml . | nindent 6 }}
+    {{- end }}
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow outbound to upstream services
+    - ports:
+        - port: 443
+          protocol: TCP
+        - port: 80
+          protocol: TCP
+    {{- if .Values.config.cluster }}
+    # Allow Raft communication between cluster nodes
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "apicerberus.selectorLabels" $ | nindent 14 }}
+      ports:
+        - port: 12000
+          protocol: TCP
+    {{- end }}
+    {{- range .Values.networkPolicy.egress }}
+    - {{ toYaml . | nindent 6 }}
+    {{- end }}
+{{- end }}

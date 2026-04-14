@@ -8,7 +8,16 @@ import { Toaster } from "sonner";
 import { App } from "./App";
 import "./globals.css";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,     // 30s before refetch on mount
+      gcTime: 5 * 60_000,    // 5 min cache lifetime
+      retry: 1,              // Single retry on failure
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 createRoot(document.getElementById("app")!).render(
   <StrictMode>

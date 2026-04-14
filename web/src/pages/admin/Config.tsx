@@ -13,7 +13,7 @@ const SAMPLE_CONFIG = `gateway:
   http_addr: ":8080"
 admin:
   addr: ":8081"
-  api_key: "secret-admin"
+  api_key: "change-me-min-32-chars"
 services: []
 routes: []
 upstreams: []

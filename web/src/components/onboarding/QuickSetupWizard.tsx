@@ -229,7 +229,6 @@ export function QuickSetupWizard({ open, onOpenChange }: QuickSetupWizardProps) 
       setCurrentStep("success");
     } catch (error) {
       toast.error("Failed to create resources. Please try again.");
-      console.error(error);
     } finally {
       setIsSubmitting(false);
     }

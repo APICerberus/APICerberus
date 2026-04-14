@@ -1,17 +1,13 @@
 # APICerebrus Alertmanager Configuration
 # Routes alerts to appropriate notification channels
+# Reference: https://prometheus.io/docs/alerting/latest/configuration/
 
 global:
   smtp_smarthost: 'localhost:587'
   smtp_from: 'alerts@apicerberus.local'
   smtp_auth_username: ''
   smtp_auth_password: ''
-  slack_api_url: ''
-  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
-  opsgenie_api_url: 'https://api.opsgenie.com/'
-  victorops_api_url: 'https://alert.victorops.com/integrations/generic/20131114/alert/'
-  telegram_api_url: 'https://api.telegram.org'
-  wechat_api_url: 'https://qyapi.weixin.qq.com/cgi-bin/'
+  smtp_require_tls: true
 
 # Templates for notification messages
 templates:
@@ -19,73 +15,74 @@ templates:
 
 # The root route on which each incoming alert enters.
 route:
-  # The labels by which incoming alerts are grouped together.
   group_by: ['alertname', 'cluster', 'service']
-
-  # When a new group of alerts is created by an incoming alert, wait at
-  # least 'group_wait' to send the initial notification.
   group_wait: 30s
-
-  # When the first notification was sent, wait 'group_interval' to send a batch
-  # of new alerts that started firing for that group.
   group_interval: 5m
-
-  # If an alert has successfully been sent, wait 'repeat_interval' to
-  # resend them.
   repeat_interval: 4h
-
-  # A default receiver
   receiver: 'default'
 
-  # All the above attributes are inherited by all child routes and can
-  # overwritten on each.
   routes:
-    # Critical alerts -> PagerDuty + Email
+    # Critical alerts -> Slack + PagerDuty immediately
     - match:
         severity: critical
-      receiver: 'critical-alerts'
+      receiver: 'critical'
+      group_wait: 10s
+      repeat_interval: 30m
       continue: true
 
-    # Warning alerts -> Slack + Email
+    # Warning alerts -> Slack
     - match:
         severity: warning
-      receiver: 'warning-alerts'
+      receiver: 'warning'
+      group_interval: 10m
       continue: true
+
+    # Security alerts -> Security team
+    - match:
+        component: security
+      receiver: 'security'
+      group_interval: 5m
 
     # Info alerts -> Slack only
     - match:
         severity: info
-      receiver: 'info-alerts'
+      receiver: 'info'
 
-    # Database alerts -> DBA team
-    - match:
-        component: database
-      receiver: 'dba-team'
-      group_wait: 10s
-
-    # Certificate alerts -> Security team
-    - match:
-        alertname: APICerebrusCertificateExpiring
-      receiver: 'security-team'
-
-# Inhibition rules allow to mute a set of alerts given that another alert is
-# firing.
+# Inhibition rules (prevent alert spam)
 inhibit_rules:
-  # If an alert with severity 'critical' is firing, mute alerts with severity
-  # 'warning' that have the same alertname.
+  # Inhibit warning if critical is firing for the same alert
   - source_match:
       severity: 'critical'
     target_match:
       severity: 'warning'
     equal: ['alertname', 'cluster', 'service']
 
+  # Inhibit info if warning is firing
+  - source_match:
+      severity: 'warning'
+    target_match:
+      severity: 'info'
+    equal: ['alertname', 'cluster', 'service']
+
 # Receivers
 receivers:
-  # Default receiver (does nothing)
+  # Default receiver
   - name: 'default'
+    email_configs:
+      - to: 'admin@example.com'
+        headers:
+          Subject: 'APICerebrus Alert: {{ .GroupLabels.alertname }}'
+        html: |
+          {{ range .Alerts }}
+          <h2>{{ .Annotations.summary }}</h2>
+          <p><strong>Description:</strong> {{ .Annotations.description }}</p>
+          <p><strong>Severity:</strong> {{ .Labels.severity }}</p>
+          <p><strong>Instance:</strong> {{ .Labels.instance }}</p>
+          <p><strong>Time:</strong> {{ .StartsAt }}</p>
+          {{ end }}
 
   # Critical alerts receiver
-  - name: 'critical-alerts'
+  - name: 'critical'
     email_configs:
       - to: 'oncall@example.com'
         subject: 'CRITICAL: {{ .GroupLabels.alertname }}'
@@ -98,7 +95,8 @@ receivers:
           Time: {{ .StartsAt }}
           {{ end }}
     slack_configs:
-      - channel: '#alerts-critical'
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts-critical'
         title: 'CRITICAL: {{ .GroupLabels.alertname }}'
         text: |
           {{ range .Alerts }}
@@ -108,36 +106,41 @@ receivers:
           {{ end }}
         send_resolved: true
     # pagerduty_configs:
-    #   - service_key: '<your-pagerduty-key>'
+    #   - service_key: '${PAGERDUTY_SERVICE_KEY}'
     #     description: '{{ .GroupLabels.alertname }}'
     #     severity: critical
 
   # Warning alerts receiver
-  - name: 'warning-alerts'
+  - name: 'warning'
     email_configs:
       - to: 'team@example.com'
         subject: 'WARNING: {{ .GroupLabels.alertname }}'
     slack_configs:
-      - channel: '#alerts-warning'
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts-warning'
         title: 'WARNING: {{ .GroupLabels.alertname }}'
-        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        text: '{{ range .Alerts }}*{{ .Annotations.summary }}* — {{ .Annotations.description }}{{ end }}'
         send_resolved: true
 
   # Info alerts receiver
-  - name: 'info-alerts'
+  - name: 'info'
     slack_configs:
-      - channel: '#alerts-info'
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts-info'
         title: 'INFO: {{ .GroupLabels.alertname }}'
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
 
-  # DBA team receiver
-  - name: 'dba-team'
-    email_configs:
-      - to: 'dba@example.com'
-        subject: 'DB Alert: {{ .GroupLabels.alertname }}'
-
   # Security team receiver
-  - name: 'security-team'
+  - name: 'security'
     email_configs:
       - to: 'security@example.com'
         subject: 'Security Alert: {{ .GroupLabels.alertname }}'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#security-alerts'
+        title: 'SECURITY: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          {{ end }}

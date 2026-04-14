@@ -6,9 +6,15 @@
 #   - gateway_request_duration_seconds{method, route}
 #   - gateway_auth_success_total / gateway_auth_failures_total
 #   - gateway_rate_limit_hits_total / gateway_rate_limit_exceeds_total
-#   - gateway_backend_errors_total{service, target}
+#   - gateway_backend_requests_total{service, target} / gateway_backend_errors_total{service, target}
 #   - gateway_active_connections
 #   - gateway_audit_dropped_total
+#   - gateway_federation_errors_total
+#
+# Aspirational metrics (require future registration):
+#   - gateway_raft_leader / gateway_raft_node_up
+#   - gateway_certificate_expiry_timestamp
+#   - gateway_user_credit_balance
 
 groups:
   - name: apicerberus-critical
@@ -36,7 +42,7 @@ groups:
           component: admin
         annotations:
           summary: "APICerebrus Admin API is down"
-          description: "APICereberus Admin API has been down for more than 2 minutes"
+          description: "APICerebrus Admin API has been down for more than 2 minutes"
 
       # Critical: High Error Rate (>10% 5xx)
       - alert: APICerebrusHighErrorRate
@@ -65,6 +71,18 @@ groups:
         annotations:
           summary: "Audit log entries are being dropped"
           description: "{{ $value }} audit entries dropped in the last 5 minutes due to buffer overflow"
+
+      # Critical: Certificate Expired
+      - alert: APICerebrusCertificateExpired
+        expr: gateway_certificate_expiry_timestamp - time() < 0
+        for: 1m
+        labels:
+          severity: critical
+          service: apicerberus
+          component: tls
+        annotations:
+          summary: "TLS certificate has expired"
+          description: "Certificate for {{ $labels.domain }} has expired"
 
   - name: apicerberus-warning
     interval: 30s
@@ -105,6 +123,18 @@ groups:
           summary: "Backend errors detected"
           description: "{{ $value }} backend errors in the last 5 minutes"
 
+      # Warning: Backend Down (no requests)
+      - alert: APICerebrusBackendDown
+        expr: sum(rate(gateway_backend_requests_total[2m])) == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: apicerberus
+          component: backend
+        annotations:
+          summary: "No backend requests detected"
+          description: "Backend may be down or unreachable"
+
       # Warning: High Authentication Failures
       - alert: APICerebrusAuthFailures
         expr: increase(gateway_auth_failures_total[5m]) > 200
@@ -117,6 +147,29 @@ groups:
           summary: "High authentication failure rate"
           description: "{{ $value }} authentication failures in the last 5 minutes — possible brute force attack"
 
+      # Warning: High Connection Count
+      - alert: APICerebrusHighConnections
+        expr: gateway_active_connections > 10000
+        for: 5m
+        labels:
+          severity: warning
+          service: apicerberus
+        annotations:
+          summary: "High number of active connections"
+          description: "More than 10000 active connections"
+
+      # Warning: Federation Errors
+      - alert: APICerebrusFederationErrors
+        expr: increase(gateway_federation_errors_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: apicerberus
+          component: federation
+        annotations:
+          summary: "GraphQL federation errors detected"
+          description: "{{ $value }} federation errors in the last 5 minutes"
+
       # Warning: Disk Space Low
       - alert: APICerebrusDiskSpaceLow
         expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.1
@@ -127,6 +180,45 @@ groups:
         annotations:
           summary: "Low disk space"
           description: "Disk space is below 10%"
+
+      # Warning: Certificate Expiring Soon
+      - alert: APICerebrusCertificateExpiringSoon
+        expr: (gateway_certificate_expiry_timestamp - time()) / 86400 < 7
+        for: 1h
+        labels:
+          severity: warning
+          service: apicerberus
+          component: tls
+        annotations:
+          summary: "TLS certificate expiring soon"
+          description: "Certificate for {{ $labels.domain }} expires in {{ $value }} days"
+
+  - name: apicerberus-cluster
+    interval: 30s
+    rules:
+      # Critical: Raft No Leader
+      - alert: APICerebrusRaftNoLeader
+        expr: gateway_raft_leader == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: apicerberus
+          component: raft
+        annotations:
+          summary: "Raft cluster has no leader"
+          description: "No Raft leader elected for more than 30 seconds"
+
+      # Warning: Raft Node Down
+      - alert: APICerebrusRaftNodeDown
+        expr: count by (cluster) (gateway_raft_node_up == 0) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: apicerberus
+          component: raft
+        annotations:
+          summary: "Raft cluster node is down"
+          description: "One or more nodes in the Raft cluster are down"
 
   - name: apicerberus-info
     interval: 1m
@@ -141,3 +233,27 @@ groups:
         annotations:
           summary: "High request volume"
           description: "Request rate is {{ $value }} req/s"
+
+      # Info: Low Credit Balance
+      - alert: APICerebrusLowCreditBalance
+        expr: gateway_user_credit_balance < 100
+        for: 5m
+        labels:
+          severity: info
+          service: apicerberus
+          component: billing
+        annotations:
+          summary: "User has low credit balance"
+          description: "User {{ $labels.user_id }} has credit balance of {{ $value }}"
+
+      # Info: Suspicious Admin Activity
+      - alert: APICerebrusSuspiciousRequests
+        expr: sum(rate(gateway_requests_total{route=~"/admin.*"}[5m])) > 100
+        for: 5m
+        labels:
+          severity: info
+          service: apicerberus
+          component: security
+        annotations:
+          summary: "High admin API request rate"
+          description: "Unusual activity detected on admin endpoints"

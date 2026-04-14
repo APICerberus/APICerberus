@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { adminApiRequest } from "@/lib/api";
 import { APP_NAME, COLOR_TOKENS } from "@/lib/constants";
 
 export type BrandingConfig = {
@@ -29,11 +30,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   const [branding, setBranding] = useState<BrandingConfig>(defaultBranding);
 
   useEffect(() => {
-    fetch("/admin/api/v1/branding/public")
-      .then((res) => {
-        if (!res.ok) throw new Error("branding fetch failed");
-        return res.json();
-      })
+    adminApiRequest<BrandingConfig>("/admin/api/v1/branding/public")
       .then((data) => {
         const merged = { ...defaultBranding, ...data };
         setBranding(merged);

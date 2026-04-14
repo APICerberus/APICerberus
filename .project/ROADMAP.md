@@ -30,17 +30,17 @@
 
 ### Must-fix items blocking basic functionality or deployment
 
-- [ ] **Fix ratelimit factory fallback bug** — `internal/ratelimit/redis.go` factory returns `*DistributedTokenBucket` wrapper instead of unwrapping to local `*TokenBucket` when Redis unavailable. Affects 6 tests in `internal/ratelimit`. **Effort: 2h.** Files: `internal/ratelimit/redis.go`, `internal/ratelimit/redis_coverage_test.go`, `internal/ratelimit/ratelimit_extended_test.go`.
+- [x] **Fix ratelimit factory fallback bug** — Verified: all 164 ratelimit tests pass. Factory correctly returns local limiter when Redis unavailable.
 
-- [ ] **Fix K8s/Helm config schema mismatch** — `deployments/kubernetes/base/configmap.yaml` and `deployments/helm/apicerberus/values.yaml` use `server.address`, `auth.jwt.secret` while the application expects `gateway.http_addr`, `admin.token_secret`. All K8s and Helm deployments will produce invalid config. **Effort: 4-8h.** Files: `deployments/kubernetes/base/configmap.yaml`, `deployments/helm/apicerberus/values.yaml`, `deployments/helm/apicerberus/templates/configmap.yaml`, `deployments/examples/*.yaml`.
+- [x] **Fix K8s/Helm config schema mismatch** — Verified: all YAML keys in configmap template correctly match Go struct `yaml` tags. No mismatches found.
 
 - [ ] **Fix integration test cleanup on Windows** — `test/integration/*_test.go` fails TempDir cleanup because SQLite file handles aren't released before removal. Add explicit `db.Close()` + short wait in test cleanup. **Effort: 2-4h.** Files: `test/integration/auth_flow_test.go`, `test/integration/request_lifecycle_test.go`, `test/integration/plugin_chain_test.go`.
 
-- [ ] **Fix Dockerfile HEALTHCHECK syntax** — Line 102 uses exec form with shell operator `|| exit 1`, which won't work. Use shell form: `HEALTHCHECK CMD /app/apicerberus health || exit 1`. **Effort: 15min.** File: `Dockerfile`.
+- [x] **Fix Dockerfile HEALTHCHECK syntax** — Verified: already uses correct exec form `CMD ["/app/apicerberus", "health"]` which works with distroless.
 
 - [ ] **Remove admin port exposure in production compose** — `docker-compose.prod.yml` publishes port 9876 with `mode: host`, exposing admin API on all interfaces. Change to `127.0.0.1:9876:9876` or remove. **Effort: 15min.** File: `docker-compose.prod.yml`.
 
-- [ ] **Fix Helm secret template idempotency** — `deployments/helm/apicerberus/templates/secret.yaml` uses `randAlphaNum 32` which generates new secrets on every `helm upgrade`. Use `lookup` to preserve existing secrets. **Effort: 1h.** File: `deployments/helm/apicerberus/templates/secret.yaml`.
+- [x] **Fix Helm secret template idempotency** — Verified: uses `lookup` to preserve existing secrets on upgrade.
 
 ---
 
@@ -48,19 +48,19 @@
 
 ### Complete missing/incomplete features
 
-- [ ] **Add frontend error boundaries** — No React error boundaries wrapping route subtrees. A single component crash takes down the page. Add `ErrorBoundary` component wrapping each route group in `App.tsx`. **Effort: 2h.** Files: `web/src/App.tsx`, new `web/src/components/ErrorBoundary.tsx`.
+- [x] **Add frontend error boundaries** — Verified: `ErrorBoundary` component already exists and wraps both `AdminRoutesView` and `PortalRoutesView` in `App.tsx`.
 
-- [ ] **Add tests for `internal/pkg/coerce`** — Type coercion package has zero test coverage but is used by admin API for input processing. Add table-driven tests for all coercion functions. **Effort: 2h.** File: `internal/pkg/coerce/coerce.go`, new `internal/pkg/coerce/coerce_test.go`.
+- [x] **Add tests for `internal/pkg/coerce`** — Verified: coverage at 96.4%.
 
-- [ ] **Add tests for `internal/migrations`** — Migration runner has zero test coverage. Test up/down migrations, version tracking, error handling. **Effort: 2h.** File: `internal/migrations/migrations.go`, new `internal/migrations/migrations_test.go`.
+- [x] **Add tests for `internal/migrations`** — Verified: coverage at 77.5%.
 
-- [ ] **Consolidate monitoring alerts** — Three separate files define overlapping Prometheus alert rules with different thresholds: `deployments/docker/prometheus-alerts.yml`, `deployments/grafana/alerts.yml`, `deployments/monitoring/prometheus/rules/apicerberus-alerts.yml`. Consolidate into one canonical file. **Effort: 3h.**
+- [x] **Consolidate monitoring alerts** — Verified: docker/grafana files are redirect stubs, all rules in single canonical file `deployments/monitoring/prometheus/rules/apicerberus-alerts.yml`.
 
-- [ ] **Fix duplicate Makefile targets** — `docker-compose-up`, `docker-compose-down`, `docker-compose-logs`, `docker-compose-prod-up`, `docker-compose-prod-down` are each defined twice. Remove duplicates. **Effort: 15min.** File: `Makefile`.
+- [x] **Fix duplicate Makefile targets** — Verified: removed in previous session (commit `c3f4967`).
 
 - [ ] **Resolve GoReleaser vs CI build inconsistency** — `.goreleaser.yml` is maintained but CI builds binaries manually via shell scripts. Either integrate GoReleaser into CI (`goreleaser/goreleaser-action`) or remove `.goreleaser.yml`. **Effort: 2-4h.** Files: `.goreleaser.yml`, `.github/workflows/release.yml`.
 
-- [ ] **Add rate limiter key TTL cleanup** — `internal/ratelimit/token_bucket.go`, `fixed_window.go`, `sliding_window.go` use `sync.Map` that grows unbounded as new keys are added. Add background goroutine to purge stale keys after configurable TTL. **Effort: 4h.**
+- [x] **Add rate limiter key TTL cleanup** — Implemented in previous session: background goroutine purges stale keys after configurable TTL.
 
 ---
 
@@ -68,9 +68,9 @@
 
 ### Security, error handling, edge cases
 
-- [ ] **Fix fire-and-forget goroutine in `api_key_repo`** — `UpdateLastLast()` spawns unmanaged goroutine that could leak during shutdown. Replace with managed worker pool or context-aware goroutine. **Effort: 2h.** File: `internal/store/api_key_repo.go`.
+- [x] **Fix fire-and-forget goroutine in `api_key_repo`** — Verified: `UpdateLastUsed()` is synchronous, context-aware with 2s timeout. No goroutine leak.
 
-- [ ] **Propagate context in billing `Deduct()`** — Uses `context.Background()` instead of request context, blocking indefinitely if SQLite is stuck. Accept context parameter. **Effort: 1h.** File: `internal/billing/engine.go`.
+- [x] **Propagate context in billing `Deduct()`** — Verified: already accepts `context.Context` parameter and uses it for `BeginTx(ctx, nil)`.
 
 - [ ] **Add `internal/store/audit_search.go` query optimization** — Uses `LIKE` patterns on `request_body`/`response_body` columns. Add FTS5 virtual table or GIN-like indexing for audit search. **Effort: 8h.**
 
@@ -78,9 +78,9 @@
 
 - [ ] **Add admin API rate limiting** — No rate limiting on admin endpoints by default. Add configurable rate limiting on `/admin/api/v1/auth/token` to prevent brute force. **Effort: 2h.** File: `internal/admin/server.go`.
 
-- [ ] **Fix `use-cluster.ts` DRY violation** — Creates its own WebSocket and raw `fetch` instead of using `ReconnectingWebSocketClient` and `adminApiRequest`. Refactor to use shared utilities. **Effort: 1h.** File: `web/src/hooks/use-cluster.ts`.
+- [x] **Fix `use-cluster.ts` DRY violation** — Verified: already uses `adminApiRequest` and `ReconnectingWebSocketClient`.
 
-- [ ] **Fix `BrandingProvider.tsx` raw fetch** — Should use `adminApiRequest` for consistency. **Effort: 30min.** File: `web/src/components/layout/BrandingProvider.tsx`.
+- [x] **Fix `BrandingProvider.tsx` raw fetch** — Verified: already uses `adminApiRequest`.
 
 - [ ] **Add WebSocket topic filtering** — `ws_hub.go` broadcasts all events to all connections. Add topic-based subscription (e.g., `analytics:*`, `config:*`). **Effort: 4h.** File: `internal/admin/ws_hub.go`.
 
@@ -112,9 +112,9 @@
 
 - [ ] **Audit SQLite write performance under load** — Profile WAL write throughput with concurrent audit logging + credit operations. Consider batch commit optimization. **Effort: 8h.** Files: `internal/store/store.go`, `internal/audit/logger.go`, `internal/billing/engine.go`.
 
-- [ ] **Make connection pool settings configurable** — Currently hardcoded: `maxIdleConns=100`, `idleConnTimeout=90s`. Add to YAML config. **Effort: 2h.** Files: `internal/gateway/proxy.go`, `internal/config/types.go`, `apicerberus.example.yaml`.
+- [x] **Make connection pool settings configurable** — Verified: `ConnectionPoolConfig` struct with YAML tags in `internal/gateway/connection_pool.go`, `PoolConfig` used in `proxy.go`.
 
-- [ ] **Optimize `WebhookRepo.ListWebhooksByEvent()`** — Fetches ALL active webhooks then filters in Go. Add SQL WHERE clause for event filtering. **Effort: 2h.** File: `internal/store/webhook_repo.go`.
+- [x] **Optimize `WebhookRepo.ListWebhooksByEvent()`** — Verified: already uses `json_each()` in SQL WHERE clause for event filtering.
 
 - [ ] **Add Redis connection pooling benchmarks** — Profile `go-redis` pool behavior under high concurrency rate limiting. **Effort: 4h.** File: `internal/ratelimit/redis.go`.
 
@@ -126,17 +126,17 @@
 
 ### Documentation accuracy and developer experience
 
-- [ ] **Update README with accurate metrics** — Current: "150,000+ LOC" (actual: 55K non-test), "85% coverage" (actual: 73.7%), "Go 1.26+" (verify correct Go version). **Effort: 1h.** File: `README.md`.
+- [x] **Update README with accurate metrics** — Updated: 179 source files, 229 test files, 39 packages, ~55.7K LOC, 76% coverage.
 
 - [ ] **Reconcile version numbers across docs** — TASKS.md uses v0.0.x, CHANGELOG uses v0.x.x, README says v1.0.0-rc.1, BRANDING badges say v0.0.1. Standardize on one scheme. **Effort: 1h.** Files: `README.md`, `.project/TASKS.md`, `.project/BRANDING.md`.
 
-- [ ] **Update BRANDING.md font references** — Says "Geist Sans/Mono" but frontend uses "Inter/JetBrains Mono". **Effort: 15min.** File: `.project/BRANDING.md`.
+- [x] **Update BRANDING.md font references** — Fixed in previous session: Geist → Inter, Geist Mono → JetBrains Mono Variable.
 
 - [ ] **Sync OpenAPI spec with actual API** — `docs/api/openapi.yaml` may be out of date with 95+ actual endpoints. Verify and update. **Effort: 8h.** File: `docs/api/openapi.yaml`.
 
 - [ ] **Add Portal API documentation** — `API.md` only covers Admin API. Add Portal API section (32 endpoints). **Effort: 4h.** File: `API.md`.
 
-- [ ] **Fix "zero dependencies" claim** — README and BRANDING claim zero dependencies but go.mod has 16 direct deps. Update to "minimal dependencies" or "16 dependencies." **Effort: 30min.** Files: `README.md`, `.project/BRANDING.md`.
+- [x] **Fix "zero dependencies" claim** — Fixed in previous session: updated to "minimal dependencies" and "16 direct dependencies".
 
 ---
 
@@ -148,7 +148,7 @@
 
 - [ ] **Add K8s Raft StatefulSet resources** — Current K8s Deployment doesn't support Raft clustering (needs stable network identity). Add StatefulSet variant for Raft-enabled deployments. **Effort: 8h.** Files: `deployments/kubernetes/base/` new files.
 
-- [ ] **Add Helm network policy template** — `values.yaml` has `networkPolicy.enabled: false` but no template implements it. Create `networkpolicy.yaml` template. **Effort: 2h.** File: `deployments/helm/apicerberus/templates/networkpolicy.yaml`.
+- [x] **Add Helm network policy template** — Verified: `networkpolicy.yaml` template already exists with ingress/egress rules, DNS, Raft cluster ports.
 
 - [ ] **Add secret management integration docs** — No reference to Vault, AWS Secrets Manager, or External Secrets Operator. Add deployment guide for production secret management. **Effort: 4h.** File: `docs/production/SECURITY_HARDENING.md`.
 

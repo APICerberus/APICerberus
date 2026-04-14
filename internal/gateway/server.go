@@ -124,7 +124,7 @@ func New(cfg *config.Config) (*Gateway, error) {
 	g := &Gateway{
 		config:         cfg,
 		router:         router,
-		proxy:          NewProxy(),
+		proxy:          NewProxy(cfg.Gateway.ConnectionPool),
 		health:         checker,
 		store:          st,
 		billing:        billingEngine,

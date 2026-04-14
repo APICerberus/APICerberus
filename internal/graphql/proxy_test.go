@@ -17,10 +17,10 @@ func TestNewProxy(t *testing.T) {
 		}
 		proxy, err := NewProxy(cfg)
 		if err != nil {
-			t.Fatalf("NewProxy() error = %v", err)
+			t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 		}
 		if proxy == nil {
-			t.Fatal("NewProxy() returned nil")
+			t.Fatal("NewProxy(config.PoolConfig{}) returned nil")
 		}
 		if proxy.target == nil {
 			t.Error("target is nil")
@@ -42,7 +42,7 @@ func TestNewProxy(t *testing.T) {
 		}
 		_, err := NewProxy(cfg)
 		if err == nil {
-			t.Error("NewProxy() should return error for invalid URL")
+			t.Error("NewProxy(config.PoolConfig{}) should return error for invalid URL")
 		}
 	})
 
@@ -53,7 +53,7 @@ func TestNewProxy(t *testing.T) {
 		}
 		proxy, err := NewProxy(cfg)
 		if err != nil {
-			t.Fatalf("NewProxy() error = %v", err)
+			t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 		}
 		if proxy.client.Timeout != 30*time.Second {
 			t.Errorf("Timeout = %v, want 30s", proxy.client.Timeout)
@@ -93,7 +93,7 @@ func TestProxy_Forward(t *testing.T) {
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 	}
 
 	t.Run("forward query", func(t *testing.T) {

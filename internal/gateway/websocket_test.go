@@ -54,7 +54,7 @@ func TestProxyForwardWebSocketTunnel(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	proxy := NewProxy()
+	proxy := NewProxy(config.PoolConfig{})
 	target := &config.UpstreamTarget{Address: upstream.URL}
 
 	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

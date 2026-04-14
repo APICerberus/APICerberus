@@ -434,7 +434,7 @@ func TestProxy_ServeHTTP_UnsupportedProtocol(t *testing.T) {
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 	}
 	defer proxy.Close()
 
@@ -464,7 +464,7 @@ func TestProxy_ServeHTTP_GRPCWebDisabled(t *testing.T) {
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 	}
 	defer proxy.Close()
 
@@ -570,7 +570,7 @@ func TestProxy_handleTranscoding_NoTranscoder(t *testing.T) {
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 	}
 	defer proxy.Close()
 
@@ -595,7 +595,7 @@ func TestProxy_handleTranscoding_NilTranscoder(t *testing.T) {
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 	}
 	defer proxy.Close()
 
@@ -622,7 +622,7 @@ func TestProxy_handleGRPCWeb_InvalidBase64(t *testing.T) {
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 	}
 	defer proxy.Close()
 
@@ -746,7 +746,7 @@ func TestProxy_HandleTranscoding_Errors(t *testing.T) {
 		}
 		proxy, err := NewProxy(cfg)
 		if err != nil {
-			t.Fatalf("NewProxy() error = %v", err)
+			t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 		}
 		defer proxy.Close()
 
@@ -772,7 +772,7 @@ func TestProxy_HandleTranscoding_Errors(t *testing.T) {
 		}
 		proxy, err := NewProxy(cfg)
 		if err != nil {
-			t.Fatalf("NewProxy() error = %v", err)
+			t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 		}
 		defer proxy.Close()
 
@@ -1007,7 +1007,7 @@ func TestProxy_ServeHTTP_ContentTypes(t *testing.T) {
 			}
 			proxy, err := NewProxy(cfg)
 			if err != nil {
-				t.Fatalf("NewProxy() error = %v", err)
+				t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 			}
 			defer proxy.Close()
 

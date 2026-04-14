@@ -43,13 +43,26 @@ var denyPrivateUpstreams bool
 func SetDenyPrivateUpstreams(v bool) { denyPrivateUpstreams = v }
 
 // NewProxy creates a reverse proxy with sensible transport pooling defaults.
-func NewProxy() *Proxy {
+func NewProxy(pool config.PoolConfig) *Proxy {
+	maxIdleConns := 1000
+	if pool.MaxIdleConns > 0 {
+		maxIdleConns = pool.MaxIdleConns
+	}
+	maxIdleConnsPerHost := 100
+	if pool.MaxIdleConnsPerHost > 0 {
+		maxIdleConnsPerHost = pool.MaxIdleConnsPerHost
+	}
+	idleConnTimeout := 90 * time.Second
+	if pool.IdleConnTimeout > 0 {
+		idleConnTimeout = pool.IdleConnTimeout
+	}
+
 	return &Proxy{
 		transport: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
-			MaxIdleConns:          1000,
-			MaxIdleConnsPerHost:   100,
-			IdleConnTimeout:       90 * time.Second,
+			MaxIdleConns:          maxIdleConns,
+			MaxIdleConnsPerHost:   maxIdleConnsPerHost,
+			IdleConnTimeout:       idleConnTimeout,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
 			ForceAttemptHTTP2:     true,

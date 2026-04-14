@@ -23,10 +23,10 @@ func TestNewProxy(t *testing.T) {
 
 		proxy, err := NewProxy(cfg)
 		if err != nil {
-			t.Fatalf("NewProxy() error = %v", err)
+			t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 		}
 		if proxy == nil {
-			t.Fatal("NewProxy() returned nil")
+			t.Fatal("NewProxy(config.PoolConfig{}) returned nil")
 		}
 		if proxy.Target != cfg.Target {
 			t.Errorf("Target = %v, want %v", proxy.Target, cfg.Target)

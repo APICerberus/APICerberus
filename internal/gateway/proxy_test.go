@@ -55,7 +55,7 @@ func TestProxyForwardBasic(t *testing.T) {
 	req.RemoteAddr = "203.0.113.10:54000"
 
 	rr := httptest.NewRecorder()
-	p := NewProxy()
+	p := NewProxy(config.PoolConfig{})
 	err := p.Forward(&RequestContext{
 		Request:        req,
 		ResponseWriter: rr,
@@ -115,7 +115,7 @@ func TestProxyStripPath(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "http://gateway.local/api/v1/items", nil)
 	rr := httptest.NewRecorder()
 
-	p := NewProxy()
+	p := NewProxy(config.PoolConfig{})
 	err := p.Forward(&RequestContext{
 		Request:        req,
 		ResponseWriter: rr,
@@ -146,7 +146,7 @@ func TestProxyPreserveHostToggle(t *testing.T) {
 	upURL, _ := url.Parse(upstream.URL)
 	upHost := upURL.Host
 
-	p := NewProxy()
+	p := NewProxy(config.PoolConfig{})
 
 	reqPreserve := httptest.NewRequest(http.MethodGet, "http://client.example.com/check", nil)
 	reqPreserve.Host = "client.example.com"
@@ -197,7 +197,7 @@ func TestProxyError502(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "http://gateway.local/fail", nil)
 	rr := httptest.NewRecorder()
 
-	p := NewProxy()
+	p := NewProxy(config.PoolConfig{})
 	err = p.Forward(&RequestContext{
 		Request:        req,
 		ResponseWriter: rr,
@@ -226,7 +226,7 @@ func TestProxyError504OnContextTimeout(t *testing.T) {
 	req := baseReq.WithContext(ctx)
 
 	rr := httptest.NewRecorder()
-	p := NewProxy()
+	p := NewProxy(config.PoolConfig{})
 	err := p.Forward(&RequestContext{
 		Request:        req,
 		ResponseWriter: rr,
@@ -253,7 +253,7 @@ func TestProxyResponseStreaming(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "http://gateway.local/stream", nil)
 	rr := httptest.NewRecorder()
 
-	p := NewProxy()
+	p := NewProxy(config.PoolConfig{})
 	if err := p.Forward(&RequestContext{
 		Request:        req,
 		ResponseWriter: rr,

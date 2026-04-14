@@ -27,6 +27,11 @@ gateway:
   idle_timeout: "120s"
   max_header_bytes: 1048576
   max_body_bytes: 10485760
+  # Connection pool for upstream proxying (zero values use defaults).
+  connection_pool:
+    max_idle_conns: 1000         # Total idle connections across all hosts
+    max_idle_conns_per_host: 100 # Idle connections per upstream host
+    idle_conn_timeout: "90s"     # Close idle connections after this duration
   # Trusted proxies for X-Forwarded-For / X-Real-IP parsing.
   # When empty (default), forwarding headers are IGNORED — RemoteAddr is used.
   # Supports individual IPs and CIDR ranges.

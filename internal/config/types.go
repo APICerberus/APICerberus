@@ -145,6 +145,14 @@ type GatewayConfig struct {
 	TrustedProxies       []string      `yaml:"trusted_proxies" json:"trusted_proxies"`
 	HTMLErrors           bool          `yaml:"html_errors" json:"html_errors"`                       // Global HTML error page toggle
 	DenyPrivateUpstreams bool          `yaml:"deny_private_upstreams" json:"deny_private_upstreams"` // Reject private/loopback upstream IPs in production
+	ConnectionPool       PoolConfig    `yaml:"connection_pool" json:"connection_pool"`
+}
+
+// PoolConfig controls the HTTP connection pool for upstream proxying.
+type PoolConfig struct {
+	MaxIdleConns        int           `yaml:"max_idle_conns" json:"max_idle_conns"`
+	MaxIdleConnsPerHost int           `yaml:"max_idle_conns_per_host" json:"max_idle_conns_per_host"`
+	IdleConnTimeout     time.Duration `yaml:"idle_conn_timeout" json:"idle_conn_timeout"`
 }
 
 type GRPCConfig struct {

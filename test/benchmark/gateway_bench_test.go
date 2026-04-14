@@ -201,7 +201,7 @@ func BenchmarkProxyThroughput(b *testing.B) {
 	}))
 	defer upstream.Close()
 
-	proxy := gateway.NewProxy()
+	proxy := gateway.NewProxy(config.PoolConfig{})
 	target := &config.UpstreamTarget{
 		ID:      "test-target",
 		Address: upstream.URL,
@@ -239,7 +239,7 @@ func BenchmarkProxyParallelThroughput(b *testing.B) {
 	}))
 	defer upstream.Close()
 
-	proxy := gateway.NewProxy()
+	proxy := gateway.NewProxy(config.PoolConfig{})
 	target := &config.UpstreamTarget{
 		ID:      "test-target",
 		Address: upstream.URL,
@@ -284,7 +284,7 @@ func BenchmarkProxyLargeResponse(b *testing.B) {
 	}))
 	defer upstream.Close()
 
-	proxy := gateway.NewProxy()
+	proxy := gateway.NewProxy(config.PoolConfig{})
 	target := &config.UpstreamTarget{
 		ID:      "test-target",
 		Address: upstream.URL,

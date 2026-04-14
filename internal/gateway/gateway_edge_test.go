@@ -475,7 +475,7 @@ func TestProxy_ForwardWebSocket_NilProxy_Edge(t *testing.T) {
 
 // TestProxy_ForwardWebSocket_InvalidContext tests ForwardWebSocket with invalid context
 func TestProxy_ForwardWebSocket_InvalidContext_Edge(t *testing.T) {
-	p := NewProxy()
+	p := NewProxy(config.PoolConfig{})
 
 	// Test with nil context
 	err := p.ForwardWebSocket(nil, &config.UpstreamTarget{ID: "t1", Address: "localhost:8080"})
@@ -504,7 +504,7 @@ func TestProxy_ForwardWebSocket_InvalidContext_Edge(t *testing.T) {
 
 // TestProxy_ForwardWebSocket_NotWebSocket tests ForwardWebSocket with non-websocket request
 func TestProxy_ForwardWebSocket_NotWebSocket_Edge(t *testing.T) {
-	p := NewProxy()
+	p := NewProxy(config.PoolConfig{})
 
 	req := httptest.NewRequest("GET", "/ws", nil)
 	// Not a websocket upgrade request
@@ -520,7 +520,7 @@ func TestProxy_ForwardWebSocket_NotWebSocket_Edge(t *testing.T) {
 
 // TestProxy_ForwardWebSocket_InvalidTarget tests ForwardWebSocket with invalid target
 func TestProxy_ForwardWebSocket_InvalidTarget_Edge(t *testing.T) {
-	p := NewProxy()
+	p := NewProxy(config.PoolConfig{})
 
 	req := httptest.NewRequest("GET", "/ws", nil)
 	req.Header.Set("Connection", "Upgrade")
@@ -547,7 +547,7 @@ func TestProxy_ForwardWebSocket_InvalidTarget_Edge(t *testing.T) {
 
 // TestProxy_ForwardWebSocket_NotHijacker tests ForwardWebSocket with non-hijacker response writer
 func TestProxy_ForwardWebSocket_NotHijacker_Edge(t *testing.T) {
-	p := NewProxy()
+	p := NewProxy(config.PoolConfig{})
 
 	req := httptest.NewRequest("GET", "/ws", nil)
 	req.Header.Set("Connection", "Upgrade")
@@ -597,7 +597,7 @@ func TestProxy_Do_NilProxy_Edge(t *testing.T) {
 
 // TestProxy_Do_InvalidContext tests Do with invalid context
 func TestProxy_Do_NilOrInvalidContext(t *testing.T) {
-	p := NewProxy()
+	p := NewProxy(config.PoolConfig{})
 
 	// Test with nil context
 	_, err := p.Do(nil, &config.UpstreamTarget{ID: "t1", Address: "localhost:8080"})
@@ -616,7 +616,7 @@ func TestProxy_Do_NilOrInvalidContext(t *testing.T) {
 
 // TestProxy_Do_InvalidTarget tests Do with invalid target
 func TestProxy_Do_InvalidTarget_Edge(t *testing.T) {
-	p := NewProxy()
+	p := NewProxy(config.PoolConfig{})
 
 	// Test with nil target
 	_, err := p.Do(&RequestContext{
@@ -637,7 +637,7 @@ func TestProxy_Do_InvalidTarget_Edge(t *testing.T) {
 
 // TestProxy_Do_InvalidURL tests Do with invalid URL construction
 func TestProxy_Do_InvalidURL_Edge(t *testing.T) {
-	p := NewProxy()
+	p := NewProxy(config.PoolConfig{})
 
 	// Test with invalid URL that will fail parsing
 	_, err := p.Do(&RequestContext{
@@ -662,7 +662,7 @@ func TestProxy_WriteResponse_NilProxy_Edge(t *testing.T) {
 
 // TestProxy_WriteResponse_InvalidArgs tests WriteResponse with invalid args
 func TestProxy_WriteResponse_InvalidArgs_Edge(t *testing.T) {
-	p := NewProxy()
+	p := NewProxy(config.PoolConfig{})
 
 	// Test with nil writer
 	err := p.WriteResponse(nil, &http.Response{

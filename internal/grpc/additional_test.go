@@ -785,7 +785,7 @@ func TestProxy_handleGRPC_BodyReadError(t *testing.T) {
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 	}
 	defer proxy.Close()
 
@@ -816,7 +816,7 @@ func TestProxy_handleGRPCWeb_BodyReadError(t *testing.T) {
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 	}
 	defer proxy.Close()
 
@@ -840,7 +840,7 @@ func TestProxy_handleTranscoding_BodyReadError(t *testing.T) {
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 	}
 	defer proxy.Close()
 
@@ -958,7 +958,7 @@ func TestProxy_handleTranscoding_Scenarios(t *testing.T) {
 		}
 		proxy, err := NewProxy(cfg)
 		if err != nil {
-			t.Fatalf("NewProxy() error = %v", err)
+			t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 		}
 		defer proxy.Close()
 
@@ -981,7 +981,7 @@ func TestProxy_handleTranscoding_Scenarios(t *testing.T) {
 		}
 		proxy, err := NewProxy(cfg)
 		if err != nil {
-			t.Fatalf("NewProxy() error = %v", err)
+			t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 		}
 		defer proxy.Close()
 
@@ -1009,7 +1009,7 @@ func TestProxy_handleGRPCWeb_Base64(t *testing.T) {
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 	}
 	defer proxy.Close()
 
@@ -1098,7 +1098,7 @@ func TestProxy_ServeHTTP_AllProtocols(t *testing.T) {
 			}
 			proxy, err := NewProxy(cfg)
 			if err != nil {
-				t.Fatalf("NewProxy() error = %v", err)
+				t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 			}
 			defer proxy.Close()
 
@@ -1124,7 +1124,7 @@ func TestProxy_handleGRPC_ErrorScenarios(t *testing.T) {
 		}
 		proxy, err := NewProxy(cfg)
 		if err != nil {
-			t.Fatalf("NewProxy() error = %v", err)
+			t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 		}
 		defer proxy.Close()
 
@@ -1152,7 +1152,7 @@ func TestProxy_handleGRPCWeb_ContentTypes(t *testing.T) {
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 	}
 	defer proxy.Close()
 
@@ -1200,7 +1200,7 @@ func TestProxy_handleGRPCWeb_PathVariations(t *testing.T) {
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 	}
 	defer proxy.Close()
 
@@ -1357,7 +1357,7 @@ func TestProxy_handleTranscoding_WithDescriptors(t *testing.T) {
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 	}
 	defer proxy.Close()
 
@@ -1474,7 +1474,7 @@ func TestProxy_handleTranscoding_ResponseError(t *testing.T) {
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 	}
 	defer proxy.Close()
 
@@ -1565,7 +1565,7 @@ func TestProxy_handleTranscoding_ResponseError(t *testing.T) {
 		}
 		proxy, err := NewProxy(cfg)
 		if err != nil {
-			t.Fatalf("NewProxy() error = %v", err)
+			t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 		}
 		defer proxy.Close()
 
@@ -1682,7 +1682,7 @@ func TestProxy_handleTranscoding_GRPCErrors(t *testing.T) {
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
-		t.Fatalf("NewProxy() error = %v", err)
+		t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 	}
 	defer proxy.Close()
 
@@ -1807,7 +1807,7 @@ func TestProxy_ServeHTTP_StreamDetection(t *testing.T) {
 			}
 			proxy, err := NewProxy(cfg)
 			if err != nil {
-				t.Fatalf("NewProxy() error = %v", err)
+				t.Fatalf("NewProxy(config.PoolConfig{}) error = %v", err)
 			}
 			defer proxy.Close()
 

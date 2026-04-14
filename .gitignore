@@ -7,6 +7,7 @@ web/coverage/
 *.db-shm
 *.db-wal
 *.log
+*.pid
 *.exe
 *.out
 *.gz

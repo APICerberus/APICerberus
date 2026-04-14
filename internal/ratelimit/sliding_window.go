@@ -115,3 +115,22 @@ func (sw *SlidingWindow) nextResetAtLocked(state *slidingWindowState, now time.T
 	slotStart := time.Unix(0, oldest*sw.subWindow.Nanoseconds())
 	return slotStart.Add(sw.window).Add(sw.subWindow)
 }
+
+// PurgeStale removes keys whose counts map is empty (all slots expired).
+func (sw *SlidingWindow) PurgeStale(now time.Time) {
+	if sw == nil {
+		return
+	}
+	currentSlot := sw.slotID(now)
+	sw.buckets.Range(func(key, value any) bool {
+		state := value.(*slidingWindowState)
+		state.mu.Lock()
+		sw.pruneLocked(state, currentSlot)
+		empty := len(state.counts) == 0
+		state.mu.Unlock()
+		if empty {
+			sw.buckets.Delete(key)
+		}
+		return true
+	})
+}

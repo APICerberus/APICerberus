@@ -84,3 +84,20 @@ func (fw *FixedWindow) ensureWindow(state *fixedWindowState, currentWindowID int
 	state.windowID.Store(currentWindowID)
 	state.count.Store(0)
 }
+
+// PurgeStale removes keys whose window has expired before the current time.
+func (fw *FixedWindow) PurgeStale(now time.Time) {
+	if fw == nil {
+		return
+	}
+	currentWindow := fw.windowID(now)
+	fw.windows.Range(func(key, value any) bool {
+		state := value.(*fixedWindowState)
+		wid := state.windowID.Load()
+		// If the stored window is more than 2 windows behind, it's stale.
+		if wid > 0 && wid < currentWindow-2 {
+			fw.windows.Delete(key)
+		}
+		return true
+	})
+}

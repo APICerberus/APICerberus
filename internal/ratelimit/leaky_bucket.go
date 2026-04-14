@@ -91,3 +91,20 @@ func (lb *LeakyBucket) nextReset(now time.Time, queue float64) time.Time {
 	seconds := queue / lb.leakRate
 	return now.Add(time.Duration(seconds * float64(time.Second)))
 }
+
+// PurgeStale removes keys whose bucket was last updated before cutoff.
+func (lb *LeakyBucket) PurgeStale(cutoff time.Time) {
+	if lb == nil {
+		return
+	}
+	lb.buckets.Range(func(key, value any) bool {
+		state := value.(*leakyBucketState)
+		state.mu.Lock()
+		stale := state.updatedAt.Before(cutoff)
+		state.mu.Unlock()
+		if stale {
+			lb.buckets.Delete(key)
+		}
+		return true
+	})
+}

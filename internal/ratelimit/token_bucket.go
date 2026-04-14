@@ -102,3 +102,20 @@ func (tb *TokenBucket) nextRefillAt(tokens float64, now time.Time) time.Time {
 	}
 	return now.Add(time.Duration(seconds * float64(time.Second)))
 }
+
+// PurgeStale removes keys whose bucket was last accessed before cutoff.
+func (tb *TokenBucket) PurgeStale(cutoff time.Time) {
+	if tb == nil {
+		return
+	}
+	tb.buckets.Range(func(key, value any) bool {
+		state := value.(*tokenBucketState)
+		state.mu.Lock()
+		stale := state.last.Before(cutoff)
+		state.mu.Unlock()
+		if stale {
+			tb.buckets.Delete(key)
+		}
+		return true
+	})
+}

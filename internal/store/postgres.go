@@ -55,6 +55,26 @@ func (p *PostgresDB) Underlying() *sql.DB {
 	return p.db
 }
 
+// Query executes a query that returns rows (non-context-aware).
+func (p *PostgresDB) Query(query string, args ...any) (*sql.Rows, error) {
+	return p.db.Query(query, args...)
+}
+
+// QueryRow executes a query that returns at most one row (non-context-aware).
+func (p *PostgresDB) QueryRow(query string, args ...any) *sql.Row {
+	return p.db.QueryRow(query, args...)
+}
+
+// Exec executes a query that doesn't return rows (non-context-aware).
+func (p *PostgresDB) Exec(query string, args ...any) (sql.Result, error) {
+	return p.db.Exec(query, args...)
+}
+
+// Begin starts a new transaction (non-context-aware).
+func (p *PostgresDB) Begin() (*sql.Tx, error) {
+	return p.db.Begin()
+}
+
 // PostgresConfig holds PostgreSQL connection configuration.
 type PostgresConfig struct {
 	Host     string

@@ -27,7 +27,7 @@ type Session struct {
 }
 
 type SessionRepo struct {
-	db  *sql.DB
+	db  DB
 	now func() time.Time
 }
 

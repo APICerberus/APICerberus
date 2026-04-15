@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -14,8 +15,9 @@ import (
 const sqliteDriverName = "apicerberus-sqlite"
 
 type Store struct {
-	db  *sql.DB
-	cfg config.StoreConfig
+	db       DB
+	cfg      config.StoreConfig
+	closeFn  func() error // optional close function (e.g., for SQLite *sql.DB close)
 }
 
 var migrationsList = []migrations.Migration{
@@ -238,34 +240,64 @@ func Open(cfg *config.Config) (*Store, error) {
 		return nil, err
 	}
 
-	registerDriver()
+	var db DB
+	var dbCloseFn func() error
+	var sqliteDB *SQLiteDB
 
-	db, err := sql.Open(sqliteDriverName, effective.Path)
-	if err != nil {
-		return nil, fmt.Errorf("open sqlite db: %w", err)
+	driver := strings.ToLower(strings.TrimSpace(effective.Driver))
+	if driver == "postgres" {
+		pgCfg := PostgresConfig{
+			Host:     effective.Postgres.Host,
+			Port:     effective.Postgres.Port,
+			User:     effective.Postgres.User,
+			Password: effective.Postgres.Password,
+			Database: effective.Postgres.Database,
+			SSLMode:  effective.Postgres.SSLMode,
+			MaxConns: effective.Postgres.MaxConns,
+		}
+		pgDB, err := OpenPostgres(context.Background(), pgCfg)
+		if err != nil {
+			return nil, fmt.Errorf("open postgres: %w", err)
+		}
+		db = pgDB
+		dbCloseFn = pgDB.Close
+	} else {
+		// Default to SQLite
+		registerDriver()
+		sqlDB, err := sql.Open(sqliteDriverName, effective.Path)
+		if err != nil {
+			return nil, fmt.Errorf("open sqlite db: %w", err)
+		}
+		maxOpenConns := effective.MaxOpenConns
+		if maxOpenConns <= 0 {
+			maxOpenConns = 25
+		}
+		if strings.TrimSpace(effective.Path) == ":memory:" {
+			maxOpenConns = 1
+		}
+		sqlDB.SetMaxOpenConns(maxOpenConns)
+		sqlDB.SetMaxIdleConns(maxOpenConns)
+		sqlDB.SetConnMaxLifetime(0)
+
+		sqliteDB = NewSQLiteDB(sqlDB)
+		db = sqliteDB
+		dbCloseFn = sqlDB.Close
 	}
-	maxOpenConns := effective.MaxOpenConns
-	if maxOpenConns <= 0 {
-		maxOpenConns = 25
-	}
-	// In-memory SQLite databases are per-connection; force a single
-	// connection so schema and data are visible across the pool.
-	if strings.TrimSpace(effective.Path) == ":memory:" {
-		maxOpenConns = 1
-	}
-	db.SetMaxOpenConns(maxOpenConns)
-	db.SetMaxIdleConns(maxOpenConns)
-	db.SetConnMaxLifetime(0)
 
 	s := &Store{
 		db:  db,
 		cfg: effective,
+		closeFn: dbCloseFn,
 	}
 
-	if err := s.applyPragmas(); err != nil {
-		_ = db.Close()
-		return nil, err
+	// Apply SQLite pragmas after store is created but before migrations
+	if sqliteDB != nil {
+		if err := s.applyPragmas(sqliteDB.Underlying()); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
 	}
+
 	if err := s.migrate(); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -279,24 +311,30 @@ func Open(cfg *config.Config) (*Store, error) {
 }
 
 func (s *Store) DB() *sql.DB {
-	if s == nil {
-		return nil
-	}
-	return s.db
-}
-
-func (s *Store) Close() error {
 	if s == nil || s.db == nil {
 		return nil
 	}
-	return s.db.Close()
+	return s.db.Underlying()
+}
+
+func (s *Store) Close() error {
+	if s == nil {
+		return nil
+	}
+	if s.closeFn != nil {
+		return s.closeFn()
+	}
+	if s.db != nil {
+		return s.db.Close()
+	}
+	return nil
 }
 
 func (s *Store) migrate() error {
 	if s == nil || s.db == nil {
 		return errors.New("store is not initialized")
 	}
-	return migrations.Migrate(s.db, migrationsList)
+	return migrations.Migrate(s.db.Underlying(), migrationsList)
 }
 
 // MigrationStatus returns applied and pending migrations.
@@ -304,12 +342,12 @@ func (s *Store) MigrationStatus() ([]migrations.Migration, []migrations.Migratio
 	if s == nil || s.db == nil {
 		return nil, nil, errors.New("store is not initialized")
 	}
-	return migrations.Status(s.db, migrationsList)
+	return migrations.Status(s.db.Underlying(), migrationsList)
 }
 
-func (s *Store) applyPragmas() error {
-	if s == nil || s.db == nil {
-		return errors.New("store is not initialized")
+func (s *Store) applyPragmas(db *sql.DB) error {
+	if db == nil {
+		return errors.New("db is nil")
 	}
 
 	journalMode := strings.ToUpper(strings.TrimSpace(s.cfg.JournalMode))
@@ -356,12 +394,12 @@ func (s *Store) applyPragmas() error {
 	}
 
 	for _, p := range pragmas {
-		if _, err := s.db.Exec(p); err != nil {
+		if _, err := db.Exec(p); err != nil {
 			return fmt.Errorf("apply pragma %q: %w", p, err)
 		}
 	}
 
-	if err := s.db.Ping(); err != nil {
+	if err := db.Ping(); err != nil {
 		return fmt.Errorf("ping sqlite db: %w", err)
 	}
 	return nil

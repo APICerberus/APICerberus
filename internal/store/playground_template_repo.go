@@ -25,7 +25,7 @@ type PlaygroundTemplate struct {
 }
 
 type PlaygroundTemplateRepo struct {
-	db  *sql.DB
+	db  DB
 	now func() time.Time
 }
 

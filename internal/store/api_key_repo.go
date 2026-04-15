@@ -36,7 +36,7 @@ type APIKey struct {
 }
 
 type APIKeyRepo struct {
-	db  *sql.DB
+	db  DB
 	now func() time.Time
 }
 

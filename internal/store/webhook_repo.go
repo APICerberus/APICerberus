@@ -47,7 +47,7 @@ type WebhookDelivery struct {
 
 // WebhookRepo provides webhook persistence
 type WebhookRepo struct {
-	db  *sql.DB
+	db  DB
 	now func() time.Time
 }
 

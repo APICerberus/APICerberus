@@ -36,6 +36,26 @@ func (s *SQLiteDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, e
 	return s.db.BeginTx(ctx, opts)
 }
 
+// Query executes a query that returns rows (non-context-aware).
+func (s *SQLiteDB) Query(query string, args ...any) (*sql.Rows, error) {
+	return s.db.Query(query, args...)
+}
+
+// QueryRow executes a query that returns at most one row (non-context-aware).
+func (s *SQLiteDB) QueryRow(query string, args ...any) *sql.Row {
+	return s.db.QueryRow(query, args...)
+}
+
+// Exec executes a query that doesn't return rows (non-context-aware).
+func (s *SQLiteDB) Exec(query string, args ...any) (sql.Result, error) {
+	return s.db.Exec(query, args...)
+}
+
+// Begin starts a new transaction (non-context-aware).
+func (s *SQLiteDB) Begin() (*sql.Tx, error) {
+	return s.db.Begin()
+}
+
 // PingContext checks if the database is reachable.
 func (s *SQLiteDB) PingContext(ctx context.Context) error {
 	return s.db.PingContext(ctx)

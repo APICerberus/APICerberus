@@ -47,7 +47,7 @@ type UserListResult struct {
 }
 
 type UserRepo struct {
-	db  *sql.DB
+	db  DB
 	now func() time.Time
 }
 

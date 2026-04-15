@@ -9,12 +9,22 @@ import (
 // DB is the database interface used by all repositories.
 // It abstracts away the underlying DB driver (SQLite or PostgreSQL).
 type DB interface {
+	// Context-aware methods (preferred)
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
 	PingContext(ctx context.Context) error
 	Close() error
+
+	// Non-context methods for backwards compatibility
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
+	Exec(query string, args ...any) (sql.Result, error)
+	Begin() (*sql.Tx, error)
+
+	// Access underlying *sql.DB
+	Underlying() *sql.DB
 }
 
 // Tx is a transaction interface for repository methods that need transactions.

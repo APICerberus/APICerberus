@@ -30,7 +30,7 @@ type EndpointPermission struct {
 }
 
 type PermissionRepo struct {
-	db  *sql.DB
+	db  DB
 	now func() time.Time
 }
 

@@ -13,7 +13,7 @@ func (r *AuditRepo) Search(filters AuditSearchFilters) (*AuditListResult, error)
 		return nil, errors.New("audit repo is not initialized")
 	}
 
-	whereSQL, args := buildAuditWhere(filters)
+	whereSQL, args := buildAuditWhere(r.db.Dialect(), filters)
 
 	countSQL := "SELECT COUNT(*) FROM audit_logs" + whereSQL
 	var total int
@@ -45,7 +45,7 @@ func (r *AuditRepo) Stats(filters AuditSearchFilters) (*AuditStats, error) {
 		return nil, errors.New("audit repo is not initialized")
 	}
 
-	whereSQL, args := buildAuditWhere(filters)
+	whereSQL, args := buildAuditWhere(r.db.Dialect(), filters)
 	stats := &AuditStats{
 		TopRoutes: []AuditRouteStat{},
 		TopUsers:  []AuditUserStat{},
@@ -113,7 +113,7 @@ func (r *AuditRepo) Stats(filters AuditSearchFilters) (*AuditStats, error) {
 
 // --- SQL helpers ---
 
-func buildAuditWhere(filters AuditSearchFilters) (string, []any) {
+func buildAuditWhere(dialect string, filters AuditSearchFilters) (string, []any) {
 	where := make([]string, 0, 12)
 	args := make([]any, 0, 18)
 
@@ -170,11 +170,17 @@ func buildAuditWhere(filters AuditSearchFilters) (string, []any) {
 		args = append(args, filters.MinLatencyMS)
 	}
 	if value := strings.TrimSpace(filters.FullText); value != "" {
-		// Use FTS5 for full-text search when available (migration v7+).
-		// Fall back to LIKE if FTS5 table doesn't exist.
-		ftsQuery := sanitizeFTS5Query(value)
-		where = append(where, "audit_logs.rowid IN (SELECT rowid FROM audit_logs_fts WHERE audit_logs_fts MATCH ?)")
-		args = append(args, ftsQuery)
+		if dialect == "postgres" {
+			// PostgreSQL uses tsvector for full-text search
+			where = append(where, "to_tsvector('english', path || ' ' || request_body || ' ' || response_body) @@ plainto_tsquery('english', ?)")
+			args = append(args, value)
+		} else {
+			// SQLite uses FTS5 for full-text search (migration v7+).
+			// Fall back to LIKE if FTS5 table doesn't exist.
+			ftsQuery := sanitizeFTS5Query(value)
+			where = append(where, "audit_logs.rowid IN (SELECT rowid FROM audit_logs_fts WHERE audit_logs_fts MATCH ?)")
+			args = append(args, ftsQuery)
+		}
 	}
 
 	if len(where) == 0 {

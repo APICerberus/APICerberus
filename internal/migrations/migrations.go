@@ -14,10 +14,15 @@ type Migration struct {
 	Version    int
 	Name       string
 	Statements []string
+	// Dialect is optional; if set, only applies to that dialect ("sqlite" or "postgres")
+	Dialect string
 }
 
 // Migrate applies all pending migrations in order.
-func Migrate(db *sql.DB, migrations []Migration) error {
+func Migrate(db *sql.DB, migrations []Migration, dialect string) error {
+	if dialect == "" {
+		dialect = "sqlite"
+	}
 	if _, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version INTEGER PRIMARY KEY,
@@ -29,6 +34,11 @@ func Migrate(db *sql.DB, migrations []Migration) error {
 	}
 
 	for _, m := range migrations {
+		// Skip migrations that don't match the current dialect
+		if m.Dialect != "" && m.Dialect != dialect {
+			continue
+		}
+
 		applied, err := isApplied(db, m.Version)
 		if err != nil {
 			return err
@@ -69,7 +79,10 @@ func Migrate(db *sql.DB, migrations []Migration) error {
 }
 
 // Status returns applied and pending migrations.
-func Status(db *sql.DB, migrations []Migration) (applied, pending []Migration, err error) {
+func Status(db *sql.DB, migrations []Migration, dialect string) (applied, pending []Migration, err error) {
+	if dialect == "" {
+		dialect = "sqlite"
+	}
 	if _, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version INTEGER PRIMARY KEY,
@@ -81,6 +94,10 @@ func Status(db *sql.DB, migrations []Migration) (applied, pending []Migration, e
 	}
 
 	for _, m := range migrations {
+		// Skip migrations that don't match the current dialect
+		if m.Dialect != "" && m.Dialect != dialect {
+			continue
+		}
 		ok, serr := isApplied(db, m.Version)
 		if serr != nil {
 			return nil, nil, serr

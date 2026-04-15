@@ -168,15 +168,30 @@ func (r *WebhookRepo) ListWebhooksByEvent(eventType string) ([]*Webhook, error) 
 		return nil, errors.New("webhook repo is not initialized")
 	}
 
-	rows, err := r.db.Query(`
+	var query string
+	if r.db.Dialect() == "postgres" {
+		// PostgreSQL uses json_array_elements for unnesting JSON arrays
+		query = `
+		SELECT w.id, w.name, w.url, w.secret, w.events, w.headers, w.active, w.retry_count, w.retry_interval, w.timeout, w.created_at, w.updated_at, w.last_triggered
+		FROM webhooks w
+		WHERE w.active = 1
+		  AND (
+		    EXISTS (SELECT 1 FROM json_array_elements(w.events) AS elem WHERE elem = $1)
+		    OR EXISTS (SELECT 1 FROM json_array_elements(w.events) AS elem WHERE elem = '*')
+		  )`
+	} else {
+		// SQLite uses json_each
+		query = `
 		SELECT w.id, w.name, w.url, w.secret, w.events, w.headers, w.active, w.retry_count, w.retry_interval, w.timeout, w.created_at, w.updated_at, w.last_triggered
 		FROM webhooks w
 		WHERE w.active = 1
 		  AND (
 		    EXISTS (SELECT 1 FROM json_each(w.events) WHERE json_each.value = ?)
 		    OR EXISTS (SELECT 1 FROM json_each(w.events) WHERE json_each.value = '*')
-		  )
-	`, eventType)
+		  )`
+	}
+
+	rows, err := r.db.Query(query, eventType)
 	if err != nil {
 		return nil, err
 	}

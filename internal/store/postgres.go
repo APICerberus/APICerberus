@@ -75,6 +75,11 @@ func (p *PostgresDB) Begin() (*sql.Tx, error) {
 	return p.db.Begin()
 }
 
+// Dialect returns "postgres" for PostgreSQL driver identification.
+func (p *PostgresDB) Dialect() string {
+	return "postgres"
+}
+
 // PostgresConfig holds PostgreSQL connection configuration.
 type PostgresConfig struct {
 	Host     string

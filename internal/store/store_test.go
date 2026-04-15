@@ -83,8 +83,15 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	if err := s2.DB().QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&count); err != nil {
 		t.Fatalf("count schema_migrations rows: %v", err)
 	}
-	if count != len(migrationsList) {
-		t.Fatalf("expected %d applied migrations got %d", len(migrationsList), count)
+	// Count only SQLite migrations (no dialect or dialect == "sqlite")
+	sqliteMigrations := 0
+	for _, m := range migrationsList {
+		if m.Dialect == "" || m.Dialect == "sqlite" {
+			sqliteMigrations++
+		}
+	}
+	if count != sqliteMigrations {
+		t.Fatalf("expected %d SQLite applied migrations got %d", sqliteMigrations, count)
 	}
 }
 

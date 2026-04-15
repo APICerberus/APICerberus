@@ -2159,7 +2159,7 @@ func TestDecodeAuditFields_InvalidJSON(t *testing.T) {
 // Test buildAuditWhere with various filters
 func TestBuildAuditWhere(t *testing.T) {
 	// Test empty filters
-	where, args := buildAuditWhere(AuditSearchFilters{})
+	where, args := buildAuditWhere("sqlite", AuditSearchFilters{})
 	if where != "" {
 		t.Errorf("buildAuditWhere with empty filters should return empty where, got: %s", where)
 	}
@@ -2171,7 +2171,7 @@ func TestBuildAuditWhere(t *testing.T) {
 	blocked := true
 	dateFrom := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	dateTo := time.Date(2024, 12, 31, 0, 0, 0, 0, time.UTC)
-	where, args = buildAuditWhere(AuditSearchFilters{
+	where, args = buildAuditWhere("sqlite", AuditSearchFilters{
 		UserID:       "user123",
 		APIKeyPrefix: "ck_live",
 		Route:        "api/users",

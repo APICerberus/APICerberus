@@ -31,7 +31,7 @@ func (r *AuditRepo) Export(filters AuditSearchFilters, format string, w io.Write
 		return errors.New("unsupported export format")
 	}
 
-	whereSQL, args := buildAuditWhere(filters)
+	whereSQL, args := buildAuditWhere(r.db.Dialect(), filters)
 	query := auditSelectColumns + whereSQL + ` ORDER BY created_at DESC`
 	if limit := normalizeAuditExportLimit(filters.Limit); limit > 0 {
 		query += ` LIMIT ?`

@@ -215,6 +215,7 @@ var migrationsList = []migrations.Migration{
 	{
 		Version: 7,
 		Name:    "audit_fts5",
+		Dialect: "sqlite", // FTS5 is SQLite-only; PostgreSQL uses tsvector
 		Statements: []string{
 			`CREATE VIRTUAL TABLE IF NOT EXISTS audit_logs_fts USING fts5(path, request_body, response_body, content=audit_logs, content_rowid=rowid)`,
 			// Triggers to keep FTS5 in sync with audit_logs
@@ -230,6 +231,34 @@ var migrationsList = []migrations.Migration{
 			END`,
 			// Rebuild FTS5 index from existing audit_logs data
 			`INSERT INTO audit_logs_fts(audit_logs_fts) VALUES('rebuild')`,
+		},
+	},
+	{
+		Version: 8,
+		Name:    "audit_tsvector",
+		Dialect: "postgres", // PostgreSQL uses tsvector instead of FTS5
+		Statements: []string{
+			// Add tsvector column for full-text search
+			`ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS search_vector tsvector`,
+			// Create GIN index on tsvector column for fast full-text search
+			`CREATE INDEX IF NOT EXISTS idx_audit_logs_search_vector ON audit_logs USING GIN(search_vector)`,
+			// Function to update search_vector on insert/update
+			`CREATE OR REPLACE FUNCTION update_audit_search_vector() RETURNS TRIGGER AS $$
+			BEGIN
+				NEW.search_vector := to_tsvector('english', COALESCE(NEW.path, '') || ' ' || COALESCE(NEW.request_body, '') || ' ' || COALESCE(NEW.response_body, ''));
+				RETURN NEW;
+			END;
+			$$ LANGUAGE plpgsql`,
+			// Trigger to automatically update search_vector on insert
+			`CREATE TRIGGER IF NOT EXISTS audit_search_vector_insert
+				BEFORE INSERT ON audit_logs
+				FOR EACH ROW EXECUTE FUNCTION update_audit_search_vector()`,
+			// Trigger to automatically update search_vector on update
+			`CREATE TRIGGER IF NOT EXISTS audit_search_vector_update
+				BEFORE UPDATE ON audit_logs
+				FOR EACH ROW EXECUTE FUNCTION update_audit_search_vector()`,
+			// Backfill existing rows
+			`UPDATE audit_logs SET search_vector = to_tsvector('english', COALESCE(path, '') || ' ' || COALESCE(request_body, '') || ' ' || COALESCE(response_body, '')) WHERE search_vector IS NULL`,
 		},
 	},
 }
@@ -334,7 +363,7 @@ func (s *Store) migrate() error {
 	if s == nil || s.db == nil {
 		return errors.New("store is not initialized")
 	}
-	return migrations.Migrate(s.db.Underlying(), migrationsList)
+	return migrations.Migrate(s.db.Underlying(), migrationsList, s.db.Dialect())
 }
 
 // MigrationStatus returns applied and pending migrations.
@@ -342,7 +371,7 @@ func (s *Store) MigrationStatus() ([]migrations.Migration, []migrations.Migratio
 	if s == nil || s.db == nil {
 		return nil, nil, errors.New("store is not initialized")
 	}
-	return migrations.Status(s.db.Underlying(), migrationsList)
+	return migrations.Status(s.db.Underlying(), migrationsList, s.db.Dialect())
 }
 
 func (s *Store) applyPragmas(db *sql.DB) error {

@@ -71,6 +71,11 @@ func (s *SQLiteDB) Underlying() *sql.DB {
 	return s.db
 }
 
+// Dialect returns "sqlite" for SQLite driver identification.
+func (s *SQLiteDB) Dialect() string {
+	return "sqlite"
+}
+
 // SQLiteTx wraps sql.Tx to implement the Tx interface.
 type SQLiteTx struct {
 	tx *sql.Tx

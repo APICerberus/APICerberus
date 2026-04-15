@@ -23,6 +23,9 @@ type DB interface {
 	Exec(query string, args ...any) (sql.Result, error)
 	Begin() (*sql.Tx, error)
 
+	// Driver identification for dialect-specific SQL
+	Dialect() string // "sqlite" or "postgres"
+
 	// Access underlying *sql.DB
 	Underlying() *sql.DB
 }

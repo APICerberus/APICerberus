@@ -10,8 +10,8 @@ gateway:
 
 admin:
   addr: ":9876"
-  api_key: "test-admin-key-32chars-minimum!!"
-  token_secret: "test-token-secret-32chars-minimum!!"
+  api_key: "${ADMIN_API_KEY}"
+  token_secret: "${TOKEN_SECRET}"
   ui_enabled: true
 
 portal:

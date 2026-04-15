@@ -146,6 +146,11 @@ type GatewayConfig struct {
 	HTMLErrors           bool          `yaml:"html_errors" json:"html_errors"`                       // Global HTML error page toggle
 	DenyPrivateUpstreams bool          `yaml:"deny_private_upstreams" json:"deny_private_upstreams"` // Reject private/loopback upstream IPs in production
 	ConnectionPool       PoolConfig    `yaml:"connection_pool" json:"connection_pool"`
+	// AllowedHealthIPs restricts access to /ready and /health/audit-drops endpoints.
+	// If set, only these IPs/CIDRs can access sensitive health endpoints that expose
+	// internal state (DB connectivity, audit buffer metrics). Empty means unrestricted.
+	// /health (status + uptime only) remains fully open regardless of this setting.
+	AllowedHealthIPs []string `yaml:"allowed_health_ips" json:"allowed_health_ips"`
 }
 
 // PoolConfig controls the HTTP connection pool for upstream proxying.

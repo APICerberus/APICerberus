@@ -40,6 +40,12 @@ gateway:
     - "172.16.0.0/12"    # Private network
     - "192.168.0.0/16"   # Private network
     # - "203.0.113.10"   # Specific load balancer IP
+  # Restricts access to /ready and /health/audit-drops endpoints.
+  # When empty, internal details (DB connectivity, audit buffer) are exposed to all.
+  # Configure to kubelet/node networks in Kubernetes deployments.
+  # /health (status + uptime) remains fully open regardless of this setting.
+  # allowed_health_ips:
+  #   - "10.0.0.0/8"     # Kubernetes node network
 
 admin:
   addr: ":9876"

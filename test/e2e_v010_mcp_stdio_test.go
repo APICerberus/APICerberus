@@ -3,6 +3,8 @@ package test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"os"
@@ -103,12 +105,16 @@ func TestE2EMCPStdioInitializeAndToolsList(t *testing.T) {
 func writeMCPTestConfig(t *testing.T) string {
 	t.Helper()
 
+	// Generate cryptographically random secrets for this test run.
+	apiKey := generateRandomSecret(32)
+	tokenSecret := generateRandomSecret(48)
+
 	content := `
 gateway:
   http_addr: "127.0.0.1:0"
 admin:
-  api_key: "Xk9#mP$vL2@nQ8*wR5&tZ3(cY7)jF4!hK6_gH1~uE0-iO9=pA2|sD5>lN8<bM3"
-  token_secret: "secret-admin-token-secret-at-least-32-chars-long"
+  api_key: "` + apiKey + `"
+  token_secret: "` + tokenSecret + `"
 services:
   - name: "svc-mcp"
     upstream: "up-mcp"
@@ -127,4 +133,14 @@ upstreams:
 		t.Fatalf("write test config: %v", err)
 	}
 	return path
+}
+
+// generateRandomSecret generates a cryptographically random secret of the given byte length,
+// encoded as a URL-safe base64 string (using only alphanumeric characters for config safety).
+func generateRandomSecret(byteLen int) string {
+	b := make([]byte, byteLen)
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand unavailable: " + err.Error())
+	}
+	return base64.URLEncoding.EncodeToString(b)[:byteLen]
 }

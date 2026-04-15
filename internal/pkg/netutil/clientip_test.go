@@ -280,3 +280,77 @@ func TestExtractClientIP_IPv6CIDR(t *testing.T) {
 		t.Errorf("ExtractClientIP() = %q, want %q", got, "2001:db8::1")
 	}
 }
+
+// --- IsAllowedIP tests ---
+
+func TestIsAllowedIP_EmptyList(t *testing.T) {
+	if !IsAllowedIP("1.2.3.4", nil) {
+		t.Error("expected true for nil slice")
+	}
+	if !IsAllowedIP("1.2.3.4", []string{}) {
+		t.Error("expected true for empty slice")
+	}
+}
+
+func TestIsAllowedIP_ExactMatch(t *testing.T) {
+	if !IsAllowedIP("10.0.0.1", []string{"10.0.0.1"}) {
+		t.Error("expected true for exact match")
+	}
+	if IsAllowedIP("10.0.0.2", []string{"10.0.0.1"}) {
+		t.Error("expected false for non-match")
+	}
+}
+
+func TestIsAllowedIP_CIDRMatch(t *testing.T) {
+	if !IsAllowedIP("10.1.2.3", []string{"10.0.0.0/8"}) {
+		t.Error("expected true for CIDR match")
+	}
+	if IsAllowedIP("192.168.1.1", []string{"10.0.0.0/8"}) {
+		t.Error("expected false for CIDR non-match")
+	}
+}
+
+func TestIsAllowedIP_InvalidIP(t *testing.T) {
+	if IsAllowedIP("not-an-ip", []string{"10.0.0.0/8"}) {
+		t.Error("expected false for invalid IP")
+	}
+	if IsAllowedIP("", []string{"10.0.0.1"}) {
+		t.Error("expected false for empty IP")
+	}
+}
+
+func TestIsAllowedIP_InvalidCIDR(t *testing.T) {
+	// Invalid CIDR should be skipped; valid IP should still match
+	if !IsAllowedIP("10.0.0.1", []string{"invalid", "10.0.0.1"}) {
+		t.Error("expected true for valid IP even with invalid CIDR in list")
+	}
+}
+
+func TestIsAllowedIP_MultipleRules(t *testing.T) {
+	rules := []string{"10.0.0.0/8", "192.168.1.0/24", "172.16.0.1"}
+	if !IsAllowedIP("10.5.5.5", rules) {
+		t.Error("expected true for 10.x.x.x")
+	}
+	if !IsAllowedIP("192.168.1.100", rules) {
+		t.Error("expected true for 192.168.1.x")
+	}
+	if !IsAllowedIP("172.16.0.1", rules) {
+		t.Error("expected true for exact match 172.16.0.1")
+	}
+	if IsAllowedIP("8.8.8.8", rules) {
+		t.Error("expected false for non-matching IP")
+	}
+}
+
+func TestIsAllowedIP_EmptyRuleInList(t *testing.T) {
+	// Empty rules should be skipped
+	if !IsAllowedIP("10.0.0.1", []string{"", "10.0.0.1"}) {
+		t.Error("expected true with empty rule in list")
+	}
+}
+
+func TestIsAllowedIP_Whitespace(t *testing.T) {
+	if !IsAllowedIP("10.0.0.1", []string{"  10.0.0.1  "}) {
+		t.Error("expected true with whitespace in rule")
+	}
+}

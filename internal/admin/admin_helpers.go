@@ -333,29 +333,7 @@ func (s *Server) cleanupOldRateLimitEntries() {
 }
 
 // isAllowedIP checks whether clientIP matches any entry in allowedIPs (supports CIDR).
+// Delegates to netutil.IsAllowedIP for consistent IP allow-list logic.
 func isAllowedIP(clientIP string, allowedIPs []string) bool {
-	if len(allowedIPs) == 0 {
-		return true
-	}
-	ip := net.ParseIP(clientIP)
-	if ip == nil {
-		return false
-	}
-	for _, rule := range allowedIPs {
-		rule = strings.TrimSpace(rule)
-		if rule == "" {
-			continue
-		}
-		if strings.Contains(rule, "/") {
-			_, network, err := net.ParseCIDR(rule)
-			if err == nil && network.Contains(ip) {
-				return true
-			}
-			continue
-		}
-		if net.ParseIP(rule).Equal(ip) {
-			return true
-		}
-	}
-	return false
+	return netutil.IsAllowedIP(clientIP, allowedIPs)
 }

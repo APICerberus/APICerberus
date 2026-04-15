@@ -126,8 +126,10 @@ func (t *RequestTransform) Apply(in *PipelineContext) error {
 		req.URL.RawPath = t.path
 	}
 
-	// Body transforms are loaded into t.bodyHooks but not yet applied.
-	// TODO: implement JSON body read/rewrite in POST body phase.
+	// Body transforms (bodyHooks) are loaded but not yet applied.
+	// The config is parsed and stored, but actual JSON body read/rewrite
+	// in the POST body phase is not yet implemented. This is a known
+	// limitation — body hooks in request transforms are accepted but ignored.
 	_ = t.bodyHooks
 
 	in.Request = req

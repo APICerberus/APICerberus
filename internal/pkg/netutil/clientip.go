@@ -74,6 +74,36 @@ func RemoteAddrIP(remoteAddr string) string {
 	return strings.Trim(remoteAddr, "[]")
 }
 
+// IsAllowedIP checks whether clientIP matches any entry in allowedIPs.
+// Supports both individual IPs ("10.0.0.1") and CIDR ranges ("10.0.0.0/8").
+// Returns true when allowedIPs is empty (no restriction).
+func IsAllowedIP(clientIP string, allowedIPs []string) bool {
+	if len(allowedIPs) == 0 {
+		return true
+	}
+	ip := net.ParseIP(clientIP)
+	if ip == nil {
+		return false
+	}
+	for _, rule := range allowedIPs {
+		rule = strings.TrimSpace(rule)
+		if rule == "" {
+			continue
+		}
+		if strings.Contains(rule, "/") {
+			_, network, err := net.ParseCIDR(rule)
+			if err == nil && network.Contains(ip) {
+				return true
+			}
+			continue
+		}
+		if net.ParseIP(rule).Equal(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 // ExtractClientIP extracts the real client IP from the request.
 //
 // When trusted_proxies is configured:

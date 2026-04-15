@@ -990,22 +990,35 @@ func (g *Gateway) handleHealth(w http.ResponseWriter, r *http.Request) bool {
 	case "/ready":
 		// Gateway is ready when it has been started and all subsystems initialized.
 		// We check that the store is accessible (ping SQLite) and the health checker is running.
+		//
+		// F-001 FIX: If allowed_health_ips is configured, only reveal internal state
+		// (DB connectivity, health checker status) to authorized IPs. All clients
+		// still get the readiness boolean, but reasons are restricted to allow-listed IPs.
 		var ready = true
 		var reasons []string
 		g.mu.RLock()
 		st := g.store
 		checker := g.health
+		allowedHealthIPs := g.config.Gateway.AllowedHealthIPs
 		g.mu.RUnlock()
+
+		clientIP := netutil.ExtractClientIP(r)
+		ipAllowed := len(allowedHealthIPs) == 0 || netutil.IsAllowedIP(clientIP, allowedHealthIPs)
 
 		if st != nil {
 			if err := st.DB().Ping(); err != nil {
 				ready = false
-				reasons = append(reasons, "database: "+err.Error())
+				// Only disclose DB error details to authorized IPs
+				if ipAllowed {
+					reasons = append(reasons, "database: "+err.Error())
+				}
 			}
 		}
 		if checker == nil {
 			ready = false
-			reasons = append(reasons, "health checker: not initialized")
+			if ipAllowed {
+				reasons = append(reasons, "health checker: not initialized")
+			}
 		}
 
 		status := "ok"
@@ -1015,7 +1028,8 @@ func (g *Gateway) handleHealth(w http.ResponseWriter, r *http.Request) bool {
 			code = http.StatusServiceUnavailable
 		}
 		resp := map[string]any{"status": status}
-		if len(reasons) > 0 {
+		// Only reveal detailed reasons to allowed IPs; others see only status
+		if ipAllowed && len(reasons) > 0 {
 			resp["reasons"] = reasons
 		}
 		_ = jsonutil.WriteJSON(w, code, resp)
@@ -1023,16 +1037,18 @@ func (g *Gateway) handleHealth(w http.ResponseWriter, r *http.Request) bool {
 	case "/health/audit-drops":
 		g.mu.RLock()
 		logger := g.auditLogger
+		allowedHealthIPs := g.config.Gateway.AllowedHealthIPs
 		g.mu.RUnlock()
 
-		var dropped int64
-		if logger != nil {
-			dropped = logger.Dropped()
+		clientIP := netutil.ExtractClientIP(r)
+		ipAllowed := len(allowedHealthIPs) == 0 || netutil.IsAllowedIP(clientIP, allowedHealthIPs)
+
+		resp := map[string]any{"audit_enabled": logger != nil, "dropped_entries": int64(0)}
+		// Only disclose real dropped count to authorized IPs; others see 0
+		if ipAllowed && logger != nil {
+			resp["dropped_entries"] = logger.Dropped()
 		}
-		_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
-			"dropped_entries": dropped,
-			"audit_enabled":   logger != nil,
-		})
+		_ = jsonutil.WriteJSON(w, http.StatusOK, resp)
 		return true
 	case "/metrics":
 		metrics.DefaultRegistry.PrometheusHandler().ServeHTTP(w, r)

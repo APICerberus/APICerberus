@@ -119,6 +119,8 @@ func (s *Server) isWebSocketAuthorized(r *http.Request) bool {
 	cfg := s.cfg.Admin
 	s.mu.RUnlock()
 
+	clientIP := extractClientIP(r)
+
 	// Cookie-based auth (browser WebSocket sends cookies automatically)
 	if token := extractAdminTokenFromCookie(r); token != "" {
 		if err := verifyAdminToken(token, cfg.TokenSecret); err == nil {
@@ -153,7 +155,17 @@ func (s *Server) isWebSocketAuthorized(r *http.Request) bool {
 	if provided == "" {
 		provided = strings.TrimSpace(r.URL.Query().Get("api_key"))
 	}
-	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
+	// Apply rate limiting to the static key fallback to prevent brute-force attacks.
+	// The rate limit is per-IP and uses the same counters as withAdminStaticAuth.
+	if s.isRateLimited(clientIP) {
+		return false
+	}
+	if subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) != 1 {
+		s.recordFailedAuth(clientIP)
+		return false
+	}
+	s.clearFailedAuth(clientIP)
+	return true
 }
 
 // isValidWebSocketOrigin validates the Origin header to prevent CSWSH attacks.

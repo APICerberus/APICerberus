@@ -167,7 +167,7 @@
 - [x] **Plugin hot-reload** — Implemented in `internal/plugin/hotreload.go`. Atomic registry swap, config change detection, concurrent-safe access, watcher management. 12 tests.
 - [x] **API versioning** — Implemented in `internal/plugin/versioning.go`. Extracts `/v{N}/` from URL, injects `X-API-Version` header, supports version allowlist, default version fallback, prefix stripping, and deprecation notices (Sunset/Deprecation headers). 29 tests. Registered as "versioning" in plugin registry.
 - [x] **Request/response mocking** — Implemented in `internal/plugin/mock.go`. PhasePreProxy (priority 5), returns canned responses with configurable status, content-type, body, headers. 23 tests. Registered as "mock" in plugin registry.
-- [ ] **Admin API OpenAPI 3.1 generation** — Auto-generate OpenAPI spec from Go types.
+- [x] **Admin API OpenAPI 3.1 generation** — Auto-generate OpenAPI spec from Go types. Implemented in `internal/admin/openapi.go`. Produces valid OpenAPI 3.1 specs with all 87+ admin API paths, 21 tags, schemas, security schemes, servers, operationIds. 21 tests covering nil server, default version, paths, health no-auth, auth security, schemas, security schemes, tags, servers, operationIds, path parameters, response codes, valid JSON output, webhook delete with ID param. Uses `map[string]map[string]Operation` flat paths structure for correct JSON serialization with `json:"security"` (non-omitempty) to preserve empty security arrays.
 - [ ] **Documentation site** — `docs.apicerberus.com` structure defined in BRANDING.md but not built.
 
 ---

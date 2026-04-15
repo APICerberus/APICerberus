@@ -161,7 +161,7 @@
 ## Beyond v1.0: Future Enhancements
 
 - [x] **Brotli compression plugin** — Implemented in `internal/plugin/compression_brotli.go`. Quality levels 0-11, runs before gzip (priority 49). Registered as "brotli" in plugin registry.
-- [ ] **Full OIDC provider mode** — Currently OIDC client only. Add OIDC provider for third-party integration.
+- [x] **Full OIDC provider mode** — Implemented in `internal/admin/oidc_provider.go`. APICerbrus acts as an OIDC Authorization Server with: discovery endpoint (`/.well-known/openid-configuration`), JWKS endpoint (`/oidc/jwks`), authorization endpoint (`/oidc/authorize` with auth code flow), token endpoint (`/oidc/token` supporting authorization_code, client_credentials, refresh_token), userinfo endpoint (`/oidc/userinfo`), token revocation (`/oidc/revoke`), and token introspection (`/oidc/introspect`). Supports RSA 2048-bit key auto-generation, BCrypt client secrets, RS256/ES256 token signing. 26 tests covering all endpoints, client auth, grant types, error cases.
 - [ ] **Multi-database support** — Currently SQLite-only. Add PostgreSQL option for larger deployments.
 - [x] **GraphQL subscription SSE transport** — Implemented in `internal/graphql/subscription_sse.go`. Converts upstream WebSocket subscriptions to Server-Sent Events. Supports GET/POST queries, graphql-ws protocol relay, ping/pong handling, client disconnect detection. 22 tests. Detection via `Accept: text/event-stream` or `?transport=sse`.
 - [x] **Plugin hot-reload** — Implemented in `internal/plugin/hotreload.go`. Atomic registry swap, config change detection, concurrent-safe access, watcher management. 12 tests.

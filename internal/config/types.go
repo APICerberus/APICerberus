@@ -198,6 +198,30 @@ type OIDCConfig struct {
 	ClaimMapping  map[string]string `yaml:"claim_mapping" json:"claim_mapping"`
 	AutoProvision bool              `yaml:"auto_provision" json:"auto_provision"`
 	DefaultRole   string            `yaml:"default_role" json:"default_role"`
+	Provider      OIDCProviderConfig `yaml:"provider" json:"provider"`
+}
+
+// OIDCProviderConfig enables APICerberus to act as an OIDC Authorization Server.
+type OIDCProviderConfig struct {
+	Enabled          bool          `yaml:"enabled" json:"enabled"`
+	Issuer           string        `yaml:"issuer" json:"issuer"`
+	KeyType          string        `yaml:"key_type" json:"key_type"` // "rsa" or "ec"
+	KeyID            string        `yaml:"key_id" json:"key_id"`
+	RSAPrivateKeyFile string       `yaml:"rsa_private_key_file" json:"rsa_private_key_file"`
+	ECPrivateKeyFile  string       `yaml:"ec_private_key_file" json:"ec_private_key_file"`
+	AccessTokenTTL   time.Duration `yaml:"access_token_ttl" json:"access_token_ttl"`
+	IDTokenTTL       time.Duration `yaml:"id_token_ttl" json:"id_token_ttl"`
+	AuthCodeTTL      time.Duration `yaml:"auth_code_ttl" json:"auth_code_ttl"`
+	Clients          []OIDCClient  `yaml:"clients" json:"clients"`
+}
+
+// OIDCClient represents a registered OAuth2/OIDC client for the provider.
+type OIDCClient struct {
+	ClientID     string   `yaml:"client_id" json:"client_id"`
+	ClientSecret string   `yaml:"client_secret" json:"client_secret"` // bcrypt hash
+	RedirectURIs []string `yaml:"redirect_uris" json:"redirect_uris"`
+	Scopes       []string `yaml:"scopes" json:"scopes"`
+	GrantTypes   []string `yaml:"grant_types" json:"grant_types"`
 }
 
 type PortalConfig struct {

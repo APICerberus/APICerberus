@@ -42,6 +42,9 @@ type Server struct {
 	mux            *http.ServeMux
 	dashboardFS    fs.FS
 
+	// OIDC Provider (Authorization Server)
+	oidcProvider *OIDCProviderServer
+
 	startedAt time.Time
 
 	// Rate limiting for admin API authentication
@@ -53,6 +56,9 @@ type Server struct {
 	// Lifecycle
 	closeOnce sync.Once
 	closed    bool
+
+	// Shutdown channel for background goroutines
+	shutdownCh chan struct{}
 }
 
 type adminAuthAttempts struct {
@@ -80,6 +86,7 @@ func NewServer(cfg *config.Config, gw *gateway.Gateway) (*Server, error) {
 		startedAt:   time.Now(),
 		rlAttempts:  make(map[string]*adminAuthAttempts),
 		rlStopCh:    make(chan struct{}),
+		shutdownCh:  make(chan struct{}),
 	}
 	s.startRateLimitCleanup()
 	SetTrustedProxies(cfg.Gateway.TrustedProxies)
@@ -95,6 +102,9 @@ func NewServer(cfg *config.Config, gw *gateway.Gateway) (*Server, error) {
 			return nil, fmt.Errorf("load embedded dashboard assets: %w", err)
 		}
 		s.dashboardFS = dashboardFS
+	}
+	if err := s.initOIDCProviderServer(); err != nil {
+		return nil, fmt.Errorf("init OIDC provider: %w", err)
 	}
 	s.registerRoutes()
 	return s, nil
@@ -130,6 +140,16 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("POST /admin/api/v1/auth/sso/logout", s.withAdminBearerAuth(s.handleOIDCLogout))
 	s.mux.HandleFunc("GET /admin/api/v1/auth/sso/status", s.withAdminBearerAuth(s.handleOIDCStatus))
 	s.mux.HandleFunc("POST /admin/login", s.handleFormLogin)
+
+	// OIDC Provider endpoints (Authorization Server)
+	s.mux.HandleFunc("GET /.well-known/openid-configuration", s.handleOIDCDiscovery)
+	s.mux.HandleFunc("GET /oidc/jwks", s.handleOIDCJWKS)
+	s.mux.HandleFunc("GET /oidc/authorize", s.handleOIDCAuthorize)
+	s.mux.HandleFunc("POST /oidc/token", s.handleOIDCProviderToken)
+	s.mux.HandleFunc("GET /oidc/userinfo", s.handleOIDCUserInfo)
+	s.mux.HandleFunc("POST /oidc/revoke", s.handleOIDCRevoke)
+	s.mux.HandleFunc("POST /oidc/introspect", s.handleOIDCIntrospect)
+
 	s.mux.HandleFunc("POST /admin/logout", s.handleFormLogout)
 	s.handle("GET /admin/api/v1/status", s.handleStatus)
 	s.mux.HandleFunc("GET /admin/api/v1/info", s.withAdminBearerAuth(s.handleInfo))

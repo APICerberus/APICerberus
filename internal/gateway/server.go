@@ -1137,6 +1137,29 @@ func (g *Gateway) serveFederationBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// SEC-GQL-001: enforce API-key authentication when the gateway has any
+	// consumer configured. The batch endpoint is dispatched before the route
+	// pipeline runs, so without this guard an unauthenticated caller can
+	// amplify one HTTP request into up to maxBatchSize federated plans, each
+	// fanning out to every subgraph. Rate-limit, billing, and complexity
+	// analysis (GQL-002/003) are not yet wired here; they should be added
+	// before removing this auth guard.
+	g.mu.RLock()
+	authRequired := g.authRequired
+	authAPIKey := g.authAPIKey
+	g.mu.RUnlock()
+	if authRequired {
+		if authAPIKey == nil {
+			g.writeError(w, http.StatusInternalServerError, "auth_unavailable",
+				"Authentication module is unavailable")
+			return
+		}
+		if _, err := authAPIKey.Authenticate(r); err != nil {
+			g.writeAuthError(w, err)
+			return
+		}
+	}
+
 	var batch []batchGraphQLRequest
 	if err := jsonutil.ReadJSON(r, &batch, 1<<22); err != nil {
 		g.writeError(w, http.StatusBadRequest, "invalid_batch_request", err.Error())

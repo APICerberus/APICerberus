@@ -25,13 +25,15 @@ func runDB(args []string) error {
 
 func runDBMigrate(args []string) error {
 	if len(args) == 0 {
-		return errors.New("missing migrate subcommand (expected: status|apply)")
+		return errors.New("missing migrate subcommand (expected: status|apply|rollback)")
 	}
 	switch args[0] {
 	case "status":
 		return runDBMigrateStatus(args[1:])
 	case "apply":
 		return runDBMigrateApply(args[1:])
+	case "rollback":
+		return runDBMigrateRollback(args[1:])
 	default:
 		return fmt.Errorf("unknown migrate subcommand %q", args[0])
 	}
@@ -118,5 +120,53 @@ func runDBMigrateApply(args []string) error {
 	if len(pending) > 0 {
 		return errors.New("some migrations are still pending")
 	}
+	return nil
+}
+
+func runDBMigrateRollback(args []string) error {
+	fs := flag.NewFlagSet("db migrate rollback", flag.ContinueOnError)
+	cfgPath := fs.String("config", "apicerberus.yaml", "path to gateway config file")
+	version := fs.Int("version", 0, "specific migration version to rollback (0 = last)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	cfg, err := config.Load(*cfgPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	s, err := store.Open(cfg)
+	if err != nil {
+		return fmt.Errorf("open store: %w", err)
+	}
+	defer s.Close()
+
+	applied, _, err := s.MigrationStatus()
+	if err != nil {
+		return fmt.Errorf("get migration status: %w", err)
+	}
+
+	if len(applied) == 0 {
+		return errors.New("no migrations to rollback")
+	}
+
+	if *version > 0 {
+		// Rollback specific version
+		fmt.Printf("Rolling back migration v%d...\n", *version)
+		if err := s.RollbackMigration(*version); err != nil {
+			return fmt.Errorf("rollback migration: %w", err)
+		}
+		fmt.Printf("Successfully rolled back v%d\n", *version)
+	} else {
+		// Rollback last
+		last := applied[len(applied)-1]
+		fmt.Printf("Rolling back migration v%d: %s...\n", last.Version, last.Name)
+		if err := s.RollbackLastMigration(); err != nil {
+			return fmt.Errorf("rollback last migration: %w", err)
+		}
+		fmt.Printf("Successfully rolled back v%d: %s\n", last.Version, last.Name)
+	}
+
 	return nil
 }

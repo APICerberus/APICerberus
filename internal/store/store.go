@@ -374,6 +374,22 @@ func (s *Store) MigrationStatus() ([]migrations.Migration, []migrations.Migratio
 	return migrations.Status(s.db.Underlying(), migrationsList, s.db.Dialect())
 }
 
+// RollbackMigration reverses a migration by version.
+func (s *Store) RollbackMigration(version int) error {
+	if s == nil || s.db == nil {
+		return errors.New("store is not initialized")
+	}
+	return migrations.Rollback(s.db.Underlying(), migrationsList, version, s.db.Dialect())
+}
+
+// RollbackLastMigration undoes the most recent migration.
+func (s *Store) RollbackLastMigration() error {
+	if s == nil || s.db == nil {
+		return errors.New("store is not initialized")
+	}
+	return migrations.RollbackLast(s.db.Underlying(), migrationsList, s.db.Dialect())
+}
+
 func (s *Store) applyPragmas(db *sql.DB) error {
 	if db == nil {
 		return errors.New("db is nil")

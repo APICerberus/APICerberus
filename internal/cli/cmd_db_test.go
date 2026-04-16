@@ -48,6 +48,13 @@ func TestRunDBMigrateApply_InvalidConfig(t *testing.T) {
 	}
 }
 
+func TestRunDBMigrateRollback_InvalidConfig(t *testing.T) {
+	err := runDBMigrateRollback([]string{"--config", "/nonexistent/config.yaml"})
+	if err == nil {
+		t.Fatal("expected error for invalid config")
+	}
+}
+
 func TestRunDBMigrateStatus_ValidConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test.yaml")

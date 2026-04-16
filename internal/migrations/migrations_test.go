@@ -282,3 +282,182 @@ func TestStatus_EmptyMigrations(t *testing.T) {
 		t.Fatalf("expected 0 pending, got %d", len(pending))
 	}
 }
+
+func TestRollback_Success(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+
+	migrations := []Migration{
+		{
+			Version: 1,
+			Name:    "create_users",
+			Statements: []string{
+				"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)",
+			},
+			Rollback: []string{
+				"DROP TABLE users",
+			},
+		},
+	}
+
+	// Apply migration
+	if err := Migrate(db, migrations, "sqlite"); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+
+	// Verify table exists
+	if _, err := db.Exec("INSERT INTO users (name) VALUES ('alice')"); err != nil {
+		t.Fatalf("insert before rollback: %v", err)
+	}
+
+	// Rollback
+	if err := Rollback(db, migrations, 1, "sqlite"); err != nil {
+		t.Fatalf("Rollback: %v", err)
+	}
+
+	// Table should be gone
+	if _, err := db.Exec("SELECT * FROM users"); err == nil {
+		t.Fatal("expected error accessing dropped table")
+	}
+
+	// Migration record should be removed
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected 0 migration records after rollback, got %d", count)
+	}
+}
+
+func TestRollback_NoRollbackDefined(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+
+	migrations := []Migration{
+		{
+			Version: 1,
+			Name:    "create_users",
+			Statements: []string{
+				"CREATE TABLE users (id INTEGER PRIMARY KEY)",
+			},
+			// No Rollback defined
+		},
+	}
+
+	if err := Migrate(db, migrations, "sqlite"); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+
+	err := Rollback(db, migrations, 1, "sqlite")
+	if err == nil {
+		t.Fatal("expected error for migration without rollback")
+	}
+}
+
+func TestRollback_NotApplied(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+
+	migrations := []Migration{
+		{
+			Version: 1,
+			Name:    "create_users",
+			Statements: []string{
+				"CREATE TABLE users (id INTEGER PRIMARY KEY)",
+			},
+			Rollback: []string{
+				"DROP TABLE users",
+			},
+		},
+	}
+
+	err := Rollback(db, migrations, 1, "sqlite")
+	if err == nil {
+		t.Fatal("expected error for non-applied migration")
+	}
+}
+
+func TestRollback_VersionNotFound(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+
+	migrations := []Migration{
+		{
+			Version: 1,
+			Name:    "create_users",
+			Statements: []string{
+				"CREATE TABLE users (id INTEGER PRIMARY KEY)",
+			},
+			Rollback: []string{"DROP TABLE users"},
+		},
+	}
+
+	err := Rollback(db, migrations, 999, "sqlite")
+	if err == nil {
+		t.Fatal("expected error for non-existent version")
+	}
+}
+
+func TestRollbackLast_Success(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+
+	migrations := []Migration{
+		{
+			Version: 1,
+			Name:    "create_users",
+			Statements: []string{
+				"CREATE TABLE users (id INTEGER PRIMARY KEY)",
+			},
+			Rollback: []string{"DROP TABLE users"},
+		},
+		{
+			Version: 2,
+			Name:    "create_orders",
+			Statements: []string{
+				"CREATE TABLE orders (id INTEGER PRIMARY KEY)",
+			},
+			Rollback: []string{"DROP TABLE orders"},
+		},
+	}
+
+	// Apply both migrations
+	if err := Migrate(db, migrations, "sqlite"); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+
+	// Rollback last (version 2)
+	if err := RollbackLast(db, migrations, "sqlite"); err != nil {
+		t.Fatalf("RollbackLast: %v", err)
+	}
+
+	// Version 1 should remain
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 migration record, got %d", count)
+	}
+
+	// Version 2 table should be gone
+	if _, err := db.Exec("SELECT * FROM orders"); err == nil {
+		t.Fatal("expected error accessing dropped table")
+	}
+
+	// Version 1 table should still exist
+	if _, err := db.Exec("INSERT INTO users (id) VALUES (1)"); err != nil {
+		t.Fatalf("users table should exist: %v", err)
+	}
+}
+
+func TestRollbackLast_NoMigrations(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+
+	err := RollbackLast(db, nil, "sqlite")
+	if err == nil {
+		t.Fatal("expected error when no migrations exist")
+	}
+}

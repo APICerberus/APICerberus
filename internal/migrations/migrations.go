@@ -11,11 +11,11 @@ import (
 
 // Migration describes one versioned, transactional schema change.
 type Migration struct {
-	Version    int
+	Version     int
 	Name       string
-	Statements []string
-	// Dialect is optional; if set, only applies to that dialect ("sqlite" or "postgres")
-	Dialect string
+	Statements  []string
+	Rollback    []string // Optional rollback statements
+	Dialect    string    // Optional; if set, only applies to that dialect ("sqlite" or "postgres")
 }
 
 // Migrate applies all pending migrations in order.
@@ -76,6 +76,86 @@ func Migrate(db *sql.DB, migrations []Migration, dialect string) error {
 	}
 
 	return nil
+}
+
+// Rollback reverses a migration by version.
+func Rollback(db *sql.DB, migrations []Migration, targetVersion int, dialect string) error {
+	if dialect == "" {
+		dialect = "sqlite"
+	}
+
+	// Find the migration to rollback
+	var migration Migration
+	found := false
+	for _, m := range migrations {
+		if m.Version == targetVersion {
+			migration = m
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("migration version %d not found", targetVersion)
+	}
+
+	// Check if migration is applied
+	applied, err := isApplied(db, targetVersion)
+	if err != nil {
+		return err
+	}
+	if !applied {
+		return fmt.Errorf("migration %d is not applied", targetVersion)
+	}
+
+	// Check if rollback is available
+	if len(migration.Rollback) == 0 {
+		return fmt.Errorf("migration %d has no rollback defined", targetVersion)
+	}
+
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return fmt.Errorf("begin rollback %d: %w", targetVersion, err)
+	}
+
+	for _, stmt := range migration.Rollback {
+		if strings.TrimSpace(stmt) == "" {
+			continue
+		}
+		if _, err := tx.Exec(stmt); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("rollback migration %d (%s): %w", targetVersion, migration.Name, err)
+		}
+	}
+
+	if _, err := tx.Exec(`DELETE FROM schema_migrations WHERE version = ?`, targetVersion); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("remove migration record %d: %w", targetVersion, err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit rollback %d: %w", targetVersion, err)
+	}
+
+	return nil
+}
+
+// RollbackLast undoes the most recent migration.
+func RollbackLast(db *sql.DB, migrations []Migration, dialect string) error {
+	if dialect == "" {
+		dialect = "sqlite"
+	}
+
+	// Get the highest applied version
+	var lastVersion int
+	err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&lastVersion)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("no migrations to rollback")
+		}
+		return fmt.Errorf("find last migration: %w", err)
+	}
+
+	return Rollback(db, migrations, lastVersion, dialect)
 }
 
 // Status returns applied and pending migrations.

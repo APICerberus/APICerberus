@@ -130,6 +130,10 @@ admin:
 
 portal:
   enabled: false
+  session:
+    secret: "e2e-test-portal-value-32-chars!!"
+    cookie_name: "portal_session"
+    max_age: "86400s"
 
 logging:
   level: "info"

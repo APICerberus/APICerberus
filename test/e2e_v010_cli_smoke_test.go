@@ -113,6 +113,11 @@ admin:
   addr: "%s"
   api_key: "Xk9#mP$vL2@nQ8*wR5&tZ3(cY7)jF4!hK6_gH1~uE0-iO9=pA2|sD5>lN8<bM3"
   token_secret: "secret-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "e2e-test-portal-value-32-chars!!"
+    cookie_name: "portal_session"
+    max_age: "86400s"
 services:
   - name: "svc-smoke"
     upstream: "up-smoke"

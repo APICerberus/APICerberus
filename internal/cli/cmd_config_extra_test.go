@@ -21,6 +21,9 @@ admin:
   addr: :9876
   api_key: test-key
   token_secret: test-admin-token-secret-at-least-32-chars-long
+portal:
+  session:
+    secret: test-portal-session-value-at-least-32-chars-long!!
 `
 	_ = os.WriteFile(configPath, []byte(configContent), 0644)
 
@@ -44,6 +47,9 @@ admin:
   addr: :9876
   api_key: test-key
   token_secret: test-admin-token-secret-at-least-32-chars-long
+portal:
+  session:
+    secret: test-portal-session-value-at-least-32-chars-long!!
 `
 	_ = os.WriteFile(configPath, []byte(configContent), 0644)
 
@@ -79,6 +85,9 @@ admin:
   addr: :9876
   api_key: imported-key
   token_secret: test-admin-token-secret-at-least-32-chars-long
+portal:
+  session:
+    secret: test-portal-session-value-at-least-32-chars-long!!
 `
 	_ = os.WriteFile(sourcePath, []byte(configContent), 0644)
 

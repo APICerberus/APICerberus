@@ -20,6 +20,11 @@ admin:
   addr: ":19876"
   api_key: "` + apiKey + `"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "integration-test-portal-value-32-chars!!"
+    cookie_name: "portal_session"
+    max_age: "86400s"
 store:
   path: "` + db + `"
 `)

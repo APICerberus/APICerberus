@@ -108,6 +108,7 @@ func writeMCPTestConfig(t *testing.T) string {
 	// Generate cryptographically random secrets for this test run.
 	apiKey := generateRandomSecret(32)
 	tokenSecret := generateRandomSecret(48)
+	portalSecret := generateRandomSecret(32)
 
 	content := `
 gateway:
@@ -115,6 +116,11 @@ gateway:
 admin:
   api_key: "` + apiKey + `"
   token_secret: "` + tokenSecret + `"
+portal:
+  session:
+    secret: "` + portalSecret + `"
+    cookie_name: "portal_session"
+    max_age: "86400s"
 services:
   - name: "svc-mcp"
     upstream: "up-mcp"

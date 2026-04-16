@@ -335,6 +335,11 @@ admin:
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
   ui_enabled: false
   ui_path: "/dashboard"
+portal:
+  session:
+    secret: "e2e-test-portal-value-32-chars!!"
+    cookie_name: "portal_session"
+    max_age: "86400s"
 logging:
   level: "info"
   format: "json"

@@ -50,6 +50,9 @@ gateway:
 admin:
   api_key: "test-admin-key"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "test-portal-session-value-at-least-32-chars-long!!"
 services:
   - name: "svc-test"
     upstream: "up-test"
@@ -284,6 +287,7 @@ func TestSetDefaults_PortalDisabledByDefault(t *testing.T) {
 			Addr:       ":9877",
 			PathPrefix: "/portal",
 			Session: PortalSessionConfig{
+				Secret:    "test-secret-that-is-at-least-32-chars-long!!",
 				CookieName: "apicerberus_session",
 				MaxAge:     24 * time.Hour,
 			},
@@ -530,6 +534,7 @@ func TestValidate_EmptyCookieName(t *testing.T) {
 		Portal: PortalConfig{
 			PathPrefix: "/portal",
 			Session: PortalSessionConfig{
+				Secret:    "test-secret-that-is-at-least-32-chars-long!!",
 				CookieName: "",
 			},
 		},
@@ -548,6 +553,7 @@ func TestValidate_InvalidMaxAge(t *testing.T) {
 		Portal: PortalConfig{
 			PathPrefix: "/portal",
 			Session: PortalSessionConfig{
+				Secret:    "test-secret-that-is-at-least-32-chars-long!!",
 				CookieName: "session",
 				MaxAge:     0,
 			},
@@ -569,6 +575,7 @@ func TestValidate_PortalEnabledNoAddr(t *testing.T) {
 			Addr:       "", // Missing addr
 			PathPrefix: "/portal",
 			Session: PortalSessionConfig{
+				Secret:    "test-secret-that-is-at-least-32-chars-long!!",
 				CookieName: "session",
 				MaxAge:     time.Hour,
 			},

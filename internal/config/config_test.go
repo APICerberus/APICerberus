@@ -17,6 +17,9 @@ gateway:
 admin:
   api_key: "test-admin-key"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "test-portal-session-value-at-least-32-chars-long!!"
 services:
   - name: "svc-users"
     upstream: "up-users"
@@ -99,6 +102,9 @@ gateway:
 admin:
   api_key: "test-admin-key"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "test-portal-session-value-at-least-32-chars-long!!"
 services:
   - name: "svc-users"
     upstream: "missing-upstream"
@@ -134,6 +140,9 @@ gateway:
 admin:
   api_key: "test-admin-key"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "test-portal-session-value-at-least-32-chars-long!!"
 services:
   - name: "svc-users"
     upstream: "up-users"
@@ -171,6 +180,9 @@ gateway:
 admin:
   api_key: "test-admin-key"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "test-portal-session-value-at-least-32-chars-long!!"
 services:
   - name: "svc-users"
     upstream: "up-users"
@@ -204,6 +216,9 @@ gateway:
 admin:
   api_key: "test-admin-key"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "test-portal-session-value-at-least-32-chars-long!!"
 services:
   - name: "svc-users"
     protocol: "http"
@@ -260,6 +275,9 @@ gateway:
 admin:
   api_key: "test-admin-key"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "test-portal-session-value-at-least-32-chars-long!!"
 services:
   - name: "svc-users"
     upstream: "up-users"
@@ -326,6 +344,9 @@ gateway:
 admin:
   api_key: "test-admin-key"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "test-portal-session-value-at-least-32-chars-long!!"
 services:
   - name: "svc-users"
     upstream: "up-users"
@@ -365,6 +386,9 @@ gateway:
 admin:
   api_key: "test-admin-key"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "test-portal-session-value-at-least-32-chars-long!!"
 services:
   - name: "svc-users"
     upstream: "up-users"
@@ -413,6 +437,9 @@ gateway:
 admin:
   api_key: "test-admin-key"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "test-portal-session-value-at-least-32-chars-long!!"
 services:
   - name: "svc-users"
     upstream: "up-users"
@@ -463,6 +490,9 @@ gateway:
 admin:
   api_key: "test-admin-key"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "test-portal-session-value-at-least-32-chars-long!!"
 services:
   - name: "svc-users"
     upstream: "up-users"

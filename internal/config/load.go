@@ -330,14 +330,16 @@ func validate(cfg *Config) error {
 		addErr("portal.path_prefix must start with '/'")
 	}
 	secret := strings.TrimSpace(cfg.Portal.Session.Secret)
+	// SECURITY: Always validate portal secret regardless of current enabled state.
+	// A hot-reload enabling the portal with an empty/weak secret would be catastrophic.
+	if len(secret) < 32 {
+		addErr("portal.session.secret must be at least 32 characters")
+	}
+	lowerSecret := strings.ToLower(secret)
+	if strings.Contains(lowerSecret, "change") || strings.Contains(lowerSecret, "secret") || strings.Contains(lowerSecret, "password") {
+		addErr("portal.session.secret appears to be a placeholder value")
+	}
 	if cfg.Portal.Enabled {
-		if len(secret) < 32 {
-			addErr("portal.session.secret must be at least 32 characters when portal is enabled")
-		}
-		lowerSecret := strings.ToLower(secret)
-		if strings.Contains(lowerSecret, "change") || strings.Contains(lowerSecret, "secret") || strings.Contains(lowerSecret, "password") {
-			addErr("portal.session.secret appears to be a placeholder value")
-		}
 		if cfg.Gateway.HTTPSAddr != "" && !cfg.Portal.Session.Secure {
 			addErr("portal.session.secure must be true when gateway.https_addr is configured")
 		}

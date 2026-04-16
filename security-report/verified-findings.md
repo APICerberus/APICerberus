@@ -166,19 +166,189 @@
 
 ---
 
+## New Findings (2026-04-16 Additional Scan)
+
+These findings were identified in an additional 2026-04-16 scan and are NOT covered by the prior audit report:
+
+### HIGH-NEW-1: JWT JTI Replay Cache Disabled by Default
+
+| Field | Value |
+|-------|-------|
+| **CWE** | CWE-287 (Improper Authentication) |
+| **CVSS 3.1** | 6.5 (Medium) — `CVSS:3.1/AV:N/AC:L/PR:N/UI:N/SA:P/Au:N/RE:P/RL:O/RC:C` |
+| **File:Line** | `internal/plugin/auth_jwt.go:260-270` |
+| **Confidence** | High |
+| **Status** | ✅ FIXED (2026-04-16) — Fail-closed on missing JTI cache |
+
+**Code:**
+```go
+func (a *AuthJWT) checkJTIReplay(token *jwt.Token) error {
+    if a.jtiReplayCache == nil {
+        fmt.Printf("WARN: JTI replay cache not configured, replay protection disabled for token\n")
+        return nil  // ← Token accepted even with replayed JTI
+    }
+    // ...
+}
+```
+
+**Impact:** JWTs with replayed `jti` claims are accepted when no JTI replay cache is configured. An attacker who obtains a valid JWT can replay it within the token's validity window.
+
+**Remediation:** Require `jtiReplayCache` to be configured in production; fail startup or return 500 if a JWT contains a `jti` claim but no replay cache exists.
+
+---
+
+### HIGH-NEW-2: GraphQL Federation SSRF via Subgraph URL Runtime Mutation
+
+| Field | Value |
+|-------|-------|
+| **CWE** | CWE-918 (Server-Side Request Forgery) |
+| **CVSS 3.1** | 7.5 (High) — `CVSS:3.1/AV:N/AC:L/PR:H/UI:N/SA:P/Au:N/RE:P/RL:O/RC:C` |
+| **File:Line** | `internal/federation/executor.go:365-372` |
+| **Confidence** | Medium — Requires compromised admin credentials |
+| **Status** | **Open** |
+
+**Code:**
+```go
+if e.validateURLs {
+    if err := validateSubgraphURL(step.Subgraph.URL); err != nil {
+        return nil, fmt.Errorf("subgraph URL validation failed: %w", err)
+    }
+}
+req, err := http.NewRequestWithContext(ctx, "POST", step.Subgraph.URL, ...)
+```
+
+**Impact:** Subgraph URLs can be updated via `PUT /admin/api/v1/subgraphs/{id}` without invalidating cached query plans. A malicious admin could set a subgraph URL to an internal service (e.g., AWS IMDS at `169.254.169.254`). URL validation at execution time prevents direct attacks, but the cached plan references the modified URL.
+
+**Remediation:**
+1. Make subgraph URLs immutable after creation
+2. Store a hash of validated URL in execution plan; reject if URL changed post-validation
+3. Include subgraph URL in query plan cache key
+
+---
+
+### HIGH-NEW-3: Portal Session Secret Validation Gap
+
+| Field | Value |
+|-------|-------|
+| **CWE** | CWE-547 (Use of Hard-coded, Security-relevant Constants) |
+| **CVSS 3.1** | 5.3 (Medium) — `CVSS:3.1/AV:N/AC:L/PR:N/UI:R/RE:L/RL:O/RC:C` |
+| **File:Line** | `internal/config/load.go:333-344` |
+| **Confidence** | Medium — Requires hot-reload misconfiguration |
+| **Status** | ✅ FIXED (2026-04-16) — Portal secret validated unconditionally |
+
+**Code:**
+```go
+if cfg.Portal.Enabled {
+    if len(secret) < 32 {
+        addErr("portal.session.secret must be at least 32 characters...")
+    }
+    // ...
+}
+// When portal is disabled, empty secret is silently accepted
+```
+
+**Impact:** If portal is disabled with no secret, then hot-reloaded with `portal.enabled: true`, session cookies are signed with empty-string secret → predictable → session hijacking.
+
+**Remediation:** Validate portal secret length regardless of current `portal.enabled` state.
+
+---
+
+### MED-NEW-1: fmt.Printf Warning Exposes Replay Protection Status
+
+| Field | Value |
+|-------|-------|
+| **CWE** | CWE-532 (Information Exposure Through Log Files) |
+| **CVSS 3.1** | 3.1 (Low) |
+| **File:Line** | `internal/plugin/auth_jwt.go:265` |
+| **Confidence** | High |
+| **Status** | ✅ FIXED (2026-04-16) — Eliminated as part of HIGH-NEW-1 refactor |
+
+**Code:**
+```go
+fmt.Printf("WARN: JTI replay cache not configured, replay protection disabled for token\n")
+```
+
+**Impact:** The message indicates replay protection is disabled, informing an attacker that replay attacks are viable. Uses `fmt.Printf` instead of structured logger.
+
+**Remediation:** Use structured logging. Do not log in this context at all — just return nil silently.
+
+---
+
+### MED-NEW-2: Query Plan Cache Keyed by Query String Only
+
+| Field | Value |
+|-------|-------|
+| **CWE** | CWE-345 (Insufficient Verification of Data Authenticity) |
+| **CVSS 3.1** | 4.3 (Medium) — `CVSS:3.1/AV:N/AC:L/PR:N/UI:R/SA:P/Au:N/RE:P/RL:O/RC:C` |
+| **File:Line** | `internal/federation/executor.go:136-148` |
+| **Confidence** | High |
+| **Status** | ✅ DOCUMENTED — QueryCache is dead code; Get/Set never called in executor |
+
+**Code:**
+```go
+func (qc *QueryCache) Get(query string) (*Plan, bool) {
+    entry, ok := qc.entries[query]  // ← Only query string is the key
+```
+
+**Impact:** Cached query plans may be returned for queries with identical query strings but different variable values or different subgraph URLs, potentially routing to the wrong subgraph.
+
+**Remediation:** Include a hash of variables and subgraph URL in the cache key, or disable caching for queries with non-empty variables.
+
+---
+
+### MED-NEW-3: WebSocket Upgrade Lacks Origin Header Validation
+
+| Field | Value |
+|-------|-------|
+| **CWE** | CWE-346 (Origin Validation Error) |
+| **CVSS 3.1** | 4.3 (Medium) — Requires deployment misconfiguration |
+| **File:Line** | `internal/admin/ws.go:171-240` |
+| **Confidence** | Medium |
+| **Status** | ✅ FIXED (2026-04-16) — `isValidWebSocketOrigin` called at ws.go:48 |
+
+**Impact:** WebSocket upgrades are not validated against the `AllowedOrigins` config list. If the gateway is deployed behind a reverse proxy that passes raw Origin headers, cross-site WebSocket hijacking is possible.
+
+**Remediation:** Validate Origin header during WebSocket upgrade. Reject if origin is not in the allowlist.
+
+---
+
+### MED-NEW-4: Portal sessionStorage Auth State (XSS-Readable) — Already Documented
+
+This finding (sessionStorage readable by XSS) was already documented in the prior audit (Finding 29 / F-009) as M-022 in code. It is listed here for completeness and is marked as **Accepted Risk** with the recommendation to use httpOnly cookies for high-risk deployments.
+
+**Status:** Documented (M-022) — No additional action beyond prior recommendation.
+
+---
+
 ## Recommendations
 
-### ✅ Completed (2026-04-16)
+### New Open Items (2026-04-16 Additional Scan)
+1. Make subgraph URLs immutable after creation, or hash-validate before execution
+2. Configure `jtiReplayCache` in production when using JWTs with `jti` claims — use Redis-backed store
+
+### ✅ Completed (2026-04-16 — Today's Session)
+1. ✅ JWT JTI replay protection — fail-closed when JTI present but cache missing (HIGH-NEW-1)
+2. ✅ fmt.Printf info leak — eliminated as part of JTI refactor (MED-NEW-1)
+3. ✅ Portal secret validation gap — always validated regardless of enabled state (HIGH-NEW-3)
+4. ✅ WebSocket Origin validation — `isValidWebSocketOrigin` was already implemented (MED-NEW-3)
+5. ✅ Query plan cache — QueryCache is dead code, Get/Set never invoked (MED-NEW-2)
+
+### ✅ Completed (2026-04-16 — from prior audit)
 1. ✅ Test file hardcoded secrets — `generateRandomSecret()` via crypto/rand
 2. ✅ Test config hardcoded secrets — env var placeholders
 3. ✅ WebSocket brute force — rate limiting added to static key fallback
 4. ✅ Body transform TODO — comment clarified
+5. ✅ Health endpoint disclosure — `allowed_health_ips` config + IP check
+6. ✅ GraphQL introspection — `admin.graphql_introspection` config field
+7. ✅ Admin key rotation — `POST /admin/api/v1/auth/rotate-key` endpoint
+8. ✅ OIDC state CSRF — properly verified (crypto/rand + constant-time compare)
 
 ### ℹ️ No Action Required
 1. Health/readiness bypass — intentional K8s design, M-004 note in code
 2. Portal CSRF — properly implemented double-submit pattern
 3. K8s empty secrets — standard deployment pattern
 4. PostgreSQL DSN, SSRF, RNG, benchmark/test secrets — confirmed safe
-5. OIDC state CSRF protection — properly verified (crypto/rand + constant-time compare)
+5. OIDC state CSRF protection — properly verified
+6. Admin session cookie httpOnly — **VERIFIED: correctly set at `token.go:235`**
 
-*Report generated: 2026-04-16*
+*Additional scan report generated: 2026-04-16*

@@ -258,16 +258,20 @@ func (a *AuthJWT) resolveECDSAPublicKey(ctx context.Context, token *jwt.Token) (
 
 // checkJTIReplay checks for JWT ID replay attacks when a replay cache is configured.
 func (a *AuthJWT) checkJTIReplay(token *jwt.Token) error {
-	if a.jtiReplayCache == nil {
-		// M-002: WARNING - JTI replay protection is disabled because no replay cache is configured.
-		// A JWT with a valid signature but replayed jti will be accepted without error.
-		// This is a security risk in production. Configure jtiReplayCache with a Redis-backed store.
-		fmt.Printf("WARN: JTI replay cache not configured, replay protection disabled for token\n")
-		return nil
-	}
-	jti, ok := token.ClaimString("jti")
-	if !ok {
+	jti, _ := token.ClaimString("jti")
+	if jti == "" {
 		return nil // jti is optional — if not present, skip replay check
+	}
+	if a.jtiReplayCache == nil {
+		// SECURITY: Fail-closed — reject tokens with jti claim when no replay cache is configured.
+		// This prevents silent acceptance of replayed JTIs in production.
+		return &JWTAuthError{
+			PluginError: PluginError{
+				Code: "jti_replay_protection_disabled",
+				Message: "jwt contains jti claim but replay protection is not configured; rejecting token",
+				Status: http.StatusServiceUnavailable,
+			},
+		}
 	}
 	if a.jtiReplayCache.Seen(jti) {
 		return &JWTAuthError{

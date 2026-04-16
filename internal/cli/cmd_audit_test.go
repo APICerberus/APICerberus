@@ -428,6 +428,9 @@ server:
 admin:
   api_key: test-key
   token_secret: test-admin-token-secret-at-least-32-chars-long
+portal:
+  session:
+    secret: test-portal-session-value-at-least-32-chars-long!!
 audit:
   retention_days: 90
   route_retention_days:
@@ -451,6 +454,9 @@ server:
 admin:
   api_key: test-key
   token_secret: test-admin-token-secret-at-least-32-chars-long
+portal:
+  session:
+    secret: test-portal-session-value-at-least-32-chars-long!!
 audit:
   retention_days: 30
 `
@@ -471,6 +477,9 @@ server:
 admin:
   api_key: test-key
   token_secret: test-admin-token-secret-at-least-32-chars-long
+portal:
+  session:
+    secret: test-portal-session-value-at-least-32-chars-long!!
 audit:
   retention_days: 30
   route_retention_days:
@@ -499,6 +508,9 @@ server:
 admin:
   api_key: test-key
   token_secret: test-admin-token-secret-at-least-32-chars-long
+portal:
+  session:
+    secret: test-portal-session-value-at-least-32-chars-long!!
 audit:
   retention_days: 30
 `
@@ -523,6 +535,9 @@ server:
 admin:
   api_key: test-key
   token_secret: test-admin-token-secret-at-least-32-chars-long
+portal:
+  session:
+    secret: test-portal-session-value-at-least-32-chars-long!!
 `
 	_ = os.WriteFile(configPath, []byte(configContent), 0644)
 
@@ -562,6 +577,9 @@ server:
 admin:
   api_key: test-key
   token_secret: test-admin-token-secret-at-least-32-chars-long
+portal:
+  session:
+    secret: test-portal-session-value-at-least-32-chars-long!!
 audit:
   retention_days: 30
 `
@@ -595,6 +613,9 @@ server:
 admin:
   api_key: test-key
   token_secret: test-admin-token-secret-at-least-32-chars-long
+portal:
+  session:
+    secret: test-portal-session-value-at-least-32-chars-long!!
 audit:
   retention_days: 30
 `

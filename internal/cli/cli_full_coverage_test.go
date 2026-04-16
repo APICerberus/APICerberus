@@ -84,6 +84,9 @@ func TestRunDB_WithRealConfig(t *testing.T) {
 admin:
   api_key: test-admin-key-that-is-at-least-32-chars
   token_secret: test-token-secret-that-is-at-least-32-characters
+portal:
+  session:
+    secret: test-portal-session-value-at-least-32-chars-long!!
 store:
   path: ` + dbPath + `
   busy_timeout: 5s

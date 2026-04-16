@@ -58,6 +58,9 @@ admin:
   addr: :9876
   api_key: test-admin-api-key-at-least-32-chars
   token_secret: test-admin-token-secret-at-least-32-chars
+portal:
+  session:
+    secret: test-portal-session-value-at-least-32-chars-long!!
 store:
   path: ":memory:"
 `
@@ -81,6 +84,9 @@ admin:
   addr: :9876
   api_key: test-admin-api-key-at-least-32-chars
   token_secret: test-admin-token-secret-at-least-32-chars
+portal:
+  session:
+    secret: test-portal-session-value-at-least-32-chars-long!!
 store:
   path: ":memory:"
 `

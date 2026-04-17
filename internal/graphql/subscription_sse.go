@@ -36,7 +36,9 @@ import (
 //	  event: error
 //	  data: {"errors":[{"message":"..."}]}
 type SSESubscriptionProxy struct {
-	upstreamURL string
+	upstreamURL     string
+	allowedOrigins  []string
+	allowedOriginMu sync.RWMutex
 }
 
 // NewSSESubscriptionProxy creates an SSE subscription proxy for the given upstream.
@@ -44,9 +46,44 @@ func NewSSESubscriptionProxy(upstreamURL string) *SSESubscriptionProxy {
 	return &SSESubscriptionProxy{upstreamURL: upstreamURL}
 }
 
+// SetAllowedOrigins installs the Origin allow-list (SEC-GQL-007). Empty list
+// preserves compat behavior; a populated list enforces strict Origin matching
+// for browser callers. See subscription_origin.go for the grammar.
+func (p *SSESubscriptionProxy) SetAllowedOrigins(origins []string) {
+	if p == nil {
+		return
+	}
+	cp := make([]string, 0, len(origins))
+	for _, o := range origins {
+		if o = strings.TrimSpace(o); o != "" {
+			cp = append(cp, o)
+		}
+	}
+	p.allowedOriginMu.Lock()
+	p.allowedOrigins = cp
+	p.allowedOriginMu.Unlock()
+}
+
+func (p *SSESubscriptionProxy) allowedOriginsSnapshot() []string {
+	p.allowedOriginMu.RLock()
+	defer p.allowedOriginMu.RUnlock()
+	out := make([]string, len(p.allowedOrigins))
+	copy(out, p.allowedOrigins)
+	return out
+}
+
 // HandleSSE handles a GraphQL subscription request over SSE.
 func (p *SSESubscriptionProxy) HandleSSE(w http.ResponseWriter, r *http.Request) {
 	if p == nil || w == nil || r == nil {
+		return
+	}
+
+	// SEC-GQL-007: same CSWSH gate as the WS transport. SSE is also
+	// reachable from a cookie-authenticated browser via EventSource /
+	// `fetch` streaming, so the Origin check applies before we open the
+	// upstream WS tunnel.
+	if !isSubscriptionOriginAllowed(r, p.allowedOriginsSnapshot()) {
+		writeSSEError(w, "forbidden origin", http.StatusForbidden)
 		return
 	}
 

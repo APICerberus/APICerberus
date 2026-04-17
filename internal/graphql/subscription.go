@@ -46,8 +46,10 @@ type wsMessage struct {
 // SubscriptionProxy handles GraphQL subscriptions over WebSocket using the
 // graphql-ws protocol (https://github.com/enisdenjo/graphql-ws/blob/master/PROTOCOL.md).
 type SubscriptionProxy struct {
-	upstreamURL string
-	client      *http.Client
+	upstreamURL     string
+	client          *http.Client
+	allowedOrigins  []string
+	allowedOriginMu sync.RWMutex
 }
 
 // NewSubscriptionProxy creates a new subscription proxy targeting the given upstream URL.
@@ -60,11 +62,61 @@ func NewSubscriptionProxy(upstreamURL string) *SubscriptionProxy {
 	}
 }
 
+// SetAllowedOrigins installs the Origin allow-list used by HandleSubscription
+// to defeat cross-site WebSocket hijacking (SEC-GQL-007).
+//
+// Semantics:
+//   - An empty / nil list leaves the handler in its prior compatibility mode
+//     (any Origin accepted; non-browser clients with no Origin header also
+//     pass). Operators exposing subscriptions to browsers MUST populate this.
+//   - Each entry is an exact URL ("https://app.example.com"), a bare
+//     "host[:port]" form, or a wildcard ("*.example.com") matching a single
+//     subdomain label — the same grammar the admin WS handler uses.
+//   - When the list is non-empty:
+//       - requests with no Origin header are rejected (browsers always set
+//         Origin on the WS handshake per RFC 6455 §10.2, so missing Origin
+//         in strict mode indicates a misconfigured or malicious client);
+//       - "null" origin is rejected (sandbox iframes, data: URIs);
+//       - the Origin must match one entry.
+func (sp *SubscriptionProxy) SetAllowedOrigins(origins []string) {
+	if sp == nil {
+		return
+	}
+	cp := make([]string, 0, len(origins))
+	for _, o := range origins {
+		if o = strings.TrimSpace(o); o != "" {
+			cp = append(cp, o)
+		}
+	}
+	sp.allowedOriginMu.Lock()
+	sp.allowedOrigins = cp
+	sp.allowedOriginMu.Unlock()
+}
+
+// allowedOriginsSnapshot returns a copy of the configured allow-list.
+func (sp *SubscriptionProxy) allowedOriginsSnapshot() []string {
+	sp.allowedOriginMu.RLock()
+	defer sp.allowedOriginMu.RUnlock()
+	out := make([]string, len(sp.allowedOrigins))
+	copy(out, sp.allowedOrigins)
+	return out
+}
+
 // HandleSubscription upgrades the incoming HTTP request to a WebSocket connection
 // and proxies graphql-ws protocol messages between the client and the upstream.
 func (sp *SubscriptionProxy) HandleSubscription(w http.ResponseWriter, r *http.Request) {
 	if !isWSUpgrade(r) {
 		http.Error(w, "expected websocket upgrade", http.StatusBadRequest)
+		return
+	}
+
+	// SEC-GQL-007: block cross-site WebSocket hijacking. See SetAllowedOrigins
+	// for the allow-list semantics. When the gateway operator has declared an
+	// allow-list, an attacker page at evil.com can no longer coerce a
+	// cookie-authenticated victim's browser into opening a subscription
+	// WebSocket against this gateway and exfiltrating live data.
+	if !isSubscriptionOriginAllowed(r, sp.allowedOriginsSnapshot()) {
+		http.Error(w, "forbidden origin", http.StatusForbidden)
 		return
 	}
 

@@ -171,12 +171,12 @@ func TestOptimizedProxy_buildUpstreamURL(t *testing.T) {
 
 	t.Run("valid target", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/api/test", nil)
-		url, err := proxy.buildUpstreamURL(req, "backend:8080", nil)
+		url, err := proxy.buildUpstreamURL(req, "localhost:8080", nil)
 		if err != nil {
 			t.Fatalf("buildUpstreamURL error: %v", err)
 		}
-		if url.Host != "backend:8080" {
-			t.Errorf("host = %q, want backend:8080", url.Host)
+		if url.Host != "localhost:8080" {
+			t.Errorf("host = %q, want localhost:8080", url.Host)
 		}
 		// Path may have // depending on implementation
 		if url.Path != "/api/test" && url.Path != "//api/test" {
@@ -186,7 +186,7 @@ func TestOptimizedProxy_buildUpstreamURL(t *testing.T) {
 
 	t.Run("target without scheme", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		url, err := proxy.buildUpstreamURL(req, "backend:9000", nil)
+		url, err := proxy.buildUpstreamURL(req, "localhost:9000", nil)
 		if err != nil {
 			t.Fatalf("buildUpstreamURL error: %v", err)
 		}
@@ -217,7 +217,7 @@ func TestOptimizedProxy_buildUpstreamURL(t *testing.T) {
 			Paths:     []string{"/api/v1"},
 			StripPath: true,
 		}
-		url, err := proxy.buildUpstreamURL(req, "backend:8080", route)
+		url, err := proxy.buildUpstreamURL(req, "localhost:8080", route)
 		if err != nil {
 			t.Fatalf("buildUpstreamURL error: %v", err)
 		}
@@ -323,9 +323,11 @@ func TestOptimizedProxy_coalesceKey(t *testing.T) {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Accept-Encoding", "gzip")
 
-	upstreamURL := &config.UpstreamTarget{Address: "backend:8080"}
-	// Create URL manually
-	parsedURL, _ := proxy.buildUpstreamURL(req, upstreamURL.Address, nil)
+	upstreamURL := &config.UpstreamTarget{Address: "localhost:8080"}
+	parsedURL, err := proxy.buildUpstreamURL(req, upstreamURL.Address, nil)
+	if err != nil {
+		t.Fatalf("buildUpstreamURL failed: %v", err)
+	}
 
 	key := proxy.coalesceKey(req, parsedURL)
 
@@ -348,7 +350,7 @@ func TestOptimizedProxy_coalesceKey_PartitionsByCookie(t *testing.T) {
 	proxy := NewOptimizedProxy(DefaultOptimizedProxyConfig())
 	defer proxy.Close()
 
-	upstream := &config.UpstreamTarget{Address: "backend:8080"}
+	upstream := &config.UpstreamTarget{Address: "localhost:8080"}
 	newReq := func(cookie string) *http.Request {
 		r := httptest.NewRequest(http.MethodGet, "http://example.com/api/me", nil)
 		r.Header.Set("Accept", "application/json")
@@ -358,7 +360,10 @@ func TestOptimizedProxy_coalesceKey_PartitionsByCookie(t *testing.T) {
 		return r
 	}
 
-	urlA, _ := proxy.buildUpstreamURL(newReq(""), upstream.Address, nil)
+	urlA, err := proxy.buildUpstreamURL(newReq(""), upstream.Address, nil)
+	if err != nil {
+		t.Fatalf("buildUpstreamURL failed: %v", err)
+	}
 
 	alice := proxy.coalesceKey(newReq("sessionid=alice-session"), urlA)
 	bob := proxy.coalesceKey(newReq("sessionid=bob-session"), urlA)
@@ -381,10 +386,13 @@ func TestOptimizedProxy_coalesceKey_PartitionsByAdminAndExtraAuthHeaders(t *test
 	proxy := NewOptimizedProxy(DefaultOptimizedProxyConfig())
 	defer proxy.Close()
 
-	upstream := &config.UpstreamTarget{Address: "backend:8080"}
+	upstream := &config.UpstreamTarget{Address: "localhost:8080"}
 	base := httptest.NewRequest(http.MethodGet, "http://example.com/admin/api/v1/status", nil)
 	base.Header.Set("Accept", "application/json")
-	upURL, _ := proxy.buildUpstreamURL(base, upstream.Address, nil)
+	upURL, err := proxy.buildUpstreamURL(base, upstream.Address, nil)
+	if err != nil {
+		t.Fatalf("buildUpstreamURL failed: %v", err)
+	}
 
 	cases := []struct {
 		name   string
@@ -422,7 +430,7 @@ func TestOptimizedProxy_coalesceKey_JoinsMultiValuedCookies(t *testing.T) {
 	proxy := NewOptimizedProxy(DefaultOptimizedProxyConfig())
 	defer proxy.Close()
 
-	upstream := &config.UpstreamTarget{Address: "backend:8080"}
+	upstream := &config.UpstreamTarget{Address: "localhost:8080"}
 
 	ra := httptest.NewRequest(http.MethodGet, "http://example.com/api/me", nil)
 	ra.Header.Add("Cookie", "shared=true")
@@ -432,7 +440,10 @@ func TestOptimizedProxy_coalesceKey_JoinsMultiValuedCookies(t *testing.T) {
 	rb.Header.Add("Cookie", "shared=true")
 	rb.Header.Add("Cookie", "sessionid=bob")
 
-	upURL, _ := proxy.buildUpstreamURL(ra, upstream.Address, nil)
+	upURL, err := proxy.buildUpstreamURL(ra, upstream.Address, nil)
+	if err != nil {
+		t.Fatalf("buildUpstreamURL failed: %v", err)
+	}
 	ka := proxy.coalesceKey(ra, upURL)
 	kb := proxy.coalesceKey(rb, upURL)
 	if ka == kb {

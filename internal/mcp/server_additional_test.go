@@ -538,7 +538,7 @@ gateway:
   http_addr: ":8080"
 admin:
   addr: ":9876"
-  api_key: "test-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:
@@ -2173,7 +2173,7 @@ gateway:
   http_addr: ":8080"
 admin:
   addr: ":9876"
-  api_key: "test-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:
@@ -2236,7 +2236,7 @@ gateway:
   http_addr: ":8080"
 admin:
   addr: ":9876"
-  api_key: "test-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:

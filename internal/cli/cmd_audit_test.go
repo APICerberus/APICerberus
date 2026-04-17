@@ -426,7 +426,7 @@ func TestRunAuditRetentionShow(t *testing.T) {
 server:
   port: 8080
 admin:
-  api_key: test-key
+  api_key: ck-test-admin-key-at-least-32-chars-long!!
   token_secret: test-admin-token-secret-at-least-32-chars-long
 portal:
   session:
@@ -452,7 +452,7 @@ func TestRunAuditRetentionShow_NoRouteOverrides(t *testing.T) {
 server:
   port: 8080
 admin:
-  api_key: test-key
+  api_key: ck-test-admin-key-at-least-32-chars-long!!
   token_secret: test-admin-token-secret-at-least-32-chars-long
 portal:
   session:
@@ -475,7 +475,7 @@ func TestRunAuditRetentionSet(t *testing.T) {
 server:
   port: 8080
 admin:
-  api_key: test-key
+  api_key: ck-test-admin-key-at-least-32-chars-long!!
   token_secret: test-admin-token-secret-at-least-32-chars-long
 portal:
   session:
@@ -506,7 +506,7 @@ func TestRunAuditRetentionSet_RouteOverride(t *testing.T) {
 server:
   port: 8080
 admin:
-  api_key: test-key
+  api_key: ck-test-admin-key-at-least-32-chars-long!!
   token_secret: test-admin-token-secret-at-least-32-chars-long
 portal:
   session:
@@ -533,7 +533,7 @@ func TestRunAuditRetentionSet_NoChanges(t *testing.T) {
 server:
   port: 8080
 admin:
-  api_key: test-key
+  api_key: ck-test-admin-key-at-least-32-chars-long!!
   token_secret: test-admin-token-secret-at-least-32-chars-long
 portal:
   session:
@@ -554,7 +554,7 @@ func TestRunAuditRetentionSet_RouteWithoutDays(t *testing.T) {
 server:
   port: 8080
 admin:
-  api_key: test-key
+  api_key: ck-test-admin-key-at-least-32-chars-long!!
   token_secret: test-admin-token-secret-at-least-32-chars-long
 `
 	_ = os.WriteFile(configPath, []byte(configContent), 0644)
@@ -575,7 +575,7 @@ func TestRunAuditRetention(t *testing.T) {
 server:
   port: 8080
 admin:
-  api_key: test-key
+  api_key: ck-test-admin-key-at-least-32-chars-long!!
   token_secret: test-admin-token-secret-at-least-32-chars-long
 portal:
   session:
@@ -611,7 +611,7 @@ func TestRunAuditRetention_NoArgs(t *testing.T) {
 server:
   port: 8080
 admin:
-  api_key: test-key
+  api_key: ck-test-admin-key-at-least-32-chars-long!!
   token_secret: test-admin-token-secret-at-least-32-chars-long
 portal:
   session:

@@ -145,8 +145,11 @@ func (e *Engine) Deduct(ctx context.Context, result *PreCheckResult, requestID, 
 		return result.Balance, nil
 	}
 
-	// Use atomic transaction to ensure balance update and transaction log are consistent
-	tx, err := e.st.DB().BeginTx(ctx, nil)
+	// Use atomic transaction to ensure balance update and transaction log are consistent.
+	// H-003 FIX: Use LevelSerializable to acquire an exclusive lock at transaction start,
+	// preventing TOCTOU races where two concurrent requests both pass PreCheck
+	// before either's Deduct commits. SQLite serializes transactions at the database level.
+	tx, err := e.st.DB().BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return 0, fmt.Errorf("begin transaction: %w", err)
 	}

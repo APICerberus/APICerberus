@@ -183,6 +183,7 @@ type TLSConfig struct {
 type AdminConfig struct {
 	Addr           string        `yaml:"addr" json:"addr"`
 	APIKey         string        `yaml:"api_key" json:"api_key"`
+	KeyVersion     int64         `yaml:"key_version" json:"key_version"`
 	AllowedIPs     []string      `yaml:"allowed_ips" json:"allowed_ips"`
 	AllowedOrigins []string      `yaml:"allowed_origins" json:"allowed_origins"`
 	TokenSecret    string        `yaml:"token_secret" json:"token_secret"`

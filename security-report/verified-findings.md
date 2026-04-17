@@ -1,8 +1,41 @@
-# APICerebrus Phase 3 (Verify) - Verified Security Findings
+# Verified Security Findings — APICerebrus 2026-04-17
 
-**Scan Date:** 2026-04-16
+**Scan Date:** 2026-04-17
 **Verifier:** Claude Code Phase 3 Verification
 **Project:** APICerebrus API Gateway
+
+---
+
+## 2026-04-17 Consolidated Scan Summary
+
+This scan found **0 Critical, 5 High, 14 Medium, 23 Low/Info** vulnerabilities.
+Full findings are in `SECURITY-REPORT.md`.
+
+### Key New Findings
+
+| ID | Severity | Title | Location |
+|----|----------|-------|----------|
+| H-001 | High | Admin key rotation does not revoke existing sessions | internal/admin/token.go:311-373 |
+| H-002 | High | Config import allows replacing admin credentials | internal/admin/server.go:427-482 |
+| H-003 | High | TOCTOU race in credit PreCheck vs Deduct | internal/billing/engine.go:92-192 |
+| H-004 | High | Test key bypass if test_mode_enabled in production | internal/billing/engine.go:107 |
+| H-005 | High | SQLite unencrypted at rest | internal/store/store.go |
+| M-001 | Medium | Admin API key has no minimum length validation | internal/config/load.go:314-321 |
+| M-002 | Medium | Logout does not invalidate JWT tokens | internal/admin/token.go:375-400 |
+| M-003 | Medium | gRPC-Web wildcard origin + credentials | internal/grpc/proxy.go:100,218 |
+| M-007 | Medium | Missing rate limiting on admin credit endpoints | internal/admin/server.go |
+| M-009 | Medium | DNS resolution failure allows unresolved hostnames | internal/gateway/proxy.go:333-337 |
+| M-014 | Medium | Auth state in sessionStorage (XSS risk) | web/src/lib/api.ts:38-54 |
+
+### Prior Issues Remediated (Recent Commits)
+
+| ID | Description | Commit |
+|----|-------------|--------|
+| WASM-003 | Panic recovery in WASM Execute/Run/AfterProxy | 8787ce2 |
+| GQL-011 | X-Admin-Key required on GET /sse | b9f221a |
+| GQL-010 | Drop path arg from system.config.import | c9add9d |
+| GQL-007 | Origin allow-list for subscription WS+SSE | 96d32aa |
+| GQL-006 | @authorized enforced at execution time | 1ea67fa |
 
 ---
 

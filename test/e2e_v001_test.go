@@ -331,7 +331,7 @@ gateway:
   max_body_bytes: 1048576
 admin:
   addr: "127.0.0.1:0"
-  api_key: "x"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
   ui_enabled: false
   ui_path: "/dashboard"

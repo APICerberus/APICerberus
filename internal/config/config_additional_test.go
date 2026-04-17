@@ -48,7 +48,7 @@ func TestWatch_Success(t *testing.T) {
 gateway:
   http_addr: ":8080"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:
@@ -118,7 +118,7 @@ func TestWatch_StatError(t *testing.T) {
 gateway:
   http_addr: ":8080"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-test"
@@ -202,7 +202,7 @@ func TestLoad_EnvOverrideError(t *testing.T) {
 gateway:
   http_addr: ":8080"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-test"

@@ -131,7 +131,7 @@ func TestValidRoles_MatchFrontend(t *testing.T) {
 func TestExtractRoleFromJWT(t *testing.T) {
 	t.Parallel()
 
-	token, err := issueAdminToken("test-secret-at-least-32-chars-long!!", 0, "manager", []string{PermServicesRead, PermRoutesRead})
+	token, err := issueAdminToken("test-secret-at-least-32-chars-long!!", 0, "manager", []string{PermServicesRead, PermRoutesRead}, 1)
 	if err != nil {
 		t.Fatalf("issueAdminToken: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestExtractRoleFromJWT(t *testing.T) {
 func TestExtractRoleFromJWT_NoRole(t *testing.T) {
 	t.Parallel()
 
-	token, err := issueAdminToken("test-secret-at-least-32-chars-long!!", 0, "", nil)
+	token, err := issueAdminToken("test-secret-at-least-32-chars-long!!", 0, "", nil, 1)
 	if err != nil {
 		t.Fatalf("issueAdminToken: %v", err)
 	}

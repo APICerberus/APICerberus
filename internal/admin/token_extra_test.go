@@ -69,36 +69,36 @@ func TestExtractBearerToken_NotBearer(t *testing.T) {
 // --- verifyAdminToken Tests ---
 
 func TestVerifyAdminToken_EmptySecret(t *testing.T) {
-	err := verifyAdminToken("some.token.here", "")
+	err := verifyAdminToken("some.token.here", "", 1)
 	if err == nil {
 		t.Error("expected error for empty secret")
 	}
 }
 
 func TestVerifyAdminToken_InvalidFormat(t *testing.T) {
-	err := verifyAdminToken("not-a-jwt", "secret-at-least-32-chars-long!")
+	err := verifyAdminToken("not-a-jwt", "secret-at-least-32-chars-long!", 1)
 	if err == nil {
 		t.Error("expected error for invalid JWT format")
 	}
 }
 
 func TestVerifyAdminToken_WrongSignature(t *testing.T) {
-	token, _ := issueAdminToken("secret-one-secret-at-least-32-chars!", 1*time.Hour, "", nil)
-	err := verifyAdminToken(token, "secret-two-secret-at-least-32-chars!!")
+	token, _ := issueAdminToken("secret-one-secret-at-least-32-chars!", 1*time.Hour, "", nil, 1)
+	err := verifyAdminToken(token, "secret-two-secret-at-least-32-chars!!", 1)
 	if err == nil {
 		t.Error("expected error for wrong signature")
 	}
 }
 
 func TestIssueAdminToken_EmptySecret(t *testing.T) {
-	_, err := issueAdminToken("", 0, "", nil)
+	_, err := issueAdminToken("", 0, "", nil, 1)
 	if err == nil {
 		t.Error("expected error for empty secret")
 	}
 }
 
 func TestIssueAdminToken_DefaultTTL(t *testing.T) {
-	token, err := issueAdminToken("secret-at-least-32-chars-long!!!", -1, "", nil)
+	token, err := issueAdminToken("secret-at-least-32-chars-long!!!", -1, "", nil, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

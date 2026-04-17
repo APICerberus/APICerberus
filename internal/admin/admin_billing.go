@@ -45,6 +45,13 @@ func (s *Server) deductCredits(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) adjustCredits(w http.ResponseWriter, r *http.Request, topup bool) {
 	userID := strings.TrimSpace(r.PathValue("id"))
+
+	// M-007: Rate limit credit operations to prevent abuse
+	if s.checkCreditRateLimit(userID) {
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many credit operations. Please try again later.")
+		return
+	}
+
 	var payload map[string]any
 	if err := jsonutil.ReadJSON(r, &payload, 1<<20); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())

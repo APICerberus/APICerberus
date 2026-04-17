@@ -126,7 +126,7 @@ gateway:
 
 admin:
   addr: "127.0.0.1:19876"
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
 
 portal:
   enabled: false

@@ -15,7 +15,7 @@ func TestLoadAppliesDefaultsAndGeneratesIDs(t *testing.T) {
 gateway:
   http_addr: ":8080"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:
@@ -100,7 +100,7 @@ func TestLoadValidation(t *testing.T) {
 gateway:
   http_addr: ":8080"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:
@@ -138,7 +138,7 @@ gateway:
   http_addr: ""
   https_addr: ":8443"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:
@@ -178,7 +178,7 @@ gateway:
     acme_email: "admin@example.com"
     acme_dir: "acme-certs"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:
@@ -214,7 +214,7 @@ func TestEnvOverrides(t *testing.T) {
 gateway:
   http_addr: ":8080"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:
@@ -273,7 +273,7 @@ func TestLoadConsumersSection(t *testing.T) {
 gateway:
   http_addr: ":8080"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:
@@ -342,7 +342,7 @@ func TestLoadConsumerValidationDuplicateKey(t *testing.T) {
 gateway:
   http_addr: ":8080"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:
@@ -384,7 +384,7 @@ func TestLoadAuthAPIKeyNames(t *testing.T) {
 gateway:
   http_addr: ":8080"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:
@@ -435,7 +435,7 @@ func TestLoadPluginConfigs(t *testing.T) {
 gateway:
   http_addr: ":8080"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:
@@ -488,7 +488,7 @@ func TestLoadBillingConfig(t *testing.T) {
 gateway:
   http_addr: ":8080"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:
@@ -565,7 +565,7 @@ func TestLoadValidation_ClusterRequiresMTLS(t *testing.T) {
 gateway:
   http_addr: ":8080"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:
@@ -590,7 +590,7 @@ cluster:
 gateway:
   http_addr: ":8080"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:
@@ -614,7 +614,7 @@ cluster:
 gateway:
   http_addr: ":8080"
 admin:
-  api_key: "test-admin-key"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   token_secret: "test-admin-token-secret-at-least-32-chars-long"
 portal:
   session:

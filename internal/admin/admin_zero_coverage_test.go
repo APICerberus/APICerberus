@@ -620,12 +620,13 @@ func TestWithAdminBearerAuth_ValidBearerToken(t *testing.T) {
 				APIKey:      "test-key-123456789012345678901234567890",
 				TokenSecret: secret,
 				TokenTTL:    time.Hour,
+				KeyVersion:  1,
 			},
 		},
 		rlAttempts: make(map[string]*adminAuthAttempts),
 	}
 
-	token, err := issueAdminToken(secret, time.Hour, string(RoleAdmin), RolePermissions[RoleAdmin])
+	token, err := issueAdminToken(secret, time.Hour, string(RoleAdmin), RolePermissions[RoleAdmin], srv.cfg.Admin.KeyVersion)
 	if err != nil {
 		t.Fatalf("failed to issue token: %v", err)
 	}

@@ -344,7 +344,7 @@ raft:
 admin:
   enabled: true
   address: "127.0.0.1:18080"
-  api_key: "admin-test-token"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   endpoints:
     cluster_status: "/admin/api/v1/cluster/status"
     cluster_nodes: "/admin/api/v1/cluster/nodes"

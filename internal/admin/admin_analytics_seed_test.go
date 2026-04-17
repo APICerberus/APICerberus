@@ -27,7 +27,7 @@ func newAdminTestServerWithAnalytics(t *testing.T) (adminBaseURL string, gw *gat
 			MaxBodyBytes:   1 << 20,
 		},
 		Admin: config.AdminConfig{
-			APIKey:      "secret-admin",
+			APIKey:      "ck-admin-testkey-mnopqrstuvwx5678yzAB",
 			TokenSecret: "secret-admin-token-secret-at-least-32-chars-long",
 			TokenTTL:    1 * time.Hour,
 			UIEnabled:   true,
@@ -110,7 +110,7 @@ func newAdminTestServerWithAnalytics(t *testing.T) (adminBaseURL string, gw *gat
 	t.Cleanup(func() { _ = adminSrv.Close() })
 	t.Cleanup(func() { _ = gw.Shutdown(context.Background()) })
 
-	token, err = issueAdminToken(cfg.Admin.TokenSecret, cfg.Admin.TokenTTL, string(RoleAdmin), RolePermissions[RoleAdmin])
+	token, err = issueAdminToken(cfg.Admin.TokenSecret, cfg.Admin.TokenTTL, string(RoleAdmin), RolePermissions[RoleAdmin], cfg.Admin.KeyVersion)
 	if err != nil {
 		t.Fatalf("issue admin token: %v", err)
 	}

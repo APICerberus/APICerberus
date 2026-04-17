@@ -123,13 +123,13 @@ func (s *Server) isWebSocketAuthorized(r *http.Request) bool {
 
 	// Cookie-based auth (browser WebSocket sends cookies automatically)
 	if token := extractAdminTokenFromCookie(r); token != "" {
-		if err := verifyAdminToken(token, cfg.TokenSecret); err == nil {
+		if err := verifyAdminToken(token, cfg.TokenSecret, cfg.KeyVersion); err == nil {
 			return true
 		}
 	}
 	// Allow Bearer token via query parameter (common for WebSocket clients)
 	if token := strings.TrimSpace(r.URL.Query().Get("token")); token != "" {
-		if err := verifyAdminToken(token, cfg.TokenSecret); err == nil {
+		if err := verifyAdminToken(token, cfg.TokenSecret, cfg.KeyVersion); err == nil {
 			// Clear token from URL to prevent logging (CWE-532)
 			q := r.URL.Query()
 			q.Del("token")
@@ -140,7 +140,7 @@ func (s *Server) isWebSocketAuthorized(r *http.Request) bool {
 	if token := strings.TrimSpace(r.Header.Get("Authorization")); token != "" {
 		const prefix = "Bearer "
 		if strings.HasPrefix(token, prefix) {
-			if err := verifyAdminToken(token[len(prefix):], cfg.TokenSecret); err == nil {
+			if err := verifyAdminToken(token[len(prefix):], cfg.TokenSecret, cfg.KeyVersion); err == nil {
 				return true
 			}
 		}

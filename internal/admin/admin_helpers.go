@@ -311,6 +311,7 @@ func (s *Server) startRateLimitCleanup() {
 			select {
 			case <-s.rlCleanupTicker.C:
 				s.cleanupOldRateLimitEntries()
+				s.cleanupCreditRateLimitEntries()
 			case <-s.rlStopCh:
 				s.rlCleanupTicker.Stop()
 				return
@@ -328,6 +329,53 @@ func (s *Server) cleanupOldRateLimitEntries() {
 	for ip, attempts := range s.rlAttempts {
 		if now.Sub(attempts.lastSeen) > 30*time.Minute {
 			delete(s.rlAttempts, ip)
+		}
+	}
+}
+
+// checkCreditRateLimit checks if the given key (userID or IP) has exceeded
+// the credit operation rate limit. Returns true if rate limited, false otherwise.
+// M-007: Added rate limiting to prevent credit endpoint abuse.
+func (s *Server) checkCreditRateLimit(key string) bool {
+	s.creditRateLimitMu.Lock()
+	defer s.creditRateLimitMu.Unlock()
+
+	now := time.Now()
+	entry, exists := s.creditRateLimit[key]
+	if !exists {
+		s.creditRateLimit[key] = &creditRateLimitEntry{
+			count:    1,
+			lastSeen: now,
+		}
+		return false
+	}
+
+	// Reset if last operation was more than 1 minute ago
+	if now.Sub(entry.lastSeen) > time.Minute {
+		entry.count = 1
+		entry.lastSeen = now
+		return false
+	}
+
+	// Increment count and check limit
+	entry.count++
+	entry.lastSeen = now
+
+	if entry.count > maxCreditOpsPerMinute {
+		return true
+	}
+	return false
+}
+
+// cleanupCreditRateLimitEntries removes stale credit rate limit entries older than 5 minutes.
+func (s *Server) cleanupCreditRateLimitEntries() {
+	s.creditRateLimitMu.Lock()
+	defer s.creditRateLimitMu.Unlock()
+
+	now := time.Now()
+	for key, entry := range s.creditRateLimit {
+		if now.Sub(entry.lastSeen) > 5*time.Minute {
+			delete(s.creditRateLimit, key)
 		}
 	}
 }

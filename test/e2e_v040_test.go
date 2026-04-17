@@ -255,7 +255,7 @@ federation:
 admin:
   enabled: true
   address: "127.0.0.1:18080"
-  api_key: "admin-test-token"
+  api_key: "ck-test-admin-key-at-least-32-chars-long!!"
   endpoints:
     subgraphs: "/admin/api/v1/subgraphs"
     supergraph: "/admin/api/v1/supergraph"

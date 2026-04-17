@@ -33,7 +33,7 @@ func TestIssueAdminTokenWithPayload(t *testing.T) {
 		t.Fatalf("expected 3 parts, got %d", len(parts))
 	}
 
-	err = verifyAdminToken(token, secret)
+	err = verifyAdminToken(token, secret, 1)
 	if err != nil {
 		t.Errorf("token verification failed: %v", err)
 	}

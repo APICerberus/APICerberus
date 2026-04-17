@@ -332,8 +332,10 @@ func validateUpstreamHost(host string) error {
 		// Not a literal IP — resolve hostname and validate each resolved IP
 		addrs, err := net.LookupHost(h)
 		if err != nil {
-			// Cannot resolve — allow with warning (dialer will fail if unreachable)
-			return nil
+			// M-009 FIX: Reject unresolved hostnames to prevent downstream connection failures.
+			// Previously allowed with comment "dialer will fail if unreachable" but this
+			// creates a poor user experience and can cause cascade issues.
+			return fmt.Errorf("upstream hostname %q cannot be resolved: %w", h, err)
 		}
 		for _, addr := range addrs {
 			if err := validateResolvedIP(addr, host); err != nil {

@@ -315,6 +315,9 @@ func validate(cfg *Config) error {
 	if apiKey == "" {
 		addErr("admin.api_key is required")
 	} else {
+		if len(apiKey) < 32 {
+			addErr("admin.api_key must be at least 32 characters")
+		}
 		lowerKey := strings.ToLower(apiKey)
 		if strings.Contains(lowerKey, "change") || strings.Contains(lowerKey, "secret") || strings.Contains(lowerKey, "password") || strings.Contains(lowerKey, "123") {
 			addErr("admin.api_key appears to be a placeholder or weak value")
@@ -400,6 +403,10 @@ func validate(cfg *Config) error {
 	case "reject", "allow_with_flag":
 	default:
 		addErr("billing.zero_balance_action must be one of: reject, allow_with_flag")
+	}
+	// H-004 FIX: Reject test_mode_enabled to prevent credit bypass in production.
+	if cfg.Billing.TestModeEnabled {
+		addErr("billing.test_mode_enabled is not permitted — use test API keys (ck_test_*) in test environments instead")
 	}
 	if cfg.Audit.BufferSize <= 0 {
 		addErr("audit.buffer_size must be greater than zero")

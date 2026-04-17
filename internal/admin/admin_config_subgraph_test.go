@@ -112,7 +112,7 @@ func TestStaticAuth(t *testing.T) {
 
 	t.Run("token with static auth correct key", func(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/auth/token", nil)
-		req.Header.Set("X-Admin-Key", "secret-admin")
+		req.Header.Set("X-Admin-Key", "ck-admin-testkey-mnopqrstuvwx5678yzAB")
 		resp, _ := http.DefaultClient.Do(req)
 		resp.Body.Close()
 		// Should return 200 with token

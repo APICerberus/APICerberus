@@ -57,7 +57,7 @@ func TestAdminBearerTokenAuth(t *testing.T) {
 
 	// Issue token with static key
 	tokenReq, _ := http.NewRequest(http.MethodPost, serverURL+"/admin/api/v1/auth/token", nil)
-	tokenReq.Header.Set("X-Admin-Key", "secret-admin")
+	tokenReq.Header.Set("X-Admin-Key", "ck-admin-testkey-mnopqrstuvwx5678yzAB")
 	tokenResp, err := http.DefaultClient.Do(tokenReq)
 	if err != nil {
 		t.Fatalf("token request error: %v", err)
@@ -400,9 +400,9 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 		"gateway:",
 		"  http_addr: 127.0.0.1:0",
 		"admin:",
-		"  api_key: Xk9#mP$vL2@nQ8*wR5&tZ3(cY7)jF4!hK6_gH1~uE0-iO9=pA2|sD5>lN8<bM3",
-		"  token_secret: secret-admin-token-secret-at-least-32-chars-long",
 		"  token_ttl: 1h",
+		// Sensitive fields (api_key, token_secret) are stripped by handleConfigImport
+		// and cannot be imported for security reasons (H-002).
 		"portal:",
 		"  session:",
 		"    secret: test-portal-session-value-at-least-32-chars-long!!",
@@ -763,7 +763,7 @@ func newAdminTestServer(t *testing.T) (adminBaseURL string, upstreamURL string, 
 			MaxBodyBytes:   1 << 20,
 		},
 		Admin: config.AdminConfig{
-			APIKey:      "secret-admin",
+			APIKey:      "ck-admin-testkey-mnopqrstuvwx5678yzAB",
 			TokenSecret: "secret-admin-token-secret-at-least-32-chars-long",
 			TokenTTL:    1 * time.Hour,
 			UIEnabled:   true,
@@ -833,7 +833,7 @@ func newAdminTestServer(t *testing.T) (adminBaseURL string, upstreamURL string, 
 		_ = gw.Shutdown(context.Background())
 	})
 
-	token, err = issueAdminToken(cfg.Admin.TokenSecret, cfg.Admin.TokenTTL, string(RoleAdmin), RolePermissions[RoleAdmin])
+	token, err = issueAdminToken(cfg.Admin.TokenSecret, cfg.Admin.TokenTTL, string(RoleAdmin), RolePermissions[RoleAdmin], cfg.Admin.KeyVersion)
 	if err != nil {
 		t.Fatalf("issue admin token: %v", err)
 	}

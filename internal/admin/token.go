@@ -32,7 +32,8 @@ func extractAdminTokenFromCookie(r *http.Request) string {
 }
 
 // issueAdminToken generates a scoped HS256 admin JWT with optional role and permissions.
-func issueAdminToken(secret string, ttl time.Duration, role string, permissions []string) (string, error) {
+// The keyVersion is embedded in the token so that key rotations invalidate existing sessions.
+func issueAdminToken(secret string, ttl time.Duration, role string, permissions []string, keyVersion int64) (string, error) {
 	if secret == "" {
 		return "", errors.New("admin token secret is not configured")
 	}
@@ -53,12 +54,13 @@ func issueAdminToken(secret string, ttl time.Duration, role string, permissions 
 		"typ": "JWT",
 	}
 	payload := map[string]any{
-		"sub": "admin",
-		"jti": jti,
-		"iss": "apicerberus-admin",
-		"aud": "apicerberus",
-		"iat": now.Unix(),
-		"exp": now.Add(ttl).Unix(),
+		"sub":         "admin",
+		"jti":         jti,
+		"iss":         "apicerberus-admin",
+		"aud":         "apicerberus",
+		"iat":         now.Unix(),
+		"exp":         now.Add(ttl).Unix(),
+		"key_version": keyVersion,
 	}
 	if role != "" {
 		payload["role"] = role
@@ -86,7 +88,9 @@ func issueAdminToken(secret string, ttl time.Duration, role string, permissions 
 }
 
 // verifyAdminToken parses and validates an admin JWT.
-func verifyAdminToken(tokenString, secret string) error {
+// The keyVersion parameter is the current admin key version from config;
+// tokens with a mismatched key_version claim are rejected (forces re-auth after key rotation).
+func verifyAdminToken(tokenString, secret string, keyVersion int64) error {
 	if secret == "" {
 		return errors.New("admin token secret is not configured")
 	}
@@ -100,6 +104,24 @@ func verifyAdminToken(tokenString, secret string) error {
 	}
 	if !jwtpkg.VerifyHS256(tok.SigningInput, tok.Signature, []byte(secret)) {
 		return errAdminTokenInvalid
+	}
+	// H-001 fix: reject tokens signed with an older key version after rotation.
+	// JSON numbers unmarshal as float64, so handle numeric types appropriately.
+	if rawVersion, ok := tok.Payload["key_version"]; ok {
+		var tokKeyVersion int64
+		switch v := rawVersion.(type) {
+		case float64:
+			tokKeyVersion = int64(v)
+		case int64:
+			tokKeyVersion = v
+		case int:
+			tokKeyVersion = int64(v)
+		default:
+			return errors.New("admin token has invalid key_version claim type")
+		}
+		if tokKeyVersion != keyVersion {
+			return errors.New("admin token key version mismatch — re-authenticate with the current key")
+		}
 	}
 	exp, ok := tok.ClaimUnix("exp")
 	if !ok || time.Now().UTC().Unix() > exp {
@@ -162,7 +184,7 @@ func (s *Server) withAdminBearerAuth(next http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusUnauthorized, "admin_unauthorized", "Missing Bearer token")
 			return
 		}
-		if err := verifyAdminToken(token, cfg.TokenSecret); err != nil {
+		if err := verifyAdminToken(token, cfg.TokenSecret, cfg.KeyVersion); err != nil {
 			s.recordFailedAuth(clientIP)
 			writeError(w, http.StatusUnauthorized, "admin_unauthorized", "Invalid or expired token")
 			return
@@ -220,7 +242,7 @@ func (s *Server) handleTokenIssue(w http.ResponseWriter, _ *http.Request) {
 	cfg := s.cfg.Admin
 	s.mu.RUnlock()
 
-	token, err := issueAdminToken(cfg.TokenSecret, cfg.TokenTTL, string(RoleAdmin), RolePermissions[RoleAdmin])
+	token, err := issueAdminToken(cfg.TokenSecret, cfg.TokenTTL, string(RoleAdmin), RolePermissions[RoleAdmin], cfg.KeyVersion)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "token_issue_failed", err.Error())
 		return
@@ -285,7 +307,7 @@ func (s *Server) handleFormLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := issueAdminToken(cfg.TokenSecret, cfg.TokenTTL, string(RoleAdmin), RolePermissions[RoleAdmin])
+	token, err := issueAdminToken(cfg.TokenSecret, cfg.TokenTTL, string(RoleAdmin), RolePermissions[RoleAdmin], cfg.KeyVersion)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "token_issue_failed", err.Error())
 		return
@@ -357,8 +379,10 @@ func (s *Server) handleRotateAdminKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// F-013: Apply the new key via mutateConfig (hot-reload without restart)
+	// H-001 fix: increment KeyVersion so all existing JWT sessions are immediately invalidated
 	if err := s.mutateConfig(func(cfg *config.Config) error {
 		cfg.Admin.APIKey = newKey
+		cfg.Admin.KeyVersion++
 		return nil
 	}); err != nil {
 		writeError(w, http.StatusInternalServerError, "rotation_failed", err.Error())

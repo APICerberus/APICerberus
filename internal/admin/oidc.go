@@ -313,15 +313,17 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	tokenSecret := s.cfg.Admin.TokenSecret
 	tokenTTL := s.cfg.Admin.TokenTTL
+	keyVersion := s.cfg.Admin.KeyVersion
 	s.mu.RUnlock()
 
 	now := time.Now().UTC()
 	payload := map[string]any{
-		"sub":   "oidc:" + idToken.Subject,
-		"email": email,
-		"role":  role,
-		"iat":   now.Unix(),
-		"exp":   now.Add(tokenTTL).Unix(),
+		"sub":         "oidc:" + idToken.Subject,
+		"email":       email,
+		"role":        role,
+		"iat":         now.Unix(),
+		"exp":         now.Add(tokenTTL).Unix(),
+		"key_version": keyVersion,
 	}
 	if len(perms) > 0 {
 		payload["permissions"] = perms

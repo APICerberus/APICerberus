@@ -53,6 +53,10 @@ type Server struct {
 	rlCleanupTicker *time.Ticker
 	rlStopCh        chan struct{}
 
+	// Rate limiting for credit operations (M-007)
+	creditRateLimitMu sync.RWMutex
+	creditRateLimit   map[string]*creditRateLimitEntry
+
 	// Lifecycle
 	closeOnce sync.Once
 	closed    bool
@@ -67,6 +71,15 @@ type adminAuthAttempts struct {
 	lastSeen  time.Time
 	blocked   bool
 }
+
+// creditRateLimitEntry tracks credit operations per key for rate limiting.
+type creditRateLimitEntry struct {
+	count    int
+	lastSeen time.Time
+}
+
+// maxCreditOpsPerMinute is the maximum credit operations allowed per key per minute.
+const maxCreditOpsPerMinute = 30
 
 const emptyMapImportSentinel = "__apicerberus_empty_map__"
 
@@ -87,6 +100,7 @@ func NewServer(cfg *config.Config, gw *gateway.Gateway) (*Server, error) {
 		rlAttempts:  make(map[string]*adminAuthAttempts),
 		rlStopCh:    make(chan struct{}),
 		shutdownCh:  make(chan struct{}),
+		creditRateLimit: make(map[string]*creditRateLimitEntry),
 	}
 	s.startRateLimitCleanup()
 	SetTrustedProxies(cfg.Gateway.TrustedProxies)
@@ -436,6 +450,23 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 	}
 	normalized := normalizeYAMLEmptyMaps(raw, emptyMapImportSentinel)
 
+	// Strip sensitive fields before import to enforce allowlist security model
+	sanitized, err := stripSensitiveFields(normalized)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "config_import_failed", err.Error())
+		return
+	}
+
+	// Parse stripped YAML and inject running config's sensitive values.
+	// This ensures validation passes while preventing imported credentials from taking effect.
+	s.mu.RLock()
+	sanitized, err = injectSensitiveFields(s.cfg, sanitized)
+	s.mu.RUnlock()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "config_import_failed", err.Error())
+		return
+	}
+
 	// Create temp file in a restricted directory to prevent other users from reading imported config (CWE-377)
 	importDir := os.TempDir()
 	if dir := os.Getenv("APICERBERUS_TMPDIR"); dir != "" {
@@ -452,7 +483,7 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 
 	// Safe: path is from os.CreateTemp, not user-controlled.
 	//nolint:gosec // G703: path is sanitized via CreateTemp
-	if err := os.WriteFile(path, normalized, 0o600); err != nil {
+	if err := os.WriteFile(path, sanitized, 0o600); err != nil {
 		writeError(w, http.StatusInternalServerError, "config_import_failed", err.Error())
 		return
 	}
@@ -462,6 +493,7 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cleanupImportedConfigSentinel(loaded, emptyMapImportSentinel)
+
 	next := config.CloneConfig(loaded)
 	if err := s.mutateConfig(func(cfg *config.Config) error {
 		*cfg = *next
@@ -479,6 +511,126 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 			"upstreams": len(next.Upstreams),
 		},
 	})
+}
+
+// stripSensitiveFields removes sensitive configuration fields from YAML bytes
+// before import to prevent accidental injection of secrets via the admin API.
+// Blocked fields: admin.api_key, admin.token_secret, admin.key_version,
+// cluster.rpc_secret, cluster.mtls, oidc.client_secret
+func stripSensitiveFields(raw []byte) ([]byte, error) {
+	if len(raw) == 0 {
+		return raw, nil
+	}
+
+	var data map[string]any
+	if err := yamlpkg.Unmarshal(raw, &data); err != nil {
+		return nil, fmt.Errorf("parse yaml: %w", err)
+	}
+
+	stripSensitiveFieldsRecursive(data)
+
+	return yamlpkg.Marshal(data)
+}
+
+// injectSensitiveFields takes a running config and sanitized YAML bytes,
+// parses the YAML, injects the running config's sensitive field values,
+// and returns the merged YAML. This ensures validation passes while
+// preserving the running config's credentials.
+func injectSensitiveFields(cfg *config.Config, sanitized []byte) ([]byte, error) {
+	var data map[string]any
+	if err := yamlpkg.Unmarshal(sanitized, &data); err != nil {
+		return nil, fmt.Errorf("parse sanitized yaml: %w", err)
+	}
+
+	// Ensure admin section exists
+	if data["admin"] == nil {
+		data["admin"] = map[string]any{}
+	}
+	admin, ok := data["admin"].(map[string]any)
+	if !ok {
+		return nil, errors.New("admin section is not a map")
+	}
+
+	// Inject sensitive values from running config
+	admin["api_key"] = cfg.Admin.APIKey
+	admin["token_secret"] = cfg.Admin.TokenSecret
+	admin["key_version"] = cfg.Admin.KeyVersion
+
+	// Inject OIDC client secret
+	if admin["oidc"] == nil {
+		admin["oidc"] = map[string]any{}
+	}
+	oidc, ok := admin["oidc"].(map[string]any)
+	if ok {
+		oidc["client_secret"] = cfg.Admin.OIDC.ClientSecret
+	}
+
+	// Inject cluster sensitive fields
+	if data["cluster"] == nil {
+		data["cluster"] = map[string]any{}
+	}
+	cluster, ok := data["cluster"].(map[string]any)
+	if !ok {
+		return nil, errors.New("cluster section is not a map")
+	}
+	cluster["rpc_secret"] = cfg.Cluster.RPCSecret
+	if cfg.Cluster.MTLS.Enabled {
+		if cluster["mtls"] == nil {
+			cluster["mtls"] = map[string]any{}
+		}
+		mtls, ok := cluster["mtls"].(map[string]any)
+		if ok {
+			mtls["enabled"] = cfg.Cluster.MTLS.Enabled
+			mtls["ca_cert_path"] = cfg.Cluster.MTLS.CACertPath
+			mtls["node_cert_path"] = cfg.Cluster.MTLS.NodeCertPath
+			mtls["node_key_path"] = cfg.Cluster.MTLS.NodeKeyPath
+			mtls["auto_generate"] = cfg.Cluster.MTLS.AutoGenerate
+			mtls["auto_cert_dir"] = cfg.Cluster.MTLS.AutoCertDir
+		}
+	}
+
+	return yamlpkg.Marshal(data)
+}
+
+// blockedImportFields lists dot-separated paths to fields that must not be
+// imported via the config import endpoint for security reasons.
+var blockedImportFields = []string{
+	"admin.api_key",
+	"admin.token_secret",
+	"admin.key_version",
+	"cluster.rpc_secret",
+	"cluster.mtls",
+	"oidc.client_secret",
+}
+
+func stripSensitiveFieldsRecursive(data map[string]any) {
+	if data == nil {
+		return
+	}
+
+	// Check top-level keys against blocked list
+	for _, field := range blockedImportFields {
+		parts := strings.SplitN(field, ".", 2)
+		if len(parts) == 1 {
+			delete(data, parts[0])
+		}
+	}
+
+	// Recurse into nested maps (admin, cluster, oidc, kafka)
+	for _, key := range []string{"admin", "cluster", "oidc", "kafka"} {
+		if nested, ok := data[key].(map[string]any); ok {
+			stripBlockedNestedFields(nested, key)
+		}
+	}
+}
+
+func stripBlockedNestedFields(nested map[string]any, parent string) {
+	for _, field := range blockedImportFields {
+		parts := strings.SplitN(field, ".", 2)
+		if len(parts) == 2 && parts[0] == parent {
+			delete(nested, parts[1])
+		}
+	}
 }
 
 func normalizeYAMLEmptyMaps(raw []byte, sentinel string) []byte {

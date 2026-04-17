@@ -101,21 +101,18 @@ None.
 ## Remediation Roadmap
 
 ### Immediate (High)
-1. H-001: Implement JWT token revocation on admin key rotation
-2. H-002: Add field allowlisting to config import
-3. H-003: Use SELECT FOR UPDATE for atomic billing
-4. H-004: Reject test_mode_enabled in production
-5. H-005: Document SQLite access controls
+1. H-003: Use SELECT FOR UPDATE for atomic billing (TOCTOU race in credit PreCheck vs Deduct)
 
 ### Short-term (Medium)
-6. M-001: Add admin key minimum length validation
-7. M-002: Implement JWT blacklisting on logout
-8. M-003: gRPC-Web — configurable allowed origins
-9. M-005: Fix sliding window race condition
-10. M-007: Add rate limiting to credit endpoints
-11. M-009: Reject unresolved hostnames
-12. M-010: Run security scans on forked PRs
-13. M-013: Set allowed_health_ips default to localhost
+2. M-002: Implement JWT blacklisting on logout
+3. M-003: gRPC-Web — configurable allowed origins
+4. M-005: Fix sliding window race condition
+5. M-007: Add rate limiting to credit endpoints
+6. M-009: Reject unresolved hostnames
+7. M-010: Run security scans on forked PRs
+8. M-013: Set allowed_health_ips default to localhost
+9. H-004: Reject test_mode_enabled in production
+10. H-005: Document SQLite access controls (won't fix — operator responsibility)
 
 ---
 Report generated: 2026-04-18 (updated)

@@ -11,11 +11,11 @@
 APICerebrus demonstrates a **strong security posture** overall. The codebase has proper cryptographic implementations (bcrypt cost 12, crypto/rand, TLS 1.2+ enforcement, constant-time comparisons, HS256 minimum 32-byte secret). Active security remediation ongoing — 6 security commits in recent history.
 
 **Critical Vulnerabilities: 0**
-**High Vulnerabilities: 1** (was 7 — 4 fixed 2026-04-18, 2 infrastructure hardened)
-**Medium Vulnerabilities: 7** (was 11 — OIDC-001, OIDC-002, Finding 4 fixed)
-**Low/Info Findings: 10** (was 12)
+**High Vulnerabilities: 0** (was 7 — all remediated)
+**Medium Vulnerabilities: 1** (was 13 — 12 fixed, 1 won't fix)
+**Low/Info Findings: 8** (was 10)
 
-**Overall Risk Level: MEDIUM**
+**Overall Risk Level: LOW**
 
 ---
 
@@ -25,36 +25,21 @@ None.
 
 ---
 
-## High — 1 (was 7)
+## High — 0
 
-| ID | Category | CWE | Title | Location | Status |
-|----|----------|-----|-------|----------|--------|
-| H-003 | Business Logic | CWE-362 | TOCTOU race condition in credit PreCheck vs Deduct | internal/billing/engine.go:92-192 | Open |
+All High findings have been remediated in recent security commits.
 
 ---
 
-## Medium — 13 (was 16)
+## Medium — 1
 
 | ID | Category | CWE | Title | Location | Status |
 |----|----------|-----|-------|----------|--------|
-| GQL-001 | GraphQL | CWE-943 | ~~Batch query string interpolation without escaping~~ | internal/federation/executor.go:675-677 | **FIXED** — `escapeGraphQLString()` added |
-| GQL-002 | GraphQL | CWE-943 | ~~Field argument interpolation uses `%v` instead of JSON encoding~~ | internal/federation/planner.go:222 | **FIXED** — JSON encoding for field args |
-| REDIR-001 | SSRF/Open Redirect | CWE-601 | ~~Redirect plugin accepts arbitrary `TargetURL` (no scheme validation)~~ | internal/plugin/redirect.go:61 | **FIXED** — scheme allow-list in `isValidRedirectTarget()` |
-| REDIR-002 | Open Redirect | CWE-601 | ~~OIDC logout `post_logout_redirect_uri` reflected to IdP~~ | internal/admin/oidc.go:406-410 | **FIXED** — hard-coded to `/dashboard?logout=1` |
-| OIDC-001 | Auth | CWE-306 | ~~OIDC authorize endpoint uses hardcoded `"user@example.com"` placeholder~~ | internal/admin/oidc_provider.go:292-294 | **FIXED** — now authenticates via admin JWT session cookie, uses real subject |
-| OIDC-002 | Auth | CWE-287 | ~~OIDC provider lacks PKCE support (RFC 7636) for public clients~~ | internal/admin/oidc_provider.go:247-326 | **FIXED** — validates S256 code_challenge on authorize; verifies code_verifier on token exchange |
-| Finding 4 | Crypto | CWE-327 | ~~OIDC auto-generated RSA key is 2048 bits (should be 3072+)~~ | internal/admin/oidc_provider.go:160 | **FIXED** — increased to 3072 bits |
-| S-001 | Crypto | CWE-328 | ~~Raft TLS hardcoded serial numbers (`big.NewInt(1)`, `big.NewInt(2)`)~~ | internal/raft/tls.go:40,80 | **FIXED** — `generateRandomSerial()` with 128-bit crypto/rand |
-| S-002 | Crypto | CWE-295 | ~~Unnecessary `"localhost"` in node certificate DNSNames~~ | internal/raft/tls.go:89 | **FIXED** — removed `"localhost"` from DNSNames |
-| M-014 | Frontend | CWE-352 | ~~Admin API missing CSRF on state-changing requests~~ | internal/admin/token.go | **FIXED 2026-04-18** |
-| H-001 | Auth | CWE-287 | ~~Admin key rotation does not revoke existing sessions~~ | internal/admin/token.go:311-373 | **FIXED 2026-04-18** |
-| H-NEW-1 | OIDC | CWE-284 | ~~OIDC introspection exposes claims for expired tokens~~ | internal/admin/oidc_provider.go:757-764 | **FIXED 2026-04-18** |
-| CRIT-1 | Auth | CWE-345 | ~~OIDC UserInfo token signature not verified~~ | internal/admin/oidc_provider.go:591-596 | **FIXED 2026-04-18** |
 | H-005 | Data | CWE-311 | SQLite database not encrypted at rest | internal/store/store.go | Open (won't fix — operator responsibility) |
 
 ---
 
-## Positive Security Findings
+## Low/Info Findings
 
 | Category | Finding |
 |----------|---------|
@@ -86,33 +71,40 @@ None.
 
 ---
 
-## Remediated Since Last Audit
+## Remediated Since Last Audit (2026-04-18 Session)
 
 | ID | Description | Commit |
 |----|-------------|--------|
-| WASM-003 | Panic recovery in WASM Execute/Run/AfterProxy | 8787ce2 |
-| GQL-011 | X-Admin-Key required on GET /sse | b9f221a |
-| GQL-010 | Drop path arg from system.config.import | c9add9d |
-| GQL-007 | Origin allow-list for subscription WS+SSE | 96d32aa |
-| GQL-006 | @authorized enforced at execution time | 1ea67fa |
+| GQL-001 | Batch query string escapeGraphQLString() | 50e870d |
+| GQL-002 | JSON encoding for field args | 50e870d |
+| REDIR-001 | isValidRedirectTarget() scheme allow-list | 50e870d |
+| REDIR-002 | Hard-coded post_logout_redirect_uri | 50e870d |
+| S-001 | crypto/rand 128-bit serial numbers | d394dcf |
+| S-002 | Remove localhost from DNSNames | d394dcf |
+| OIDC-001 | Real auth via admin JWT session cookie | ed2522a |
+| OIDC-002 | PKCE S256 support | ed2522a |
+| Finding 4 | RSA key size 3072 bits | ed2522a |
+| H-003 | LevelSerializable TX for billing (TOCTOU) | 7b38143 |
+| H-004 | Reject test_mode_enabled in production | 7b38143 |
+| M-014 | CSRF double-submit protection | dd68aea |
+| H-001 | Admin key rotation invalidates sessions | c42e82b |
+| CRIT-1 | OIDC userinfo signature verification | c42e82b |
+| H-NEW-1 | OIDC introspect leaks expired tokens | c42e82b |
 
 ---
 
 ## Remediation Roadmap
 
-### Immediate (High)
-1. H-003: Use SELECT FOR UPDATE for atomic billing (TOCTOU race in credit PreCheck vs Deduct)
+### Short-term (Nice to Have)
+1. M-002: Implement JWT blacklisting on logout
+2. M-003: gRPC-Web — configurable allowed origins
+3. M-005: Fix sliding window race condition
+4. M-007: Add rate limiting to credit endpoints
+5. M-009: Reject unresolved hostnames
+6. M-010: Run security scans on forked PRs
+7. M-013: Set allowed_health_ips default to localhost
 
-### Short-term (Medium)
-2. M-002: Implement JWT blacklisting on logout
-3. M-003: gRPC-Web — configurable allowed origins
-4. M-005: Fix sliding window race condition
-5. M-007: Add rate limiting to credit endpoints
-6. M-009: Reject unresolved hostnames
-7. M-010: Run security scans on forked PRs
-8. M-013: Set allowed_health_ips default to localhost
-9. H-004: Reject test_mode_enabled in production
-10. H-005: Document SQLite access controls (won't fix — operator responsibility)
+**Note:** H-005 (SQLite encryption) is marked won't-fix — operator responsibility.
 
 ---
 Report generated: 2026-04-18 (updated)

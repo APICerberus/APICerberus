@@ -43,8 +43,8 @@ None.
 | REDIR-002 | Open Redirect | CWE-601 | ~~OIDC logout `post_logout_redirect_uri` reflected to IdP~~ | internal/admin/oidc.go:406-410 | **FIXED** — hard-coded to `/dashboard?logout=1` |
 | OIDC-001 | Auth | CWE-306 | OIDC authorize endpoint uses hardcoded `"user@example.com"` placeholder | internal/admin/oidc_provider.go:292-294 | OPEN |
 | OIDC-002 | Auth | CWE-287 | OIDC provider lacks PKCE support (RFC 7636) for public clients | internal/admin/oidc_provider.go:247-326 | OPEN |
-| S-001 | Crypto | CWE-328 | Raft TLS hardcoded serial numbers (`big.NewInt(1)`, `big.NewInt(2)`) | internal/raft/tls.go:40,80 | OPEN |
-| S-002 | Crypto | CWE-295 | Unnecessary `"localhost"` in node certificate DNSNames | internal/raft/tls.go:89 | OPEN |
+| S-001 | Crypto | CWE-328 | ~~Raft TLS hardcoded serial numbers (`big.NewInt(1)`, `big.NewInt(2)`)~~ | internal/raft/tls.go:40,80 | **FIXED** — `generateRandomSerial()` with 128-bit crypto/rand |
+| S-002 | Crypto | CWE-295 | ~~Unnecessary `"localhost"` in node certificate DNSNames~~ | internal/raft/tls.go:89 | **FIXED** — removed `"localhost"` from DNSNames |
 | M-014 | Frontend | CWE-352 | ~~Admin API missing CSRF on state-changing requests~~ | internal/admin/token.go | **FIXED 2026-04-18** |
 | H-001 | Auth | CWE-287 | ~~Admin key rotation does not revoke existing sessions~~ | internal/admin/token.go:311-373 | **FIXED 2026-04-18** |
 | H-NEW-1 | OIDC | CWE-284 | ~~OIDC introspection exposes claims for expired tokens~~ | internal/admin/oidc_provider.go:757-764 | **FIXED 2026-04-18** |

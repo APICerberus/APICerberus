@@ -29,6 +29,16 @@ func NewTLSCertificateManager(nodeID, clusterID string) (*TLSCertificateManager,
 	}, nil
 }
 
+// generateRandomSerial generates a cryptographically random 128-bit serial number
+// as required by RFC 5280 §4.1.2.2 (serial numbers must be unique within CA scope).
+func generateRandomSerial() (*big.Int, error) {
+	b := make([]byte, 16) // 128 bits
+	if _, err := rand.Read(b); err != nil {
+		return nil, err
+	}
+	return new(big.Int).SetBytes(b), nil
+}
+
 // GenerateCA generates a new CA certificate and key.
 func (m *TLSCertificateManager) GenerateCA() error {
 	key, err := rsa.GenerateKey(rand.Reader, 4096)
@@ -36,8 +46,13 @@ func (m *TLSCertificateManager) GenerateCA() error {
 		return fmt.Errorf("failed to generate CA key: %w", err)
 	}
 
+	serial, err := generateRandomSerial()
+	if err != nil {
+		return fmt.Errorf("failed to generate CA serial: %w", err)
+	}
+
 	template := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
+		SerialNumber: serial,
 		Subject: pkix.Name{
 			Organization: []string{"APICerebrus Raft Cluster"},
 			CommonName:   fmt.Sprintf("%s CA", m.clusterID),
@@ -76,8 +91,13 @@ func (m *TLSCertificateManager) GenerateNodeCertificate() error {
 		return fmt.Errorf("failed to generate node key: %w", err)
 	}
 
+	serial, err := generateRandomSerial()
+	if err != nil {
+		return fmt.Errorf("failed to generate node serial: %w", err)
+	}
+
 	template := &x509.Certificate{
-		SerialNumber: big.NewInt(2),
+		SerialNumber: serial,
 		Subject: pkix.Name{
 			Organization: []string{"APICerebrus Raft Cluster"},
 			CommonName:   m.nodeID,
@@ -86,7 +106,7 @@ func (m *TLSCertificateManager) GenerateNodeCertificate() error {
 		NotAfter:    time.Now().Add(365 * 24 * time.Hour), // 1 year
 		KeyUsage:    x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		DNSNames:    []string{m.nodeID, "localhost"},
+		DNSNames:    []string{m.nodeID},
 	}
 
 	certBytes, err := x509.CreateCertificate(rand.Reader, template, m.caCert, &key.PublicKey, m.caKey)

@@ -18,6 +18,7 @@
 | H-NEW-3 (CWE-732) | High | NetworkPolicy enabled by default in Helm | c42e82b |
 | H-NEW-4 (CWE-732) | High | PodDisruptionBudget enabled by default | c42e82b |
 | H-NEW-5 (CWE-306) | High | .env.example sslmode=disable warning | c42e82b |
+| M-014 (CWE-352) | Medium | Admin API CSRF double-submit protection added | fa4e82b |
 
 ---
 

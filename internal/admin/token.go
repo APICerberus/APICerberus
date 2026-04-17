@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,7 +22,11 @@ var (
 	errAdminTokenInvalid = errors.New("admin token invalid")
 )
 
-const adminSessionCookieName = "apicerberus_admin_session"
+const (
+	adminSessionCookieName = "apicerberus_admin_session"
+	adminCSRFCookieName    = "apicerberus_admin_csrf"
+	adminCSRFHeaderName    = "X-CSRF-Token"
+)
 
 // extractAdminTokenFromCookie reads the admin JWT from the HttpOnly session cookie.
 func extractAdminTokenFromCookie(r *http.Request) string {
@@ -191,6 +196,19 @@ func (s *Server) withAdminBearerAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		s.clearFailedAuth(clientIP)
 
+		// CSRF protection: validate double-submit token for state-changing requests.
+		// M-014 fix: Browser-based CSRF attacks can forge requests even with Bearer auth.
+		// The admin API relies on X-Admin-Key + HttpOnly cookie; CSRF adds origin validation.
+		// NOTE: Skip CSRF check on login endpoints that set the CSRF cookie (handleTokenIssue,
+		// handleFormLogin) to avoid chicken-and-egg — the cookie isn't set until after auth.
+		isLoginEndpoint := r.URL.Path == "/admin/api/v1/auth/token" || r.URL.Path == "/admin/login"
+		if !isLoginEndpoint && (r.Method == "POST" || r.Method == "PUT" || r.Method == "DELETE" || r.Method == "PATCH") {
+			if !validateAdminCSRFToken(r) {
+				writeError(w, http.StatusForbidden, "csrf_required", "CSRF token validation failed")
+				return
+			}
+		}
+
 		// Extract role and permissions from the verified JWT
 		role, perms := extractRoleFromJWT(token)
 		ctx := r.Context()
@@ -248,6 +266,8 @@ func (s *Server) handleTokenIssue(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
+	csrfToken, csrfErr := generateAdminCSRFToken()
+
 	// Set HttpOnly cookie for XSS-safe authentication transport.
 	// Always set Secure flag to prevent token leakage over HTTP (CWE-614)
 	cookie := &http.Cookie{
@@ -261,12 +281,62 @@ func (s *Server) handleTokenIssue(w http.ResponseWriter, _ *http.Request) {
 	}
 	http.SetCookie(w, cookie)
 
+	if csrfErr == nil {
+		setAdminCSRFCookie(w, csrfToken)
+	}
+
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
 		"token_type": "Bearer",
 		"token":      token,
+		"csrf_token": csrfToken,
 		"expires_in": int(cfg.TokenTTL.Seconds()),
 		"message":    "Session cookie set successfully",
 	})
+}
+
+// generateAdminCSRFToken creates a cryptographically random CSRF token.
+func generateAdminCSRFToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+// setAdminCSRFCookie sets the CSRF double-submit cookie on the response.
+// The cookie is NOT HttpOnly so JavaScript can read it for the double-submit pattern.
+func setAdminCSRFCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     adminCSRFCookieName,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   86400, // 24 hours
+		HttpOnly: false, // Must be readable by JS for double-submit header
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// validateAdminCSRFToken validates the double-submit CSRF token from header vs cookie.
+// Returns true for GET/HEAD/OPTIONS (no body, no CSRF needed), or when no CSRF cookie
+// is present (programmatic/test clients without browser cookie flow). For browser-based
+// POST/PUT/DELETE/PATCH, both cookie and header must match.
+func validateAdminCSRFToken(r *http.Request) bool {
+	method := r.Method
+	if method == "GET" || method == "HEAD" || method == "OPTIONS" {
+		return true
+	}
+	cookie, err := r.Cookie(adminCSRFCookieName)
+	// No CSRF cookie means this is a programmatic client (test/mcp/api-key) — skip CSRF
+	if err != nil || cookie.Value == "" {
+		return true
+	}
+	// Check X-CSRF-Token header (primary) and X-XSRF-Token (Angular fallback)
+	headerToken := r.Header.Get(adminCSRFHeaderName)
+	if headerToken == "" {
+		headerToken = r.Header.Get("X-XSRF-Token")
+	}
+	return cookie.Value == headerToken && cookie.Value != ""
 }
 
 // handleFormLogin accepts an admin key via HTML form POST, validates it against

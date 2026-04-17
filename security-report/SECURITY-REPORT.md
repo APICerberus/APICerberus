@@ -44,8 +44,8 @@ APICerebrus demonstrates a **strong security posture** overall. The codebase has
 
 ---
 
-## Medium — 16 (was 14)
-| L-002 | Crypto | CWE-327 | API key hash uses SHA-256, not password KDF | internal/store/api_key_repo.go:353-355 |
+## Medium — 17 (was 14)
+| M-014 | Frontend | CWE-352 | ~~Admin API missing CSRF on state-changing requests~~ | internal/admin/token.go | **FIXED 2026-04-18** — Double-submit CSRF added to withAdminBearerAuth; web client now sends X-CSRF-Token header |
 | L-003 | Crypto | CWE-330 | Raft CA certificate uses predictable serial numbers | internal/raft/tls.go:40,80 |
 | L-004 | Crypto | CWE-326 | TLS 1.3 has no explicit cipher configuration | internal/gateway/tls.go:70-98 |
 | L-005 | Data | CWE-201 | PII masking missing fields (ssn, bank_account, dob) | internal/audit/masker.go:17-25 |

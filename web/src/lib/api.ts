@@ -23,10 +23,10 @@ export class ApiError extends Error {
 }
 
 // M-021: Admin API CSRF protection.
-// The admin API should implement CSRF token validation for state-changing operations.
-// The backend should require the X-Admin-Key header for authentication, but CSRF tokens
-// provide additional protection against cross-site request forgery for browser-based attacks.
-// The X-Admin-Key itself acts as a bearer token — ensure it is never exposed in URLs or logs.
+// M-014 fix: Admin API now uses double-submit CSRF tokens for state-changing operations.
+// The server generates a cryptographically random token on login, stored in a non-HttpOnly
+// cookie (readable by JS). The client reads it and sends it as X-CSRF-Token header.
+// The X-Admin-Key bearer token handles API auth; CSRF adds protection against browser-based CSRF.
 
 // M-022: Auth state in sessionStorage is a security risk.
 // sessionStorage persists until the tab/window is closed, but is accessible to any
@@ -40,6 +40,16 @@ export function isAdminAuthenticated(): boolean {
     return false;
   }
   return window.sessionStorage.getItem(API_CONFIG.adminAuthStateKey) === "true";
+}
+
+const ADMIN_CSRF_COOKIE_NAME = "apicerberus_admin_csrf";
+
+function getAdminCSRFToken(): string | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  const match = document.cookie.match(new RegExp("(^| )" + ADMIN_CSRF_COOKIE_NAME + "=([^;]+)"));
+  return match ? match[2] : null;
 }
 
 export function setAdminAuthenticated(value: boolean) {
@@ -103,6 +113,15 @@ export async function adminApiRequest<T>(path: string, options: ApiRequestOption
   if (options.body !== undefined) {
     headers.set("Content-Type", "application/json");
     body = JSON.stringify(options.body);
+  }
+
+  // M-014 fix: Add CSRF token for state-changing operations (double-submit pattern)
+  const method = options.method ?? "GET";
+  if (method === "POST" || method === "PUT" || method === "DELETE" || method === "PATCH") {
+    const csrfToken = getAdminCSRFToken();
+    if (csrfToken) {
+      headers.set("X-CSRF-Token", csrfToken);
+    }
   }
 
   const url = resolveUrl(withQuery(path, options.query));

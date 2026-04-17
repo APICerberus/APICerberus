@@ -588,10 +588,36 @@ func (s *Server) handleOIDCUserInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse and verify token
+	// Parse token (signature verified below — userinfo was missed in M-009)
 	token, err := jwt.Parse(tokenStr)
 	if err != nil || token == nil {
 		writeError(w, http.StatusUnauthorized, "invalid_token", "failed to parse token")
+		return
+	}
+
+	// Verify signature using the provider's private key (same pattern as introspect)
+	providerSignerMu.RLock()
+	signer = providerSigner
+	providerSignerMu.RUnlock()
+
+	if signer == nil {
+		writeError(w, http.StatusUnauthorized, "invalid_token", "signer not initialized")
+		return
+	}
+
+	var sigValid bool
+	switch signer.algorithm {
+	case "RS256":
+		if rsaPub, ok := signer.privateKey.(*rsa.PrivateKey); ok {
+			sigValid = jwt.VerifyRS256(token.SigningInput, token.Signature, &rsaPub.PublicKey)
+		}
+	case "ES256":
+		if ecdsaPub, ok := signer.privateKey.(*ecdsa.PrivateKey); ok {
+			sigValid = jwt.VerifyES256(token.SigningInput, token.Signature, &ecdsaPub.PublicKey)
+		}
+	}
+	if !sigValid {
+		writeError(w, http.StatusUnauthorized, "invalid_token", "invalid signature")
 		return
 	}
 
@@ -729,12 +755,16 @@ func (s *Server) handleOIDCIntrospect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := map[string]any{
-		"active":    exp > now,
-		"sub":       claims["sub"],
-		"scope":     claims["scope"],
-		"client_id": claims["aud"],
-		"exp":       claims["exp"],
-		"iat":       claims["iat"],
+		"active": exp > now,
+	}
+	// Only expose claims when token is active (RFC 7662 §2.2 allows but does not require
+	// returning claims for inactive tokens — omit them to prevent information leakage)
+	if exp > now {
+		resp["sub"] = claims["sub"]
+		resp["scope"] = claims["scope"]
+		resp["client_id"] = claims["aud"]
+		resp["exp"] = claims["exp"]
+		resp["iat"] = claims["iat"]
 	}
 
 	w.Header().Set("Content-Type", "application/json")

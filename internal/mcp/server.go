@@ -254,13 +254,7 @@ func (s *Server) RunSSE(ctx context.Context, addr string) error {
 	mux.HandleFunc("POST /mcp", func(w http.ResponseWriter, r *http.Request) {
 		// Require X-Admin-Key header matching the configured admin key.
 		// Stdio transport is inherently local; SSE transport is network-accessible and needs auth.
-		s.mu.RLock()
-		adminKey := ""
-		if s.cfg != nil {
-			adminKey = s.cfg.Admin.APIKey
-		}
-		s.mu.RUnlock()
-		if adminKey == "" || !secureCompare(r.Header.Get("X-Admin-Key"), adminKey) {
+		if !s.checkAdminKey(r) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -275,6 +269,15 @@ func (s *Server) RunSSE(ctx context.Context, addr string) error {
 		_ = json.NewEncoder(w).Encode(resp)
 	})
 	mux.HandleFunc("GET /sse", func(w http.ResponseWriter, r *http.Request) {
+		// SEC-GQL-011: GET /sse previously accepted unauthenticated streams,
+		// giving any network attacker an unbounded-FD DoS primitive — each
+		// open request held a socket plus a per-request goroutine with a
+		// 10-second heartbeat loop indefinitely. Require X-Admin-Key here,
+		// matching the POST /mcp gate.
+		if !s.checkAdminKey(r) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
 		flusher, ok := w.(http.Flusher)
 		if !ok {
 			http.Error(w, "streaming unsupported", http.StatusInternalServerError)
@@ -453,4 +456,24 @@ func extractAdminError(payload any, status int) string {
 // secureCompare compares two strings in constant time to prevent timing attacks.
 func secureCompare(a, b string) bool {
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
+}
+
+// checkAdminKey returns true iff r carries the configured admin key via the
+// X-Admin-Key header. Single source of truth for the SSE transport's auth
+// gate so every network-accessible endpoint applies the same rule — see
+// SEC-GQL-011 for the DoS class this closes.
+func (s *Server) checkAdminKey(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	s.mu.RLock()
+	adminKey := ""
+	if s.cfg != nil {
+		adminKey = s.cfg.Admin.APIKey
+	}
+	s.mu.RUnlock()
+	if adminKey == "" {
+		return false
+	}
+	return secureCompare(r.Header.Get("X-Admin-Key"), adminKey)
 }

@@ -1652,12 +1652,13 @@ func TestRunSSE_HTTPRequests(t *testing.T) {
 		}
 	})
 
-	// Test GET /sse endpoint
+	// Test GET /sse endpoint (authenticated — happy path after SEC-GQL-011).
 	t.Run("GET /sse", func(t *testing.T) {
 		req, err := http.NewRequest("GET", "http://"+addr+"/sse", nil)
 		if err != nil {
 			t.Fatalf("Failed to create request: %v", err)
 		}
+		req.Header.Set("X-Admin-Key", "test-admin-key")
 
 		client := &http.Client{Timeout: 2 * time.Second}
 		resp, err := client.Do(req)
@@ -1680,6 +1681,43 @@ func TestRunSSE_HTTPRequests(t *testing.T) {
 		_, _ = resp.Body.Read(buf)
 		if !strings.Contains(string(buf), "ready") {
 			t.Error("Expected 'ready' event in SSE stream")
+		}
+	})
+
+	// Test GET /sse without X-Admin-Key returns 401 (SEC-GQL-011).
+	t.Run("GET /sse unauthorized", func(t *testing.T) {
+		req, err := http.NewRequest("GET", "http://"+addr+"/sse", nil)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+		client := &http.Client{Timeout: 2 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("GET /sse failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Errorf("Expected status 401 for unauth /sse, got %d", resp.StatusCode)
+		}
+	})
+
+	// Wrong admin key is also rejected.
+	t.Run("GET /sse wrong key", func(t *testing.T) {
+		req, err := http.NewRequest("GET", "http://"+addr+"/sse", nil)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+		req.Header.Set("X-Admin-Key", "wrong-key")
+		client := &http.Client{Timeout: 2 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("GET /sse failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Errorf("Expected status 401 for wrong admin key on /sse, got %d", resp.StatusCode)
 		}
 	})
 

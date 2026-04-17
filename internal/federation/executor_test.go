@@ -357,7 +357,9 @@ func TestBatchRequest(t *testing.T) {
 	}))
 	defer server.Close()
 
-	executor := NewExecutor()
+	// Disable SSRF URL validation because httptest.NewServer binds to
+	// 127.0.0.1 which the gate rightly rejects in non-test paths.
+	executor := NewExecutorWith(WithExecutorURLValidation(false))
 	batch := &BatchRequest{
 		Queries: []string{"user(id: 1) { id }", "user(id: 2) { id }"},
 	}

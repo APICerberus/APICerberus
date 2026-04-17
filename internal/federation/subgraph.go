@@ -234,6 +234,19 @@ func (m *SubgraphManager) FetchSchema(subgraph *Subgraph) (*Schema, error) {
 		return nil, err
 	}
 
+	// SEC-GQL-005: re-validate subgraph URL before every outbound dispatch.
+	// AddSubgraph validates at registration time, but a DNS record can be
+	// flipped to a private / metadata IP later (rebinding). Re-checking here
+	// before issuing the introspection request closes the TOCTOU window —
+	// the guest can no longer turn the schema fetch into an oracle against
+	// internal services.
+	if m.validateURLs {
+		if err := validateSubgraphURL(subgraph.URL); err != nil {
+			subgraph.setHealth(HealthUnhealthy)
+			return nil, fmt.Errorf("introspect: %w", err)
+		}
+	}
+
 	req, err := http.NewRequest("POST", subgraph.URL, strings.NewReader(string(jsonBody)))
 	if err != nil {
 		return nil, err
@@ -333,6 +346,17 @@ func (m *SubgraphManager) FetchSchema(subgraph *Subgraph) (*Schema, error) {
 
 // CheckHealth checks the health of a subgraph.
 func (m *SubgraphManager) CheckHealth(subgraph *Subgraph) error {
+	// SEC-GQL-005: same rebinding defense as FetchSchema. Without this the
+	// healthy/unhealthy boolean and latency that the health check exposes
+	// could be used as a reflective oracle against metadata / RFC1918 after
+	// a post-registration DNS flip.
+	if m.validateURLs {
+		if err := validateSubgraphURL(subgraph.URL); err != nil {
+			subgraph.setHealth(HealthUnhealthy)
+			return fmt.Errorf("health: %w", err)
+		}
+	}
+
 	req, err := http.NewRequest("GET", subgraph.URL, nil)
 	if err != nil {
 		subgraph.setHealth(HealthUnhealthy)
@@ -418,6 +442,16 @@ func typeToString(t *TypeRef) string {
 // validateSubgraphURL rejects subgraph URLs targeting loopback, link-local,
 // unspecified, or multicast addresses to prevent SSRF via subgraph registration.
 // For hostnames, it resolves DNS and validates each resolved IP.
+//
+// SEC-GQL-005 hardening:
+//   - DNS resolution failures now DENY rather than ALLOW. Previously a malicious
+//     or transient NXDOMAIN at validation time let a hostname pass, then a later
+//     DNS flip could return a private / metadata IP at connection time (TOCTOU).
+//   - IPv4-in-IPv6 ("::ffff:10.0.0.1") is now unwrapped before the IsPrivate /
+//     link-local checks so attackers can't bypass the gate with v4-mapped-v6.
+//   - IPv6 link-local (fe80::/10) and unique-local (fc00::/7) are covered
+//     explicitly; the Go stdlib IsPrivate covers fc00::/7 but the call order
+//     had to be reshuffled so v4-mapped addresses are re-checked after unwrap.
 func validateSubgraphURL(rawURL string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -436,11 +470,12 @@ func validateSubgraphURL(rawURL string) error {
 		return validateSubgraphIP(ip, host)
 	}
 
-	// Hostname — resolve and validate each resolved IP
 	addrs, err := net.LookupHost(host)
 	if err != nil {
-		// Cannot resolve — allow (will fail at connection time if unreachable)
-		return nil
+		return fmt.Errorf("subgraph host %q cannot be resolved: %w (SSRF gate fails closed)", host, err)
+	}
+	if len(addrs) == 0 {
+		return fmt.Errorf("subgraph host %q resolved to no addresses (SSRF gate fails closed)", host)
 	}
 	for _, addr := range addrs {
 		if err := validateSubgraphIP(net.ParseIP(addr), host); err != nil {
@@ -453,15 +488,28 @@ func validateSubgraphURL(rawURL string) error {
 // validateSubgraphIP validates a resolved IP address against SSRF blocklist.
 func validateSubgraphIP(ip net.IP, host string) error {
 	if ip == nil {
-		return nil
+		return fmt.Errorf("subgraph host %q has unparsable IP (SSRF gate fails closed)", host)
 	}
+
+	// Unwrap ::ffff:a.b.c.d → a.b.c.d so IPv4 checks below apply to
+	// v4-mapped addresses — otherwise "::ffff:169.254.169.254" would
+	// skip the 169.254 branch below.
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
+
 	if ip.IsLoopback() {
 		return fmt.Errorf("subgraph host %q resolves to loopback address %q", host, ip.String())
 	}
 	if ip.IsUnspecified() {
 		return fmt.Errorf("subgraph host %q resolves to unspecified address %q", host, ip.String())
 	}
-	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 169 && ip4[1] == 254 {
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return fmt.Errorf("subgraph host %q resolves to link-local address %q", host, ip.String())
+	}
+	// IPv4 169.254.0.0/16 is covered by IsLinkLocalUnicast, but keep the
+	// explicit metadata check as a defense-in-depth signal in error messages.
+	if len(ip) == 4 && ip[0] == 169 && ip[1] == 254 {
 		return fmt.Errorf("subgraph host %q resolves to link-local/metadata address %q", host, ip.String())
 	}
 	if ip.IsMulticast() {

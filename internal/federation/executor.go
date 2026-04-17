@@ -613,6 +613,14 @@ func (e *Executor) ExecuteBatch(ctx context.Context, subgraph *Subgraph, batch *
 		return nil, err
 	}
 
+	// SEC-GQL-005: re-validate subgraph URL before every batch dispatch —
+	// closes the DNS-rebinding TOCTOU window between registration and now.
+	if e.validateURLs {
+		if err := validateSubgraphURL(subgraph.URL); err != nil {
+			return nil, fmt.Errorf("batch: %w", err)
+		}
+	}
+
 	req, err := http.NewRequestWithContext(ctx, "POST", subgraph.URL, bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, err
@@ -698,6 +706,17 @@ func (e *Executor) runSubscription(sub *SubscriptionConnection, step *PlanStep) 
 		close(sub.Messages)
 		close(sub.Errors)
 	}()
+
+	// SEC-GQL-005: re-validate subgraph URL before opening a websocket.
+	// Subscriptions are the longest-lived network path in federation; if
+	// DNS rebinding can be triggered, the socket survives the original
+	// validation indefinitely. Check again right before Dial.
+	if e.validateURLs {
+		if err := validateSubgraphURL(sub.Subgraph.URL); err != nil {
+			sub.Errors <- fmt.Errorf("subscription: %w", err)
+			return
+		}
+	}
 
 	// Convert HTTP URL to WebSocket URL
 	wsURL := sub.Subgraph.URL

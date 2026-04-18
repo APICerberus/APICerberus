@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"unicode"
 )
 
 // BotDetectConfig configures bot detection behavior.
@@ -76,10 +77,34 @@ func (b *BotDetect) Evaluate(in *PipelineContext) error {
 	return &BotDetectError{
 		PluginError: PluginError{
 			Code:    "bot_blocked",
-			Message: fmt.Sprintf("Blocked bot user-agent: %s", in.Request.Header.Get("User-Agent")),
+			Message: fmt.Sprintf("Blocked bot user-agent: %s", sanitizeUserAgent(in.Request.Header.Get("User-Agent"))),
 			Status:  http.StatusForbidden,
 		},
 	}
+}
+
+// sanitizeUserAgent truncates the User-Agent to a safe length and removes
+// log-injection characters (\r, \n) to prevent log forgery (L-010).
+func sanitizeUserAgent(ua string) string {
+	const maxLen = 200
+	if len(ua) > maxLen {
+		ua = ua[:maxLen]
+	}
+	var b strings.Builder
+	b.Grow(len(ua))
+	for _, r := range ua {
+		// Drop CR/LF to prevent log injection attacks
+		if r == '\r' || r == '\n' {
+			continue
+		}
+		// Replace other control characters with space
+		if r < ' ' && unicode.IsControl(r) {
+			b.WriteRune(' ')
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 var knownBotPatterns = []string{

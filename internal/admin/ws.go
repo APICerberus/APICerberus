@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,7 +50,10 @@ func (s *Server) handleRealtimeWebSocket(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusForbidden, "invalid_origin", "Invalid WebSocket origin")
 		return
 	}
-	if !s.isWebSocketAuthorized(r) {
+	if authorized, retrySec := s.isWebSocketAuthorized(r); !authorized {
+		if retrySec > 0 {
+			w.Header().Set("Retry-After", strconv.Itoa(retrySec))
+		}
 		writeError(w, http.StatusUnauthorized, "admin_unauthorized", "Invalid admin key")
 		return
 	}
@@ -114,7 +118,7 @@ func (s *Server) handleRealtimeWebSocket(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (s *Server) isWebSocketAuthorized(r *http.Request) bool {
+func (s *Server) isWebSocketAuthorized(r *http.Request) (bool, int) {
 	s.mu.RLock()
 	cfg := s.cfg.Admin
 	s.mu.RUnlock()
@@ -124,7 +128,7 @@ func (s *Server) isWebSocketAuthorized(r *http.Request) bool {
 	// Cookie-based auth (browser WebSocket sends cookies automatically)
 	if token := extractAdminTokenFromCookie(r); token != "" {
 		if err := verifyAdminToken(token, cfg.TokenSecret, cfg.KeyVersion); err == nil {
-			return true
+			return true, 0
 		}
 	}
 	// Allow Bearer token via query parameter (common for WebSocket clients)
@@ -134,14 +138,14 @@ func (s *Server) isWebSocketAuthorized(r *http.Request) bool {
 			q := r.URL.Query()
 			q.Del("token")
 			r.URL.RawQuery = q.Encode()
-			return true
+			return true, 0
 		}
 	}
 	if token := strings.TrimSpace(r.Header.Get("Authorization")); token != "" {
 		const prefix = "Bearer "
 		if strings.HasPrefix(token, prefix) {
 			if err := verifyAdminToken(token[len(prefix):], cfg.TokenSecret, cfg.KeyVersion); err == nil {
-				return true
+				return true, 0
 			}
 		}
 	}
@@ -149,7 +153,7 @@ func (s *Server) isWebSocketAuthorized(r *http.Request) bool {
 	// Fall back to static key
 	expected := strings.TrimSpace(cfg.APIKey)
 	if expected == "" {
-		return true
+		return true, 0
 	}
 	provided := strings.TrimSpace(r.Header.Get("X-Admin-Key"))
 	if provided == "" {
@@ -157,15 +161,15 @@ func (s *Server) isWebSocketAuthorized(r *http.Request) bool {
 	}
 	// Apply rate limiting to the static key fallback to prevent brute-force attacks.
 	// The rate limit is per-IP and uses the same counters as withAdminStaticAuth.
-	if s.isRateLimited(clientIP) {
-		return false
+	if retrySec, limited := s.rateLimitInfo(clientIP); limited {
+		return false, retrySec // L-009: caller writes Retry-After header
 	}
 	if subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) != 1 {
 		s.recordFailedAuth(clientIP)
-		return false
+		return false, 0
 	}
 	s.clearFailedAuth(clientIP)
-	return true
+	return true, 0
 }
 
 // isValidWebSocketOrigin validates the Origin header to prevent CSWSH attacks.

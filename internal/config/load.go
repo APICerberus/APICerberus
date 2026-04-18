@@ -11,6 +11,35 @@ import (
 	customyaml "github.com/APICerberus/APICerebrus/internal/pkg/yaml"
 )
 
+// isWeakSecret checks if a secret value matches a known weak/placeholder pattern.
+// This prevents operators from deploying with guessable admin credentials.
+func isWeakSecret(value string) bool {
+	lower := strings.ToLower(value)
+	// Check for exact blocklist matches first (case-insensitive)
+	weakValues := []string{
+		"secret", "password", "changeme", "changeme-in-production",
+		"123456", "admin", "root", "test", "demo",
+		"your-secret", "your-hmac-secret", "your-secure-session-secret",
+		"change-me-in-production", "change-me-min-32-chars",
+	}
+	for _, weak := range weakValues {
+		if strings.EqualFold(lower, weak) {
+			return true
+		}
+	}
+	// Check for blocklisted substrings (partial match on common patterns)
+	// Only flag if the value also meets minimum length to avoid false positives
+	if len(value) >= 16 {
+		partialPatterns := []string{"change", "secret", "password"}
+		for _, pattern := range partialPatterns {
+			if strings.Contains(lower, pattern) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Load reads, parses, normalizes and validates configuration from disk.
 func Load(path string) (*Config, error) {
 	// #nosec G304 -- path is the administrator-supplied config file path.
@@ -318,8 +347,7 @@ func validate(cfg *Config) error {
 		if len(apiKey) < 32 {
 			addErr("admin.api_key must be at least 32 characters")
 		}
-		lowerKey := strings.ToLower(apiKey)
-		if strings.Contains(lowerKey, "change") || strings.Contains(lowerKey, "secret") || strings.Contains(lowerKey, "password") || strings.Contains(lowerKey, "123") {
+		if isWeakSecret(apiKey) {
 			addErr("admin.api_key appears to be a placeholder or weak value")
 		}
 	}
@@ -327,8 +355,7 @@ func validate(cfg *Config) error {
 	if len(tokenSecret) < 32 {
 		addErr("admin.token_secret must be at least 32 characters")
 	}
-	lowerTokenSecret := strings.ToLower(tokenSecret)
-	if strings.Contains(lowerTokenSecret, "change") || strings.Contains(lowerTokenSecret, "secret") || strings.Contains(lowerTokenSecret, "password") {
+	if isWeakSecret(tokenSecret) {
 		addErr("admin.token_secret appears to be a placeholder or weak value")
 	}
 	if !strings.HasPrefix(cfg.Admin.UIPath, "/") {
@@ -343,8 +370,7 @@ func validate(cfg *Config) error {
 	if len(secret) < 32 {
 		addErr("portal.session.secret must be at least 32 characters")
 	}
-	lowerSecret := strings.ToLower(secret)
-	if strings.Contains(lowerSecret, "change") || strings.Contains(lowerSecret, "secret") || strings.Contains(lowerSecret, "password") {
+	if isWeakSecret(secret) {
 		addErr("portal.session.secret appears to be a placeholder value")
 	}
 	if cfg.Portal.Enabled {

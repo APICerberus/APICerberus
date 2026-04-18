@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,6 +41,12 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 			"message": message,
 		},
 	})
+}
+
+// writeRateLimitedError writes a 429 response with a Retry-After header (L-008).
+func writeRateLimitedError(w http.ResponseWriter, retryAfterSec int) {
+	w.Header().Set("Retry-After", strconv.Itoa(retryAfterSec))
+	writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many attempts. Please try again later.")
 }
 
 // writeInternalError logs the actual error and sends a generic message to the client.
@@ -238,34 +245,41 @@ func SetTrustedProxies(proxies []string) {
 
 // isRateLimited checks if a client IP has exceeded the rate limit for failed auth attempts
 func (s *Server) isRateLimited(clientIP string) bool {
+	_, limited := s.rateLimitInfo(clientIP)
+	return limited
+}
+
+// rateLimitInfo returns (retryAfterSeconds, isLimited). retryAfterSeconds is 0 when not limited.
+func (s *Server) rateLimitInfo(clientIP string) (retryAfterSeconds int, isLimited bool) {
 	s.rlMu.RLock()
 	defer s.rlMu.RUnlock()
 
+	const blockDuration = 30 * time.Minute
+	const windowDuration = 15 * time.Minute
+	const maxAttempts = 5
+
 	attempts, exists := s.rlAttempts[clientIP]
 	if !exists {
-		return false
+		return 0, false
 	}
 
-	// If already blocked, check if block duration has passed (30 minutes)
 	if attempts.blocked {
-		if time.Since(attempts.lastSeen) > 30*time.Minute {
-			// Unblock after 30 minutes of no activity
-			return false
+		elapsed := time.Since(attempts.lastSeen)
+		if elapsed > blockDuration {
+			return 0, false
 		}
-		return true
+		return int(blockDuration - elapsed + time.Second - 1) / int(time.Second), true
 	}
 
-	// Check if within rate limit window (15 minutes) and exceeded threshold (5 attempts)
-	if time.Since(attempts.firstSeen) <= 15*time.Minute && attempts.count >= 5 {
-		return true
+	if time.Since(attempts.firstSeen) <= windowDuration && attempts.count >= maxAttempts {
+		return int(windowDuration - time.Since(attempts.firstSeen) + time.Second - 1) / int(time.Second), true
 	}
 
-	// Reset if outside the window
-	if time.Since(attempts.firstSeen) > 15*time.Minute {
-		return false
+	if time.Since(attempts.firstSeen) > windowDuration {
+		return 0, false
 	}
 
-	return false
+	return 0, false
 }
 
 // recordFailedAuth records a failed authentication attempt for a client IP

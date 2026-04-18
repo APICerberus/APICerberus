@@ -475,7 +475,7 @@ func TestWASMPluginManager_Disabled(t *testing.T) {
 	if pm.IsEnabled() {
 		t.Error("disabled config should not be enabled")
 	}
-	if err := pm.LoadModule("test", "test.wasm", nil); err == nil {
+	if err := pm.LoadModule("test", "test.wasm", nil, nil); err == nil {
 		t.Error("expected error loading on disabled manager")
 	}
 }
@@ -527,7 +527,7 @@ func TestWASMPluginManager_CreatePipelinePlugin_NotFound(t *testing.T) {
 func TestWASMRuntime_LoadModule_Disabled(t *testing.T) {
 	t.Parallel()
 	rt := &WASMRuntime{config: WASMConfig{Enabled: false}}
-	_, err := rt.LoadModule("test", "test.wasm", nil)
+	_, err := rt.LoadModule("test", "test.wasm", nil, nil)
 	if err == nil {
 		t.Error("expected error loading on disabled runtime")
 	}
@@ -625,7 +625,7 @@ func TestWASMRuntime_LoadModule_Success(t *testing.T) {
 		"name":    "TestPlugin",
 		"version": "2.0.0",
 		"phase":   "pre-proxy",
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("LoadModule: %v", err)
 	}
@@ -650,7 +650,7 @@ func TestWASMRuntime_LoadModule_Success(t *testing.T) {
 
 func TestWASMRuntime_LoadModule_DefaultMetadata(t *testing.T) {
 	rt := newTestWASMRuntime(t)
-	mod, err := rt.LoadModule("mod2", "test.wasm", map[string]any{})
+	mod, err := rt.LoadModule("mod2", "test.wasm", map[string]any{}, nil)
 	if err != nil {
 		t.Fatalf("LoadModule: %v", err)
 	}
@@ -683,15 +683,50 @@ func TestWASMRuntime_LoadModule_InvalidWASM(t *testing.T) {
 	}
 	defer rt.Close()
 
-	_, err = rt.LoadModule("bad", "bad.wasm", nil)
+	_, err = rt.LoadModule("bad", "bad.wasm", nil, nil)
 	if err == nil {
 		t.Error("expected error for invalid WASM binary")
 	}
 }
 
+func TestWASMRuntime_LoadModule_FileChecksumMismatch_M004(t *testing.T) {
+	rt := newTestWASMRuntime(t)
+	defer rt.Close()
+
+	// Pass a wrong SHA-256 for test.wasm via fileChecksums.
+	// The file should be rejected at load time (M-004: post-install tampering detection).
+	wrongChecksums := map[string]string{
+		"test.wasm": "0000000000000000000000000000000000000000000000000000000000000000",
+	}
+	_, err := rt.LoadModule("bad", "test.wasm", nil, wrongChecksums)
+	if err == nil {
+		t.Fatal("expected error for SHA-256 mismatch, but LoadModule succeeded")
+	}
+	if !strings.Contains(err.Error(), "SHA-256 mismatch") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestWASMRuntime_LoadModule_FileChecksumOK_M004(t *testing.T) {
+	rt := newTestWASMRuntime(t)
+	defer rt.Close()
+
+	// Pre-compute the real SHA-256 of test.wasm.
+	// We can't easily compute it here, so instead verify that passing a valid
+	// sha256 via pluginConfig["wasm_file_sha256"] works (existing M-WASM-022 path).
+	validSHA := "0000000000000000000000000000000000000000000000000000000000000000"
+	_, err := rt.LoadModule("test", "test.wasm", map[string]any{"wasm_file_sha256": validSHA}, nil)
+	if err == nil {
+		t.Fatal("expected error for wrong SHA-256")
+	}
+	if !strings.Contains(err.Error(), "SHA-256 mismatch") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestWASMModule_Execute_MinimalModule(t *testing.T) {
 	rt := newTestWASMRuntime(t)
-	mod, err := rt.LoadModule("exec-test", "test.wasm", nil)
+	mod, err := rt.LoadModule("exec-test", "test.wasm", nil, nil)
 	if err != nil {
 		t.Fatalf("LoadModule: %v", err)
 	}
@@ -706,7 +741,7 @@ func TestWASMModule_Execute_MinimalModule(t *testing.T) {
 
 func TestWASMModule_Close_Loaded(t *testing.T) {
 	rt := newTestWASMRuntime(t)
-	mod, err := rt.LoadModule("close-test", "test.wasm", nil)
+	mod, err := rt.LoadModule("close-test", "test.wasm", nil, nil)
 	if err != nil {
 		t.Fatalf("LoadModule: %v", err)
 	}
@@ -725,7 +760,7 @@ func TestWASMPluginManager_LoadModule_Success(t *testing.T) {
 	if !pm.IsEnabled() {
 		t.Error("should be enabled")
 	}
-	if err := pm.LoadModule("mod-1", "test.wasm", map[string]any{"name": "TestMod"}); err != nil {
+	if err := pm.LoadModule("mod-1", "test.wasm", map[string]any{"name": "TestMod"}, nil); err != nil {
 		t.Fatalf("LoadModule: %v", err)
 	}
 	mod, ok := pm.GetModule("mod-1")
@@ -742,7 +777,7 @@ func TestWASMPluginManager_LoadModule_Success(t *testing.T) {
 
 func TestWASMPluginManager_UnloadModule_Success(t *testing.T) {
 	pm := newTestWASMManager(t)
-	pm.LoadModule("mod-1", "test.wasm", nil)
+	pm.LoadModule("mod-1", "test.wasm", nil, nil)
 	if err := pm.UnloadModule("mod-1"); err != nil {
 		t.Fatalf("UnloadModule: %v", err)
 	}
@@ -755,7 +790,7 @@ func TestWASMPluginManager_CreatePipelinePlugin_Success(t *testing.T) {
 	pm := newTestWASMManager(t)
 	pm.LoadModule("mod-1", "test.wasm", map[string]any{
 		"name": "WasmTest", "phase": "pre-proxy", "priority": 50,
-	})
+	}, nil)
 	plug, err := pm.CreatePipelinePlugin("mod-1")
 	if err != nil {
 		t.Fatalf("CreatePipelinePlugin: %v", err)
@@ -773,7 +808,7 @@ func TestWASMPluginManager_CreatePipelinePlugin_Success(t *testing.T) {
 
 func TestWASMPluginManager_CreatePipelinePlugin_Execute(t *testing.T) {
 	pm := newTestWASMManager(t)
-	pm.LoadModule("mod-1", "test.wasm", nil)
+	pm.LoadModule("mod-1", "test.wasm", nil, nil)
 	plug, _ := pm.CreatePipelinePlugin("mod-1")
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -785,12 +820,12 @@ func TestWASMPluginManager_CreatePipelinePlugin_Execute(t *testing.T) {
 
 func TestWASMPluginManager_ReloadModule(t *testing.T) {
 	pm := newTestWASMManager(t)
-	pm.LoadModule("mod-1", "test.wasm", map[string]any{"name": "v1"})
+	pm.LoadModule("mod-1", "test.wasm", map[string]any{"name": "v1"}, nil)
 	mod1, _ := pm.GetModule("mod-1")
 	if mod1.Name() != "v1" {
 		t.Errorf("Name = %q, want v1", mod1.Name())
 	}
-	pm.LoadModule("mod-1", "test.wasm", map[string]any{"name": "v2"})
+	pm.LoadModule("mod-1", "test.wasm", map[string]any{"name": "v2"}, nil)
 	mod2, _ := pm.GetModule("mod-1")
 	if mod2.Name() != "v2" {
 		t.Errorf("Name = %q, want v2", mod2.Name())

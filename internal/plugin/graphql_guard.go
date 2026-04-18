@@ -99,11 +99,8 @@ func (g *GraphQLGuard) Handle(w http.ResponseWriter, r *http.Request) bool {
 	}
 
 	if !result.IsValid {
-		errors := ""
-		for _, e := range result.Errors {
-			errors += e + "; "
-		}
-		graphql.WriteError(w, errors, http.StatusBadRequest)
+		// L-012: Return generic error to avoid exposing query structure details.
+		graphql.WriteError(w, "query validation failed", http.StatusBadRequest)
 		return true
 	}
 

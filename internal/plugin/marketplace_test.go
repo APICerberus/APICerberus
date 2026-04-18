@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -737,6 +738,40 @@ func TestMarketplace_Install_AlreadyInstalled(t *testing.T) {
 	}
 }
 
+func TestInstalledPlugin_FileSHA256_M004(t *testing.T) {
+	t.Parallel()
+	p := &InstalledPlugin{
+		FileChecksums: map[string]string{
+			"plugin.wasm":              "abc123",
+			"path/to/nested.wasm":      "def456",
+			"another.wasm":             "ghi789",
+		},
+	}
+
+	// Found cases
+	sha, ok := p.FileSHA256("plugin.wasm")
+	if !ok || sha != "abc123" {
+		t.Errorf("FileSHA256(plugin.wasm) = %q, ok=%v; want abc123, true", sha, ok)
+	}
+	sha, ok = p.FileSHA256("path/to/nested.wasm")
+	if !ok || sha != "def456" {
+		t.Errorf("FileSHA256(path/to/nested.wasm) = %q, ok=%v; want def456, true", sha, ok)
+	}
+
+	// Not found
+	sha, ok = p.FileSHA256("nonexistent.wasm")
+	if ok {
+		t.Errorf("FileSHA256(nonexistent.wasm) ok = true; want false")
+	}
+
+	// Nil checksums
+	p2 := &InstalledPlugin{}
+	sha, ok = p2.FileSHA256("any.wasm")
+	if ok || sha != "" {
+		t.Errorf("FileSHA256 on nil map = %q, ok=%v; want empty, false", sha, ok)
+	}
+}
+
 func TestMarketplace_Search_CaseInsensitive(t *testing.T) {
 	mp := &Marketplace{
 		index: &PluginIndex{
@@ -1046,9 +1081,21 @@ func TestMarketplace_ExtractAndInstall_ValidTarGz(t *testing.T) {
 		config: cfg,
 	}
 
-	err := mp.extractAndInstall(installPath)
+	checksums, err := mp.extractAndInstall(installPath)
 	if err != nil {
 		t.Fatalf("extractAndInstall failed: %v", err)
+	}
+
+	// M-004: verify per-file checksums are returned and are non-empty
+	if checksums == nil {
+		t.Fatal("extractAndInstall returned nil checksums map")
+	}
+	sha, ok := checksums["plugin.go"]
+	if !ok {
+		t.Errorf("checksums has no entry for plugin.go; keys: %v", maps.Keys(checksums))
+	}
+	if sha == "" {
+		t.Error("checksum for plugin.go is empty")
 	}
 
 	// Verify file was extracted
@@ -1071,7 +1118,7 @@ func TestMarketplace_ExtractAndInstall_InvalidGzip(t *testing.T) {
 		config: DefaultMarketplaceConfig(),
 	}
 
-	err := mp.extractAndInstall(installPath)
+	_, err := mp.extractAndInstall(installPath)
 	if err == nil {
 		t.Fatal("expected error for invalid gzip")
 	}
@@ -1102,7 +1149,7 @@ func TestMarketplace_ExtractAndInstall_PathTraversal(t *testing.T) {
 		config: DefaultMarketplaceConfig(),
 	}
 
-	err := mp.extractAndInstall(installPath)
+	_, err := mp.extractAndInstall(installPath)
 
 	// On Unix, filepath.Clean resolves ".." and the Rel check catches it.
 	// On Windows, "/../../../etc/evil.go" gets cleaned to "/etc/evil.go"
@@ -1156,7 +1203,7 @@ func TestMarketplace_ExtractAndInstall_ExceedsMaxSize(t *testing.T) {
 		},
 	}
 
-	err := mp.extractAndInstall(installPath)
+	_, err := mp.extractAndInstall(installPath)
 	if err == nil {
 		t.Fatal("expected error for oversized extracted file")
 	}

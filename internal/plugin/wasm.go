@@ -233,7 +233,11 @@ func resolveWASMPhase(id string, pluginConfig map[string]any) (Phase, error) {
 }
 
 // LoadModule compiles and loads a WASM module from file.
-func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (*WASMModule, error) {
+// An optional fileChecksums map (path -> sha256) may be provided; if the module's
+// relative path is found in the map, its hash is verified before loading (M-004).
+// This detects post-install file tampering, such as a container-escape modifying
+// the .wasm file after the marketplace archive passed its own SHA-256 check.
+func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any, fileChecksums map[string]string) (*WASMModule, error) {
 	if !r.IsEnabled() {
 		return nil, fmt.Errorf("wasm runtime is disabled")
 	}
@@ -272,10 +276,19 @@ func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (
 		return nil, fmt.Errorf("cannot read wasm module: %w", err)
 	}
 
-	// M-WASM-022: verify SHA-256 if provided in pluginConfig.
-	// A marketplace-installed plugin stores its checksum so that
-	// post-install file tampering is detected at load time.
-	if expectedSHA, ok := pluginConfig["wasm_file_sha256"].(string); ok && expectedSHA != "" {
+	// M-004 / M-WASM-022: verify SHA-256 from either pluginConfig (explicit) or
+	// fileChecksums (marketplace). This detects post-install file tampering.
+	// The pluginConfig["wasm_file_sha256"] path supports manually-configured WASM
+	// plugins; fileChecksums is used for marketplace-installed plugins.
+	expectedSHA := ""
+	if sha, ok := pluginConfig["wasm_file_sha256"].(string); ok && sha != "" {
+		expectedSHA = sha
+	} else if fileChecksums != nil {
+		// Normalize evalRel to forward-slash for consistent cross-OS lookup.
+		relKey := strings.ReplaceAll(evalRel, string(filepath.Separator), "/")
+		expectedSHA, _ = fileChecksums[relKey]
+	}
+	if expectedSHA != "" {
 		hash := sha256.Sum256(wasmBytes)
 		actual := hex.EncodeToString(hash[:])
 		if actual != expectedSHA {
@@ -616,7 +629,9 @@ func (m *WASMPluginManager) IsEnabled() bool {
 }
 
 // LoadModule loads a WASM module.
-func (m *WASMPluginManager) LoadModule(id, path string, pluginConfig map[string]any) error {
+// Pass marketplace plugin's FileChecksums as fileChecksums to verify the .wasm file
+// against per-file SHA-256 computed at install time (M-004).
+func (m *WASMPluginManager) LoadModule(id, path string, pluginConfig map[string]any, fileChecksums map[string]string) error {
 	if !m.IsEnabled() {
 		return fmt.Errorf("wasm plugin manager is disabled")
 	}
@@ -630,7 +645,7 @@ func (m *WASMPluginManager) LoadModule(id, path string, pluginConfig map[string]
 		delete(m.modules, id)
 	}
 
-	module, err := m.runtime.LoadModule(id, path, pluginConfig)
+	module, err := m.runtime.LoadModule(id, path, pluginConfig, fileChecksums)
 	if err != nil {
 		return err
 	}

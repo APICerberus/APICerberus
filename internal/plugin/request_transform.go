@@ -154,7 +154,7 @@ func (t *RequestTransform) applyHeaderTransforms(req *http.Request) {
 		}
 	}
 	for key, value := range t.addHeaders {
-		req.Header.Set(key, value)
+		req.Header.Set(key, sanitizeHeaderValue(value)) // L-011: strip CR/LF to prevent header injection
 	}
 }
 
@@ -301,4 +301,11 @@ func normalizeAnyMap(values map[string]any) map[string]any {
 		out[key] = value
 	}
 	return out
+}
+
+// sanitizeHeaderValue removes CR/LF characters from header values to prevent
+// HTTP response splitting / header injection attacks (L-011).
+// Operator-controlled config is low-risk, but we sanitize for defense-in-depth.
+func sanitizeHeaderValue(value string) string {
+	return strings.NewReplacer("\r", "", "\n", "").Replace(value)
 }

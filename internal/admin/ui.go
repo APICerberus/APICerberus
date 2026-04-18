@@ -1,6 +1,8 @@
 package admin
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"io/fs"
 	"net/http"
 	"path"
@@ -8,6 +10,13 @@ import (
 
 	apicerberus "github.com/APICerberus/APICerebrus"
 )
+
+// generateCSPNonce generates a random 16-byte nonce for CSP.
+func generateCSPNonce() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return base64.StdEncoding.EncodeToString(b)
+}
 
 func embeddedDashboardFS() (fs.FS, error) {
 	return apicerberus.EmbeddedDashboardFS()
@@ -39,19 +48,34 @@ func (s *Server) newDashboardHandler() http.Handler {
 			http.Error(w, "dashboard assets unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		setDashboardSecurityHeaders(w)
+		// M-003: Generate per-request nonce for CSP to replace 'unsafe-inline'.
+		// The nonce is injected into the inline script and referenced in the CSP header.
+		nonce := generateCSPNonce()
+		// Inject nonce into the inline theme flash prevention script.
+		// The script tag is: <script>\n      (function() {...
+		// We need to replace just the opening <script> with <script nonce="...">
+		index = []byte(strings.Replace(
+			string(index),
+			"<script>\n      ",
+			`<script nonce="`+nonce+`">\n      `,
+			1,
+		))
+		setDashboardSecurityHeadersWithNonce(w, nonce)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(index)
 	})
 }
 
-func setDashboardSecurityHeaders(w http.ResponseWriter) {
+func setDashboardSecurityHeadersWithNonce(w http.ResponseWriter, nonce string) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("X-XSS-Protection", "1; mode=block")
 	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'")
+	// M-003: Replaced 'unsafe-inline' with nonce-based script allowlist.
+	// Only the inline script with the matching nonce is permitted.
+	w.Header().Set("Content-Security-Policy",
+		"default-src 'self'; script-src 'self' 'nonce-"+nonce+"'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'")
 	w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
 }
 

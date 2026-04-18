@@ -99,11 +99,25 @@ type PluginListing struct {
 // InstalledPlugin represents an installed plugin.
 type InstalledPlugin struct {
 	PluginListing
-	InstallPath      string         `json:"install_path"`
-	InstalledAt      time.Time      `json:"installed_at"`
-	InstalledVersion string         `json:"installed_version"`
-	Enabled          bool           `json:"enabled"`
-	Config           map[string]any `json:"config,omitempty"`
+	InstallPath      string            `json:"install_path"`
+	InstalledAt      time.Time         `json:"installed_at"`
+	InstalledVersion string            `json:"installed_version"`
+	Enabled          bool              `json:"enabled"`
+	Config           map[string]any    `json:"config,omitempty"`
+	FileChecksums    map[string]string `json:"file_checksums,omitempty"` // filename -> sha256; M-004
+}
+
+// FileSHA256 returns the SHA-256 checksum for a given relative file path,
+// and a bool indicating whether the file was found in FileChecksums.
+// This is used to verify WASM files at load time (M-004).
+func (p *InstalledPlugin) FileSHA256(relativePath string) (string, bool) {
+	if p.FileChecksums == nil {
+		return "", false
+	}
+	// Normalize path separators to forward slashes for consistent lookup.
+	key := strings.ReplaceAll(relativePath, string(filepath.Separator), "/")
+	sum, ok := p.FileChecksums[key]
+	return sum, ok
 }
 
 // MarketplaceStorage defines the storage interface for marketplace.
@@ -395,13 +409,15 @@ func (mp *Marketplace) Install(ctx context.Context, id, version string) (*Instal
 		Config:           make(map[string]any),
 	}
 
-	// Extract and install
-	if err := mp.extractAndInstall(installPath); err != nil {
+	// Extract and install, computing per-file checksums for integrity verification (M-004).
+	fileChecksums, err := mp.extractAndInstall(installPath)
+	if err != nil {
 		if delErr := mp.storage.DeletePlugin(installPath); delErr != nil {
 			log.Printf("[WARN] marketplace: failed to clean up plugin after install error: %v", delErr)
 		}
 		return nil, fmt.Errorf("failed to install plugin: %w", err)
 	}
+	installedPlugin.FileChecksums = fileChecksums
 
 	// Save metadata
 	if err := mp.storage.SaveMetadata(installedPlugin); err != nil {
@@ -631,18 +647,19 @@ func (mp *Marketplace) verifySignature(data []byte, signature, author string) er
 }
 
 // extractAndInstall extracts and installs a plugin package.
-func (mp *Marketplace) extractAndInstall(installPath string) error {
+// Returns a map of filename -> SHA-256 checksum for all regular files extracted.
+func (mp *Marketplace) extractAndInstall(installPath string) (map[string]string, error) {
 	// Open the tar.gz file
 	// #nosec G304 -- installPath is constructed by SavePlugin under controlled basePath with sanitized ID.
 	file, err := os.Open(installPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer file.Close()
 
 	gzReader, err := gzip.NewReader(file)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer gzReader.Close()
 
@@ -655,56 +672,67 @@ func (mp *Marketplace) extractAndInstall(installPath string) error {
 		maxExtractSize = 100 * 1024 * 1024 // 100MB default
 	}
 	var extractedSize int64
+	checksums := make(map[string]string)
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Sanitize path
 		targetPath := filepath.Join(pluginDir, filepath.Clean("/"+header.Name))
 		rel, err := filepath.Rel(pluginDir, targetPath)
 		if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
-			return fmt.Errorf("invalid path in archive: %s", header.Name)
+			return nil, fmt.Errorf("invalid path in archive: %s", header.Name)
 		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(targetPath, 0750); err != nil {
-				return err
+				return nil, err
 			}
 		case tar.TypeReg:
 			// M-012: Check BEFORE creating the file if it would exceed the limit.
 			// A file that itself is larger than remaining budget can't be fully extracted.
 			remaining := maxExtractSize - extractedSize
 			if header.Size > remaining {
-				return fmt.Errorf("extracted plugin exceeds maximum size of %d bytes", maxExtractSize)
+				return checksums, fmt.Errorf("extracted plugin exceeds maximum size of %d bytes", maxExtractSize)
 			}
 			// #nosec G304 -- targetPath is sanitized via filepath.Clean/Rel checks above.
 			outFile, err := os.Create(targetPath)
 			if err != nil {
-				return err
+				return checksums, err
 			}
-			written, err := io.CopyN(outFile, tarReader, remaining)
+			// Compute SHA-256 while extracting for per-file integrity verification (M-004).
+			hasher := sha256.New()
+			writer := io.MultiWriter(outFile, hasher)
+			written, err := io.CopyN(writer, tarReader, remaining)
 			extractedSize += written
 			if err != nil && !errors.Is(err, io.EOF) {
-				_ = outFile.Close() // #nosec G104 // Best-effort cleanup; returning copy error.
-				return err
+				_ = outFile.Close()
+				_ = os.Remove(targetPath) // L-001: delete partial file on copy error.
+				return checksums, err
 			}
 			if extractedSize > maxExtractSize {
 				_ = outFile.Close()
-				return fmt.Errorf("extracted plugin exceeds maximum size of %d bytes", maxExtractSize)
+				_ = os.Remove(targetPath) // L-001: delete partial file exceeding size budget.
+				return checksums, fmt.Errorf("extracted plugin exceeds maximum size of %d bytes", maxExtractSize)
 			}
 			if err := outFile.Close(); err != nil {
-				return fmt.Errorf("failed to close extracted file: %w", err)
+				_ = os.Remove(targetPath) // L-001: delete partial file on close error.
+				return checksums, fmt.Errorf("failed to close extracted file: %w", err)
 			}
+			// Store per-file checksum using normalized (forward-slash) relative path as key.
+			// This ensures OS-independent lookup in FileSHA256 (M-004).
+			relPath := strings.ReplaceAll(rel, string(filepath.Separator), "/")
+			checksums[relPath] = hex.EncodeToString(hasher.Sum(nil))
 		}
 	}
 
-	return nil
+	return checksums, nil
 }
 
 // loadCachedIndex loads the cached plugin index.

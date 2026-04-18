@@ -394,6 +394,165 @@ The two low-severity findings are architectural observations rather than exploit
 
 ---
 
+## Phase 2 Additional Findings (2026-04-18)
+
+The following observations were identified during Phase 2 focused scan on Authentication, Authorization, and API Security:
+
+### Finding P2-001: Test API Key Prefix Bypass Scope
+
+**CWE:** CWE-1390 - Improper Access Control
+**Severity:** Info (Risk mitigated by production config enforcement)
+**File:** `internal/billing/engine.go:107-108`
+
+```go
+if e.cfg.TestModeEnabled && isTestAPIKey(in.RawAPIKey) {
+    return result, nil
+}
+```
+
+**Observation:** API keys prefixed with `ck_test_` bypass credit deduction entirely when `test_mode_enabled` is true. The codebase mitigates this risk:
+
+- `config/load.go:407`: Production config rejects `test_mode_enabled` (H-004 fix)
+- `config/load.go:161`: Config loader warns if `ck_test_` keys detected in non-test environment
+- `store/api_key_repo.go:76`: Test key prefix validation
+
+**Risk:** Low — Production deployments are protected by config validation. Test environments may intentionally bypass credits.
+
+---
+
+### Finding P2-002: OIDC Refresh Token Reuse Detection Absent
+
+**CWE:** CWE-287 - Improper Authentication
+**Severity:** Low
+**File:** `internal/admin/oidc_provider.go:475-476`
+
+```go
+// Delete the used refresh token (one-time use)
+delete(s.oidcProvider.refreshTokens, string(rtHash[:]))
+```
+
+**Observation:** Refresh tokens are single-use (rotated), but there is no mechanism to detect token reuse. OAuth 2.0 best practices recommend detecting reuse to identify token theft.
+
+**Current Behavior:**
+1. Legitimate user refreshes token → new token issued, old token deleted
+2. If stolen token is used after rotation → rejection without alerting administrator
+
+**Risk:** Low — Single-use rotation is implemented. Token theft detection is an enhancement.
+
+**Remediation:** Log and alert when a refresh token is reused after rotation. Consider revoking all sessions for that user as a security precaution.
+
+---
+
+### Finding P2-003: Portal Session Cookie SameSite=Lax
+
+**CWE:** CWE-1275 - Cookie with SameSite Attribute
+**Severity:** Info
+**File:** `internal/portal/server.go:457`
+
+```go
+SameSite: http.SameSiteLaxMode,
+```
+
+**Observation:** Portal session cookies use `SameSite=Lax` rather than `SameSite=Strict`. CSRF protection middleware (`withCSRF`) provides additional defense.
+
+**Comparison with Admin:**
+- Admin cookies use `SameSite=StrictMode` (`server.go:279`, `server.go:395`)
+- Portal cookies use `SameSite=LaxMode`
+
+**Risk:** Low — CSRF middleware (`portal/server.go:659-680`) validates double-submit tokens for all state-changing operations. Cookie attribute is defense-in-depth.
+
+---
+
+### Finding P2-004: MC P SSE Heartbeat Connection Resource
+
+**CWE:** CWE-400 - Resource Exhaustion
+**Severity:** Info
+**File:** `internal/mcp/server.go:293-304`
+
+```go
+ticker := time.NewTicker(10 * time.Second)
+for {
+    select {
+    case <-ticker.C:
+        _, _ = fmt.Fprintf(w, "event: heartbeat\n...")
+    }
+}
+```
+
+**Observation:** SSE endpoint maintains persistent connection with 10-second heartbeat. X-Admin-Key authentication is required (SEC-GQL-011 fix). No per-client connection limit exists.
+
+**Risk:** Low — Authenticated clients can still exhaust server resources with many simultaneous connections.
+
+**Remediation:** Consider implementing per-client connection limits and maximum session duration for SSE endpoints.
+
+---
+
+### Finding P2-005: In-Memory OIDC Auth Code Storage Limitations
+
+**CWE:** CWE-266 - Incorrect Privilege Assignment
+**Severity:** Info
+**File:** `internal/admin/oidc_provider.go:339-348`
+
+```go
+s.mu.Lock()
+s.oidcProvider.authCodes[code] = &authCodeEntry{...}
+s.mu.Unlock()
+```
+
+**Observation:** Authorization codes are stored in-memory only. In clustered deployments, auth codes would not be shared between instances.
+
+**Impact:**
+- Single-instance: Works correctly
+- Multi-instance: User may need to re-authenticate if their request hits a different instance
+
+**Risk:** Low — Not a security issue, but a reliability concern for high-availability deployments.
+
+---
+
+## Phase 2 Verification Summary
+
+| Control | Status | Verification |
+|---------|--------|--------------|
+| Admin API X-Admin-Key auth | ✅ Verified | `server.go:246-252` constant-time comparison |
+| Admin JWT Bearer auth | ✅ Verified | `token.go:98-149` includes key version check |
+| Admin CSRF protection | ✅ Verified | `token.go:199-210` double-submit pattern |
+| Admin RBAC default-deny | ✅ Verified | `rbac.go:306-312` unmapped endpoints blocked |
+| Admin IP allow-list | ✅ Verified | `token.go:172-175` before auth |
+| API key timing attack protection | ✅ Verified | `auth_apikey.go:186` subtle.ConstantTimeCompare |
+| JWT none algorithm rejection | ✅ Verified | `auth_jwt.go:179` explicit check |
+| JWT JTI replay protection | ✅ Verified | `auth_jwt.go:260-297` fail-closed |
+| Rate limiting (distributed) | ✅ Verified | `redis.go` Lua scripts atomic |
+| GraphQL depth limiting | ✅ Verified | `graphql_guard.go:38` default 15 |
+| GraphQL complexity limiting | ✅ Verified | `graphql_guard.go:41` default 1000 |
+| Portal CSRF protection | ✅ Verified | `portal/server.go:659-680` |
+| Portal session rate limiting | ✅ Verified | `portal/server.go:494-523` |
+| OIDC PKCE support | ✅ Verified | `oidc_provider.go:258-264` |
+| OIDC token signature verification | ✅ Verified | `oidc_provider.go:756-777` |
+| MCP SSE auth required | ✅ Verified | `server.go:254-260` |
+
+---
+
+## Conclusion
+
+Phase 2 security scan confirms strong authentication and authorization controls throughout the APICerebrus codebase:
+
+**Strengths:**
+- Multiple authentication layers (static key, JWT, CSRF, session)
+- Constant-time comparisons prevent timing attacks
+- Rate limiting on auth attempts and credit operations
+- RBAC with default-deny for unmapped endpoints
+- GraphQL query depth/complexity controls
+- OIDC provider with PKCE and proper signature verification
+
+**Enhancement Opportunities:**
+- OIDC refresh token reuse detection for token theft alerting
+- Per-client SSE connection limits
+- Distributed auth code storage for HA deployments
+
+**Overall Risk: LOW** — The codebase implements industry best practices for API security.
+
+---
+
 ## Security Report Location
 
 This report is written to: `security-report/api-security-findings.md`
@@ -403,3 +562,366 @@ Related reports in `security-report/`:
 - `findings-auth.md` — Authentication and authorization findings
 - `findings-injection.md` — Injection-related findings
 - `sc-federation-mcp-results.md` — Security scan results for Federation/MCP
+
+---
+
+## Phase 3 API Security Findings (2026-04-18)
+
+### Finding P3-001: OIDC Auth Code Single-Use Without Reuse Detection
+
+**CWE:** CWE-287 (Improper Authentication)
+**Severity:** Low
+**File:** `internal/admin/oidc_provider.go:414-416`
+**Confidence:** 80%
+
+```go
+if exists && entry != nil && !entry.Used && time.Now().Before(entry.Expiry) {
+    entry.Used = true
+}
+```
+
+**Description:** Authorization codes are marked as used on successful exchange (`entry.Used = true`), preventing replay. However, there is no mechanism to detect or alert when a code is reused after it has been marked used (token theft detection per OAuth 2.0 best practices).
+
+**Current behavior:**
+1. Code issued → stored in memory with `Used: false`
+2. First exchange → `entry.Used = true`, code deleted from map after TTL
+3. Stolen code replayed → `exists` is false OR `entry.Used` is true → rejection, but no logging/alert
+
+**Impact:** Token theft via man-in-the-middle is detectable only by analyzing server-side logs for reuse patterns. No automatic alerting or session revocation.
+
+**Remediation:** Log a security event when a code reuse is detected. Consider revoking all active sessions for the subject user as a precautionary measure.
+
+**Effort:** Low
+
+---
+
+### Finding P3-002: OIDC Provider Token Introspection Missing Expiry Validation
+
+**CWE:** CWE-287 (Improper Authentication)
+**Severity:** Low
+**File:** `internal/admin/oidc_provider.go:790-795`
+**Confidence:** 75%
+
+```go
+claims := token.Payload
+exp, _ := claims["exp"].(float64)
+now := float64(time.Now().Unix())
+
+// M-010: Validate audience claim if OIDC clients are configured.
+if s.oidcProvider != nil && len(s.oidcProvider.clients) > 0 {
+    aud, _ := claims["aud"].(string)
+```
+
+**Description:** The introspection handler extracts `exp` from claims but does not return the `active: false` for expired tokens before proceeding to audience validation. The `exp > now` check at line 815 determines active status, but claims are still processed for an expired token before the response is built.
+
+**Current behavior:**
+1. Token with `exp` in the past is parsed
+2. Signature verified (correctly)
+3. Audience validated (M-010 fix)
+4. Only at line 815: `active: exp > now` → false
+5. Claims are NOT exposed for inactive tokens (line 819) — this part is correct
+
+**Impact:** The response is technically correct (inactive tokens return `active: false` without claims), but the audience validation occurs before the expiry check. An expired token's claims are processed before rejection.
+
+**Remediation:** Return early for expired tokens before audience validation:
+
+```go
+if exp <= now {
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]any{"active": false})
+    return
+}
+```
+
+**Effort:** Low
+
+---
+
+### Finding P3-003: JWT HS256 Secret Minimum Length Not Enforced at Signing
+
+**CWE:** CWE-327 (Use of Weak Cryptographic Primitive)
+**Severity:** Low
+**File:** `internal/pkg/jwt/jwt.go:216-227`
+**Confidence:** 85%
+
+```go
+func SignHS256(signingInput string, secret []byte) ([]byte, error) {
+    if len(secret) < minHS256SecretLength {
+        return nil, fmt.Errorf("%w: secret length %d is below minimum %d bytes", ErrWeakHS256Secret, len(secret), minHS256SecretLength)
+    }
+```
+
+**Description:** `SignHS256` returns `ErrWeakHS256Secret` if the secret is below 32 bytes. However, in the admin JWT token issuance path (`token.go:87`), the error from `jwtpkg.SignHS256` is returned but there is no explicit handling to prevent issuing tokens with weak signatures.
+
+**Example issue path:**
+1. Config has `admin.token_secret` that passes config validation (32-char minimum)
+2. But if the secret is exactly 32 bytes of low-entropy content (e.g., repeated patterns), the signing will succeed but produce a weak signature
+
+**Current mitigations:**
+- `load.go:326-333`: Config validation rejects `token_secret` containing `change`, `secret`, `password`
+- `load.go:407`: Rejects `test_mode_enabled` in production
+
+**Impact:** Low — The 32-byte minimum and weak value detection in config validation provide adequate protection. The signing function correctly rejects weak secrets.
+
+**Remediation:** Consider adding entropy estimation to config validation for `admin.token_secret` beyond simple substring matching.
+
+**Effort:** Medium
+
+---
+
+### Finding P3-004: Rate Limit Response Missing Retry-After Header
+
+**CWE:** CWE-307 (Improper Restriction of Excessive Authentication Attempts)
+**Severity:** Low
+**File:** `internal/admin/server.go:76-82`
+**Confidence:** 90%
+
+**Description:** When `isRateLimited(clientIP)` returns true, the response includes HTTP 429 but does not include a `Retry-After` header indicating when the client may retry.
+
+**Current behavior:**
+```go
+writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many failed authentication attempts. Please try again later.")
+```
+
+**Impact:** Clients cannot determine when to retry without parsing response bodies or maintaining their own backoff schedule.
+
+**Remediation:** Include `Retry-After` header in rate-limited responses:
+
+```go
+w.Header().Set("Retry-After", "60")
+writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many failed authentication attempts. Please try again later.")
+```
+
+**Effort:** Low
+
+---
+
+### Finding P3-005: API Key Auth Supports Query Parameter — Logging Exposure
+
+**CWE:** CWE-598 (Information Exposure Through Query String)
+**Severity:** Info
+**File:** `internal/gateway/consumer.go:52-56`
+**Confidence:** 85%
+
+```go
+if value := strings.TrimSpace(req.URL.Query().Get("apikey")); value != "" {
+    return value
+}
+if value := strings.TrimSpace(req.URL.Query().Get("api_key")); value != "" {
+    return value
+}
+```
+
+**Description:** API key authentication accepts keys from URL query parameters (`apikey`, `api_key`). Query strings are typically logged by web servers, proxies, and browser history.
+
+**Current mitigations:**
+- Keys are accepted from multiple locations (header preferred over query)
+- No logging of actual key values — only the presence of query parameters is noted
+- Consumer API keys are high-entropy and don't appear in access logs as readable strings
+
+**Impact:** Low — API keys in query strings appear in server access logs. However, the keys are SHA256-hashed for storage and the gateway doesn't log query string values.
+
+**Remediation:** Document that query-parameter API keys should be avoided in production. Consider deprecating query parameter support.
+
+**Effort:** Low (documentation)
+
+---
+
+### Finding P3-006: WebSocket Authorization Falls Back to Static Key Without Rate Limit
+
+**CWE:** CWE-307 (Improper Restriction of Excessive Authentication Attempts)
+**Severity:** Low
+**File:** `internal/admin/ws.go:149-168`
+**Confidence:** 80%
+
+```go
+// Fall back to static key
+expected := strings.TrimSpace(cfg.APIKey)
+if expected == "" {
+    return true
+}
+provided := strings.TrimSpace(r.Header.Get("X-Admin-Key"))
+if provided == "" {
+    provided = strings.TrimSpace(r.URL.Query().Get("api_key"))
+}
+// Apply rate limiting to the static key fallback
+if s.isRateLimited(clientIP) {
+    return false
+}
+if subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) != 1 {
+    s.recordFailedAuth(clientIP)
+    return false
+}
+```
+
+**Description:** WebSocket authorization supports three auth methods in order:
+1. Session cookie (JWT) — rate limited check via `verifyAdminToken` (no backoff)
+2. Bearer token in query param — cleared after verification
+3. Static X-Admin-Key — rate limited via `isRateLimited`
+
+For methods 1 and 2, there is no rate limiting on the static key comparison. An attacker with a valid session cookie or token could still attempt brute-force against the static key without triggering rate limits.
+
+**Current behavior:**
+- Cookie/token auth: Rate limit not applied to static key comparison
+- Static key: Rate limit IS applied
+
+**Impact:** Low — Cookie and token auth require the attacker to already have valid credentials. The static key fallback is rate-limited.
+
+**Remediation:** Apply rate limiting to all WebSocket auth methods, not just static key fallback.
+
+**Effort:** Low
+
+---
+
+### Finding P3-007: OIDC Authorization Code Uses Random Hex, Not Time-Based
+
+**CWE:** CWE-310 (Cryptographic Issues)
+**Severity:** Info
+**File:** `internal/admin/oidc_provider.go:333-337`
+**Confidence:** 90%
+
+```go
+code, err := newRandomHex(32)
+if err != nil {
+    writeError(w, http.StatusInternalServerError, "internal_error", "failed to generate authorization code")
+    return
+}
+```
+
+**Description:** Authorization codes are generated using `newRandomHex(32)` — 32 bytes of `crypto/rand` output encoded as 64 hex characters. This is cryptographically strong (256 bits of entropy).
+
+**Observation:** Some OIDC implementations embed timestamps in auth codes to detect replay and enable cleanup without a background goroutine. The current approach relies entirely on the cleanup goroutine (`cleanupAuthCodes`).
+
+**Impact:** None — The current approach is secure. The 5-minute TTL with cleanup goroutine is adequate.
+
+---
+
+### Finding P3-008: Portal Session Cookie HttpOnly=False for CSRF
+
+**CWE:** CWE-1275 (Cookie with SameSite Attribute)
+**Severity:** Info
+**File:** `internal/admin/token.go:307-318`
+**Confidence:** 85%
+
+```go
+func setAdminCSRFCookie(w http.ResponseWriter, token string) {
+    http.SetCookie(w, &http.Cookie{
+        Name:     adminCSRFCookieName,
+        Value:    token,
+        Path:     "/",
+        MaxAge:   86400,
+        HttpOnly: false, // Must be readable by JS for double-submit header
+        Secure:   true,
+        SameSite: http.SameSiteStrictMode,
+    })
+}
+```
+
+**Description:** The CSRF double-submit cookie has `HttpOnly: false` so JavaScript can read it for the double-submit pattern. This is the correct pattern for CSRF tokens.
+
+**Comparison:**
+- Admin session cookie: `HttpOnly: true` — protected from XSS
+- Admin CSRF cookie: `HttpOnly: false` — required for CSRF double-submit to work
+- Portal session cookie: `HttpOnly: true` + CSRF middleware
+
+**Impact:** The CSRF cookie (non-HttpOnly) could be read by XSS attacks and used to forge requests. However, the admin session cookie (HttpOnly) prevents attackers from obtaining the actual admin JWT.
+
+**Risk:** Low — Defense-in-depth through HttpOnly session cookie protects the actual authentication.
+
+---
+
+### Finding P3-009: Config Import Allows X-Admin-Key Header Parameter
+
+**CWE:** CWE-20 (Improper Input Validation)
+**Severity:** Info
+**File:** `internal/admin/server.go:460-465`
+**Confidence:** 90%
+
+```go
+// stripSensitiveFields removes credentials that could be injected via config import.
+func stripSensitiveFields(cfg *config.Config) {
+    // Admin key is not stripped — it is required for subsequent API calls
+}
+```
+
+**Description:** Config import does NOT strip the `X-Admin-Key` field from the config. An operator could import a config file containing a malicious `X-Admin-Key` value that would be used for subsequent API operations.
+
+**Current behavior:** The comment explains that admin key is kept for API operations. However, this means a compromised config file could inject a different admin key.
+
+**Impact:** Low — Config import requires the current admin key for authentication. An attacker with file system access but not admin credentials could inject a config with their own admin key, but the admin key in the config would need to pass the constant-time comparison.
+
+**Remediation:** Consider stripping `X-Admin-Key` from imported configs and requiring the current admin key to be provided via header for all subsequent operations.
+
+**Effort:** Medium
+
+---
+
+### Finding P3-010: Portal Login Redirects to Relative Path Without Validation
+
+**CWE:** CWE-601 (Open Redirect)
+**Severity:** Low
+**File:** `internal/portal/server.go:360-380`
+**Confidence:** 70%
+
+**Observation:** The portal login handler (`handleLogin`) redirects to `r.FormValue("return_to")` which appears to be a relative path, but no validation was observed that the redirect target is actually relative (not an absolute URL).
+
+**Current behavior:** The return_to parameter is accepted and used in `http.Redirect(w, r, returnTo, http.StatusSeeOther)`.
+
+**Impact:** If the `return_to` parameter is not properly validated, an attacker could craft a portal login link that redirects to an external domain after authentication.
+
+**Remediation:** Validate that `return_to` is a relative path (starts with `/`) and does not contain `//` or scheme prefix.
+
+**Effort:** Low
+
+---
+
+### Phase 3 Verification Summary
+
+| Control | Status | Verification |
+|---------|--------|--------------|
+| Admin JWT none algorithm rejection | ✅ Verified | `auth_jwt.go:179` explicit check |
+| Admin JWT key version enforcement | ✅ Verified | `token.go:113-129` |
+| Admin static key constant-time compare | ✅ Verified | `token.go:247` |
+| Admin CSRF double-submit | ✅ Verified | `token.go:324-340` |
+| Admin RBAC default-deny | ✅ Verified | `rbac.go:306-312` |
+| Admin IP allow-list | ✅ Verified | `token.go:172-175` before auth |
+| API key auth constant-time compare | ✅ Verified | `auth_apikey.go:186,204` |
+| API key test prefix bypass | ✅ Mitigated | `config/load.go:413-414` blocks test_mode_enabled in prod |
+| OIDC PKCE S256 required | ✅ Verified | `oidc_provider.go:258-264` |
+| OIDC token signature verification | ✅ Verified | `oidc_provider.go:766-777` |
+| OIDC nonce validation | ✅ Verified | `oidc.go:244-249` |
+| WebSocket origin validation | ✅ Verified | `ws.go:179-239` |
+| Rate limiting on auth attempts | ✅ Verified | `server.go:68-83` |
+| JWT JTI replay protection | ✅ Verified | `auth_jwt.go:260-297` fail-closed |
+| OIDC auth code single-use | ✅ Verified | `oidc_provider.go:414-416` |
+| Config weak secret detection | ✅ Verified | `load.go:326-333` |
+| Portal CSRF middleware | ✅ Verified | `portal/server.go:659-680` |
+
+---
+
+## Conclusion
+
+Phase 3 API security scan confirms strong authentication and authorization controls throughout APICerebrus:
+
+**Strengths:**
+- Multiple authentication layers (static key, JWT Bearer, CSRF double-submit, session cookies)
+- Constant-time comparisons prevent timing attacks on all secret comparisons
+- Rate limiting on failed auth attempts per IP
+- OIDC provider with PKCE, nonce validation, and proper signature verification
+- JWT none algorithm explicitly rejected
+- API key test prefix bypass blocked in production via config validation
+- WebSocket origin validation prevents cross-site WebSocket hijacking
+
+**New Findings (this scan):**
+- P3-001: OIDC auth code reuse detection logging (Low)
+- P3-002: OIDC introspection could return early for expired tokens (Low)
+- P3-003: JWT HS256 weak secret entropy beyond blocklist (Low)
+- P3-004: Rate limit response missing Retry-After header (Low)
+- P3-005: API key query param logging exposure (Info)
+- P3-006: WebSocket auth fallback without rate limit (Low)
+- P3-007: OIDC auth code format observation (Info)
+- P3-008: CSRF cookie HttpOnly=False correct pattern (Info)
+- P3-009: Config import admin key retention (Info)
+- P3-010: Portal login redirect path validation (Low)
+
+**Overall Risk: LOW** — APICerebrus implements industry best practices for API authentication and authorization. The new findings are low-severity enhancement opportunities rather than exploitable vulnerabilities.

@@ -196,16 +196,17 @@ type AdminConfig struct {
 
 // OIDCConfig holds OpenID Connect SSO configuration.
 type OIDCConfig struct {
-	Enabled       bool              `yaml:"enabled" json:"enabled"`
-	IssuerURL     string            `yaml:"issuer_url" json:"issuer_url"`
-	ClientID      string            `yaml:"client_id" json:"client_id"`
-	ClientSecret  string            `yaml:"client_secret" json:"client_secret"`
-	RedirectURL   string            `yaml:"redirect_url" json:"redirect_url"`
-	Scopes        []string          `yaml:"scopes" json:"scopes"`
-	ClaimMapping  map[string]string `yaml:"claim_mapping" json:"claim_mapping"`
-	AutoProvision bool              `yaml:"auto_provision" json:"auto_provision"`
-	DefaultRole   string            `yaml:"default_role" json:"default_role"`
-	Provider      OIDCProviderConfig `yaml:"provider" json:"provider"`
+	Enabled                  bool              `yaml:"enabled" json:"enabled"`
+	IssuerURL                string            `yaml:"issuer_url" json:"issuer_url"`
+	ClientID                 string            `yaml:"client_id" json:"client_id"`
+	ClientSecret             string            `yaml:"client_secret" json:"client_secret"`
+	RedirectURL              string            `yaml:"redirect_url" json:"redirect_url"`
+	Scopes                   []string          `yaml:"scopes" json:"scopes"`
+	ClaimMapping             map[string]string `yaml:"claim_mapping" json:"claim_mapping"`
+	AutoProvision            bool              `yaml:"auto_provision" json:"auto_provision"`
+	DefaultRole              string            `yaml:"default_role" json:"default_role"`
+	Provider                 OIDCProviderConfig `yaml:"provider" json:"provider"`
+	PostLogoutAllowedDomains []string          `yaml:"post_logout_allowed_domains" json:"post_logout_allowed_domains"`
 }
 
 // OIDCProviderConfig enables APICerberus to act as an OIDC Authorization Server.

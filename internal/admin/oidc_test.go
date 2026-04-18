@@ -284,3 +284,67 @@ func TestHandleOIDCLogout_NotConfigured(t *testing.T) {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }
+
+func TestIsAllowedPostLogoutDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		redirectURL    string
+		allowedDomains []string
+		want           bool
+	}{
+		{
+			name:        "relative path with empty allowlist",
+			redirectURL: "/dashboard?logout=1",
+			want:        true,
+		},
+		{
+			name:           "relative path with configured allowlist should be permitted",
+			redirectURL:    "/dashboard?logout=1",
+			allowedDomains: []string{"example.com", "trusted.example.org"},
+			want:           true,
+		},
+		{
+			name:           "matching domain in allowlist",
+			redirectURL:    "https://example.com/dashboard",
+			allowedDomains: []string{"example.com"},
+			want:           true,
+		},
+		{
+			name:           "non-matching domain in allowlist",
+			redirectURL:    "https://evil.com/redirect",
+			allowedDomains: []string{"example.com"},
+			want:           false,
+		},
+		{
+			name:           "case-insensitive domain match",
+			redirectURL:    "https://EXAMPLE.COM/dashboard",
+			allowedDomains: []string{"example.com"},
+			want:           true,
+		},
+		{
+			name:           "subdomain not matching parent domain",
+			redirectURL:    "https://fakeexample.com/redirect",
+			allowedDomains: []string{"example.com"},
+			want:           false,
+		},
+		{
+			name:           "empty allowlist rejects external URL",
+			redirectURL:    "https://example.com/redirect",
+			allowedDomains: []string{},
+			want:           false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := isAllowedPostLogoutDomain(tt.redirectURL, tt.allowedDomains)
+			if got != tt.want {
+				t.Errorf("isAllowedPostLogoutDomain(%q, %v) = %v, want %v",
+					tt.redirectURL, tt.allowedDomains, got, tt.want)
+			}
+		})
+	}
+}

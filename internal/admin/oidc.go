@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -33,6 +35,32 @@ var (
 	oidcProviderMu sync.RWMutex
 	oidcProvider   *oidcStateEntry
 )
+
+// isAllowedPostLogoutDomain checks if the given URL's host is in the allowed domains list.
+// If the list is empty, only relative paths (no host) are permitted.
+// This prevents open redirect attacks via malicious IdP configurations.
+func isAllowedPostLogoutDomain(redirectURL string, allowedDomains []string) bool {
+	if len(allowedDomains) == 0 {
+		// No allowlist configured — only permit relative paths (no host component)
+		u, err := url.Parse(redirectURL)
+		return err == nil && u.Host == "" && strings.HasPrefix(redirectURL, "/")
+	}
+	u, err := url.Parse(redirectURL)
+	if err != nil {
+		return false
+	}
+	// Relative paths (no host) are always safe — they can't redirect to external sites.
+	if u.Host == "" {
+		return true
+	}
+	host := strings.ToLower(u.Host)
+	for _, domain := range allowedDomains {
+		if strings.EqualFold(host, strings.ToLower(domain)) {
+			return true
+		}
+	}
+	return false
+}
 
 // initOIDCProvider creates an OIDC provider and verifier from the current config.
 // It must be called before handling any OIDC requests.
@@ -103,8 +131,8 @@ func (s *Server) initOIDCProvider() (*oidcStateEntry, error) {
 func (s *Server) handleOIDCLogin(w http.ResponseWriter, r *http.Request) {
 	// Rate limit to prevent SSO redirect abuse
 	clientIP := extractClientIP(r)
-	if s.isRateLimited(clientIP) {
-		writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many authentication attempts. Please try again later.")
+	if retrySec, limited := s.rateLimitInfo(clientIP); limited {
+		writeRateLimitedError(w, retrySec)
 		return
 	}
 
@@ -162,8 +190,8 @@ func (s *Server) handleOIDCLogin(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	// Rate limit to prevent callback abuse
 	clientIP := extractClientIP(r)
-	if s.isRateLimited(clientIP) {
-		writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many authentication attempts. Please try again later.")
+	if retrySec, limited := s.rateLimitInfo(clientIP); limited {
+		writeRateLimitedError(w, retrySec)
 		return
 	}
 
@@ -388,6 +416,26 @@ func (s *Server) handleOIDCLogout(w http.ResponseWriter, r *http.Request) {
 	// which can be controlled by an attacker (Host header injection).
 	redirectURL := "/dashboard?logout=1"
 
+	// M-001: Validate post-logout redirect URL against allowlist.
+	// If domains are configured, only allow redirects to those domains.
+	// If no domains are configured, only relative paths are permitted (host must be empty).
+	// This prevents malicious IdP configurations from redirecting users to attacker-controlled sites.
+	if !isAllowedPostLogoutDomain(redirectURL, cfg.OIDC.PostLogoutAllowedDomains) {
+		writeError(w, http.StatusBadRequest, "invalid_post_logout_redirect", "Post-logout redirect is not permitted")
+		return
+	}
+
+	// Dedicated HTTP client with explicit TLS 1.2+ minimum and timeout.
+	// M-005: Using http.DefaultClient would skip IdP-specific CA validation.
+	discoveryClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				MinVersion: tls.VersionTLS12,
+			},
+		},
+		Timeout: 10 * time.Second,
+	}
+
 	entry, err := s.initOIDCProvider()
 	if err == nil {
 		// Try to get end_session_endpoint from discovery
@@ -395,7 +443,7 @@ func (s *Server) handleOIDCLogout(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, discoveryURL, nil)
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := discoveryClient.Do(req)
 		if err == nil {
 			defer resp.Body.Close()
 			var disc struct {

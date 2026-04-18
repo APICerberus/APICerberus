@@ -175,8 +175,8 @@ func (s *Server) withAdminBearerAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Rate limiting check
-		if s.isRateLimited(clientIP) {
-			writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many failed authentication attempts. Please try again later.")
+		if retrySec, limited := s.rateLimitInfo(clientIP); limited {
+			writeRateLimitedError(w, retrySec)
 			return
 		}
 
@@ -238,8 +238,8 @@ func (s *Server) withAdminStaticAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Rate limiting check
-		if s.isRateLimited(clientIP) {
-			writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many failed authentication attempts. Please try again later.")
+		if retrySec, limited := s.rateLimitInfo(clientIP); limited {
+			writeRateLimitedError(w, retrySec)
 			return
 		}
 
@@ -359,8 +359,8 @@ func (s *Server) handleFormLogin(w http.ResponseWriter, r *http.Request) {
 
 	clientIP := extractClientIP(r)
 
-	if s.isRateLimited(clientIP) {
-		http.Redirect(w, r, "/dashboard?login=rate_limited", http.StatusSeeOther)
+	if retrySec, limited := s.rateLimitInfo(clientIP); limited {
+		http.Redirect(w, r, fmt.Sprintf("/dashboard?login=rate_limited&retry_after=%d", retrySec), http.StatusSeeOther)
 		return
 	}
 
@@ -410,8 +410,8 @@ func (s *Server) handleRotateAdminKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clientIP := extractClientIP(r)
-	if s.isRateLimited(clientIP) {
-		writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many authentication attempts.")
+	if retrySec, limited := s.rateLimitInfo(clientIP); limited {
+		writeRateLimitedError(w, retrySec)
 		return
 	}
 

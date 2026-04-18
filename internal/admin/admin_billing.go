@@ -48,6 +48,8 @@ func (s *Server) adjustCredits(w http.ResponseWriter, r *http.Request, topup boo
 
 	// M-007: Rate limit credit operations to prevent abuse
 	if s.checkCreditRateLimit(userID) {
+		// L-008: Include Retry-After header for credit rate limit responses.
+		w.Header().Set("Retry-After", "60")
 		writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many credit operations. Please try again later.")
 		return
 	}

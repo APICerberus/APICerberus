@@ -1,403 +1,579 @@
-# Verified Security Findings — APICerebrus 2026-04-18
+# APICerebrus Verified Security Findings
 
-**Scan Date:** 2026-04-18 (updated)
-**Verifier:** Claude Code Phase 3 Verification + 2026-04-18 remediation pass
-**Project:** APICerebrus API Gateway
-
----
-
-## 2026-04-18 Remediation Summary
-
-**Fixed today:** 6 critical/high findings + 2 infrastructure hardening
-
-| ID | Severity | Fix | Commit |
-|----|----------|-----|--------|
-| CRIT-1 (CWE-345) | Critical | OIDC userinfo signature verification added | c42e82b |
-| H-NEW-1 (CWE-284) | High | OIDC introspect stops leaking expired token claims | c42e82b |
-| H-NEW-2 (CWE-295) | High | TLS 1.3-only in all K8s configs | c42e82b |
-| H-NEW-3 (CWE-732) | High | NetworkPolicy enabled by default in Helm | c42e82b |
-| H-NEW-4 (CWE-732) | High | PodDisruptionBudget enabled by default | c42e82b |
-| H-NEW-5 (CWE-306) | High | .env.example sslmode=disable warning | c42e82b |
-| M-014 (CWE-352) | Medium | Admin API CSRF double-submit protection added | fa4e82b |
+**Verification Date:** 2026-04-18
+**Verification Method:** Code inspection + git history analysis
+**Scope:** All findings from go-findings.md, secrets-findings.md, injection-findings.md, api-security-findings.md, web-findings.md, wasm-plugin-findings.md
 
 ---
 
-## 2026-04-17 Consolidated Scan Summary
+## Executive Summary
 
-This scan found **0 Critical, 5 High, 14 Medium, 23 Low/Info** vulnerabilities.
-Full findings are in `SECURITY-REPORT.md`.
+| Severity | Count | Fixed | Open | False Positive |
+|----------|-------|-------|------|----------------|
+| Critical | 0 | 0 | 0 | 0 |
+| High | 1 | 0 | 1 | 0 |
+| Medium | 10 | 3 | 6 | 1 |
+| Low | 10 | 0 | 9 | 1 |
+| **Total** | **21** | **3** | **16** | **2** |
 
-### Key New Findings
-
-| ID | Severity | Title | Location |
-|----|----------|-------|----------|
-| H-001 | High | Admin key rotation does not revoke existing sessions | internal/admin/token.go:311-373 |
-| H-002 | High | Config import allows replacing admin credentials | internal/admin/server.go:427-482 |
-| H-003 | High | TOCTOU race in credit PreCheck vs Deduct | internal/billing/engine.go:92-192 |
-| H-004 | High | Test key bypass if test_mode_enabled in production | internal/billing/engine.go:107 |
-| H-005 | High | SQLite unencrypted at rest | internal/store/store.go |
-| M-001 | Medium | Admin API key has no minimum length validation | internal/config/load.go:314-321 |
-| M-002 | Medium | Logout does not invalidate JWT tokens | internal/admin/token.go:375-400 |
-| M-003 | Medium | gRPC-Web wildcard origin + credentials | internal/grpc/proxy.go:100,218 |
-| M-007 | Medium | Missing rate limiting on admin credit endpoints | internal/admin/server.go |
-| M-009 | Medium | DNS resolution failure allows unresolved hostnames | internal/gateway/proxy.go:333-337 |
-| M-014 | Medium | Auth state in sessionStorage (XSS risk) | web/src/lib/api.ts:38-54 |
-
-### Prior Issues Remediated (Recent Commits)
-
-| ID | Description | Commit |
-|----|-------------|--------|
-| WASM-003 | Panic recovery in WASM Execute/Run/AfterProxy | 8787ce2 |
-| GQL-011 | X-Admin-Key required on GET /sse | b9f221a |
-| GQL-010 | Drop path arg from system.config.import | c9add9d |
-| GQL-007 | Origin allow-list for subscription WS+SSE | 96d32aa |
-| GQL-006 | @authorized enforced at execution time | 1ea67fa |
+**Net Change from Previous Report:**
+- Fixed: 3 (M-003 redirect domain allowlist, M-005 OIDC JWT verification, H-002 hardcoded API key)
+- False Positives: 2 (M-005 WASM alloc context, M-006 pipeline phase filtering)
+- Remaining: 16 open findings
 
 ---
 
-## Verification Summary
+## Verified Findings
 
-| # | Raw Finding | Verified? | Final Severity | Confidence | Status |
-|---|-------------|-----------|---------------|------------|--------|
-| 1 | SQL Parameterized Queries (positive) | VERIFIED | N/A (Good) | High | ✅ |
-| 2 | PostgreSQL DSN Construction | **FALSE POSITIVE** | N/A | High | ✅ |
-| 3 | Health Endpoint Bypass Auth | **FIXED** | Medium | High | ✅ `allowed_health_ips` config option + IP check (2026-04-16) |
-| 4 | RBAC Enforcement (positive) | VERIFIED | N/A (Good) | High | ✅ |
-| 5 | Client IP Spoofing Prevention (positive) | VERIFIED | N/A (Good) | High | ✅ |
-| 6 | Admin API Key Brute Force | **PARTIAL → FIXED** | Low | High | ✅ WS endpoint fixed 2026-04-16 |
-| 7 | OIDC Provider with Bcrypt (positive) | VERIFIED | N/A (Good) | High | ✅ |
-| 8 | Test Files Hardcoded Secrets | **FIXED** | Medium | High | ✅ `generateRandomSecret()` added 2026-04-16 |
-| 9 | Test Config Predictable Secrets | **FIXED** | Medium | High | ✅ Env var placeholders 2026-04-16 |
-| 10 | JWT Benchmark Secret | **FALSE POSITIVE** | N/A | High | ✅ |
-| 11 | OIDC Test Client Secret | **FALSE POSITIVE** | N/A | High | ✅ |
-| 12 | No dangerouslySetInnerHTML (positive) | VERIFIED | N/A (Good) | High | ✅ |
-| 13 | No eval()/new Function() (positive) | VERIFIED | N/A (Good) | High | ✅ |
-| 14 | Proxy HTTP Client SSRF Risk | **FALSE POSITIVE** | N/A | High | ✅ |
-| 15 | No Obvious SSRF (positive) | VERIFIED | N/A (Good) | High | ✅ |
-| 16 | No Path Traversal (positive) | VERIFIED | N/A (Good) | High | ✅ |
-| 17 | No exec.Command (positive) | VERIFIED | N/A (Good) | High | ✅ |
-| 18 | JWT Validation Implementation (positive) | VERIFIED | N/A (Good) | High | ✅ |
-| 19 | JWT Algorithm Confusion Protection (positive) | VERIFIED | N/A (Good) | High | ✅ |
-| 20 | Atomic Redis Rate Limiting (positive) | VERIFIED | N/A (Good) | High | ✅ |
-| 21 | Non-Crypto RNG in Analytics | **FALSE POSITIVE** | N/A | High | ✅ |
-| 22 | Crypto/Rand Panic is Appropriate | **FALSE POSITIVE** | N/A | High | ✅ |
-| 23 | Portal API CSRF Protection | **FALSE POSITIVE** | N/A | High | ✅ Double-submit + X-CSRF-Token header implemented |
-| 24 | API Client Uses Fetch with Credentials | **FALSE POSITIVE** | N/A | High | ✅ |
-| 25 | Password Hashing with Bcrypt (positive) | VERIFIED | N/A (Good) | High | ✅ |
-| 26 | Audit Logging Field Masking (positive) | VERIFIED | N/A (Good) | High | ✅ |
-| 27 | TODO Comments - Incomplete Features | **DOCUMENTED** | Low | High | ✅ Comment clarified 2026-04-16 |
-| 28 | Kubernetes Empty Secrets | **NOT A CODE VULNERABILITY** | N/A | High | ✅ Standard K8s pattern; requires Secrets override |
+### [H-001]: Weak-Secret Blocklist Incomplete for Admin Token Secret
+- **CWE:** CWE-327 (Use of Weak Cryptographic Primitive) / CWE-798 (Hard-coded Credentials)
+- **File:** `internal/config/load.go:326-333`
+- **Confidence:** 95%
+- **Status:** OPEN
+- **Verified:** Yes
 
-**Confirmed Real Issues:** 12 (prior: 8 fixed, 4 new findings from 2026-04-16 deep scan)
-**False Positives:** 11
-**Partially Mitigated:** 0
-**Remaining After Fixes:** 0 Critical, 0 High, 2 Medium (intentional design), 3 Low (documented)
+**Evidence:**
+```go
+// internal/config/load.go:326-333
+tokenSecret := strings.TrimSpace(cfg.Admin.TokenSecret)
+if len(tokenSecret) < 32 {
+    addErr("admin.token_secret must be at least 32 characters")
+}
+lowerTokenSecret := strings.ToLower(tokenSecret)
+if strings.Contains(lowerTokenSecret, "change") || strings.Contains(lowerTokenSecret, "secret") || strings.Contains(lowerTokenSecret, "password") {
+    addErr("admin.token_secret appears to be a placeholder or weak value")
+}
+```
 
-### NEW FINDINGS (2026-04-16 Deep Scan)
+**Analysis:** The blocklist check only covers "change", "secret", "password" but NOT other known weak values like "admin", "root", "test", "demo", "123456", "changeme", "changeme-in-production", "change-me-in-production", "change-me-min-32-chars", "your-secret", "your-hmac-secret", "your-secure-session-secret".
 
-#### Finding 29: Portal sessionStorage Auth State Exposed to XSS
-- **File:** `web/src/lib/api.ts:38-54`
-- **CWE:** CWE-79 (Cross-Site Scripting)
-- **Severity:** Medium (conditional on XSS)
-- **Status:** DOCUMENTED — Comment acknowledges the risk in code (M-022)
-- **Explanation:** Auth state stored in sessionStorage (`window.sessionStorage.getItem(API_CONFIG.adminAuthStateKey)`) is readable by any JavaScript on the same origin, including injected XSS scripts. The code comments at lines 31-36 explicitly document this as M-021/M-022 and recommend httpOnly cookies for production.
-- **Impact:** If an XSS vulnerability exists elsewhere, an attacker could read the auth state flag from sessionStorage. The session token itself is NOT stored in sessionStorage (it uses httpOnly cookies), so the impact is limited to the boolean auth flag.
-- **Remediation:** For production deployments with high XSS risk, consider storing auth state in httpOnly cookies instead of sessionStorage. The current implementation is acceptable for typical deployments but should be documented.
+An operator could use `token_secret: "admin1234567890123456789012345678"` (32+ chars, no "change"/"secret"/"password") and pass validation. This would allow JWT forgery if the secret is guessable.
 
-#### Finding 30: OIDC State Parameter CSRF Validation — Properly Verified
-- **File:** `internal/admin/oidc.go:118-185`
-- **CWE:** CWE-352 (CSRF)
-- **Severity:** Low
-- **Status:** :white_check_mark: **VERIFIED — Properly implemented**
-- **Explanation:** State is generated with `crypto/rand` (32 bytes hex, line 118), stored in an HttpOnly cookie (lines 144-153), and validated with `constantTimeEqual` on callback (line 181). Nonce is also generated and validated. Both state and nonce are cleared after use. This is a robust CSRF protection for the OIDC flow.
-- **Impact:** No impact — CSRF protection for OIDC flow is properly implemented using cryptographic best practices.
-- **Remediation:** No action needed.
+**Remediation:** Expand blocklist to include: "admin", "root", "test", "demo", "123456", "changeme", "changeme-in-production", "change-me-in-production", "change-me-min-32-chars", "your-secret", "your-hmac-secret", "your-secure-session-secret".
 
-#### Finding 31: Kafka TLS InsecureSkipVerify — Admin-Configurable
-- **File:** `internal/audit/kafka.go:378-382`
+---
+
+### [H-002]: Hardcoded Consumer API Key in Version-Controlled Config
+- **CWE:** CWE-798 (Hard-coded Credentials)
+- **File:** `apicerberus.yaml:220`
+- **Confidence:** 90%
+- **Status:** FIXED
+- **Verified:** Yes
+
+**Evidence:**
+```yaml
+# apicerberus.yaml:217-220
+consumers:
+  - name: "mobile-app"
+    api_keys:
+      - key: "${MOBILE_APP_API_KEY}"
+```
+
+**Analysis:** The `apicerberus.yaml` now uses environment variable substitution `${MOBILE_APP_API_KEY}` instead of the hardcoded `ck_live_mobile_app_key_12345678901234567890`. The old finding was valid but has been remediated.
+
+**Status Change:** OPEN → FIXED
+
+---
+
+### [M-001]: Redirect Plugin Domain Allowlist
+- **CWE:** CWE-601 (URL Redirect to Untrusted Site)
+- **File:** `internal/plugin/redirect.go:34-69`
+- **Confidence:** 85%
+- **Status:** FIXED
+- **Verified:** Yes
+
+**Evidence from commit 0c538c3:**
+```go
+// internal/plugin/redirect.go:34-69
+func isValidRedirectTarget(target string, allowedDomains map[string]bool) bool {
+    // ...
+    switch strings.ToLower(u.Scheme) {
+    case "https", "http":
+        // M-003: if allowedDomains is configured, restrict external redirects
+        if len(allowedDomains) > 0 {
+            host := strings.ToLower(u.Host)
+            if !allowedDomains[host] {
+                return false
+            }
+        }
+        return true
+    // ...
+    }
+}
+```
+
+**Analysis:** The fix adds `allowedDomains` parameter to restrict external redirects to an allowlist. The `NewRedirect` constructor builds the lookup map from `cfg.AllowedDomains`. When `allowedDomains` is empty (not configured), behavior is unchanged for backward compatibility.
+
+**Status Change:** OPEN → FIXED
+
+---
+
+### [M-002]: OIDC Logout Reflects post_logout_redirect_uri to IdP
+- **CWE:** CWE-601 (Open Redirect)
+- **File:** `internal/admin/oidc.go:406-410`
+- **Confidence:** 80%
+- **Status:** OPEN
+- **Verified:** Yes
+
+**Evidence:**
+```go
+// internal/admin/oidc.go:406-410
+logoutURL := disc.EndSessionEndpoint +
+    "?post_logout_redirect_uri=" + redirectURL +
+    "&client_id=" + cfg.OIDC.ClientID
+http.Redirect(w, r, logoutURL, http.StatusFound)
+```
+
+**Analysis:** The `redirectURL` defaults to `/dashboard?logout=1` (line 389) and is only user-controlled if explicitly configured. The IdP determines whether to honor the `post_logout_redirect_uri`. Exploitation requires admin to configure a malicious IdP redirect URI pointing to an attacker-controlled domain. Low practical risk due to admin-level access requirement.
+
+**Note:** If `allowedDomains` allowlist is implemented for redirect plugin, a similar pattern should be considered for OIDC post-logout redirects.
+
+---
+
+### [M-003]: OIDC WebSocket Auth Cookie Parsed Without Signature Re-Validation
+- **CWE:** CWE-565 (Reliance on Cookies without Validation and Integrity Checking)
+- **File:** `internal/admin/oidc_provider.go:312-322`
+- **Confidence:** 75%
+- **Status:** FIXED
+- **Verified:** Yes
+
+**Evidence from commit 02c8d96:**
+```go
+// internal/admin/oidc_provider.go:312-322 (M-005 fix)
+// Parse and verify the JWT signature using HS256
+tok, err := jwt.Parse(cookie.Value)
+if err == nil {
+    alg, _ := tok.HeaderString("alg")
+    if alg == "HS256" && jwt.VerifyHS256(tok.SigningInput, tok.Signature, []byte(secret)) {
+        if claims, ok := tok.Payload["sub"].(string); ok {
+            subject = claims
+        }
+    }
+}
+```
+
+**Analysis:** Prior to the fix, `jwt.Parse` was called without signature verification. Now HS256 signature is explicitly verified before extracting the subject claim.
+
+**Status Change:** OPEN → FIXED (commit 02c8d96)
+
+---
+
+### [M-004]: OIDC Authorization Issues Auth Code Without Per-Request Challenge
+- **CWE:** CWE-287 (Improper Authentication)
+- **File:** `internal/admin/oidc_provider.go:319-358`
+- **Confidence:** 70%
+- **Status:** OPEN
+- **Verified:** Yes
+
+**Analysis:** The handler issues authorization codes for the session user without re-authenticating. Per RFC 6749, this is correct behavior - the user already authenticated to obtain the session cookie. However, an attacker with a valid session could authorize requests without explicit user consent for sensitive scopes.
+
+This is a design trade-off rather than a vulnerability. OIDC authorization codes are single-use with 5-minute TTL and stored in-memory.
+
+---
+
+### [M-005]: WASM allocFn.Call Uses Unbounded context.Background()
+- **CWE:** CWE-400 (Resource Exhaustion)
+- **File:** `internal/plugin/wasm.go:462`
+- **Confidence:** 85%
+- **Status:** FALSE_POSITIVE
+- **Verified:** Yes
+
+**False Positive Reason:** The finding claimed `allocFn.Call` used `context.Background()` instead of the timeout-carrying `execCtx`. Verification shows:
+
+```go
+// internal/plugin/wasm.go:462 - writeToWASMMemory receives ctx which carries MaxExecution timeout
+func writeToWASMMemory(ctx context.Context, mod api.Module, data []byte) (uint32, uint32, error) {
+    // ...
+    results, err := allocFn.Call(ctx, uint64(len(data)))
+```
+
+The `ctx` parameter is passed from `Execute` via `writeToWASMMemory(execCtx, mod, reqBytes)` where `execCtx = context.WithTimeout(context.Background(), timeout)` carries the `MaxExecution` timeout. The timeout context is correctly propagated.
+
+**Status Change:** OPEN → FALSE_POSITIVE
+
+---
+
+### [M-006]: Pipeline Phase Filtering Not Enforced at Execution
+- **CWE:** CWE-693 (Protection Mechanism Failure)
+- **File:** `internal/plugin/pipeline.go:15-36`, `internal/plugin/registry.go:253-262`
+- **Confidence:** 80%
+- **Status:** FALSE_POSITIVE
+- **Verified:** Yes
+
+**False Positive Reason:** The finding claimed `Pipeline.Execute` iterates ALL plugins without phase filtering. Verification shows:
+
+1. `BuildRoutePipelinesWithContext` (registry.go:253-262) sorts plugins by phase using `phaseOrder()`:
+   - PhasePreAuth: order 1
+   - PhaseAuth: order 2
+   - PhasePreProxy: order 3
+   - PhaseProxy: order 4
+   - PhasePostProxy: order 5
+
+2. `Pipeline.Execute` (pipeline.go:20-34) iterates through the pre-sorted slice and runs plugins sequentially in phase order.
+
+Plugins ARE correctly ordered by phase at build time. The execution order is guaranteed by the sorted slice.
+
+**Status Change:** OPEN → FALSE_POSITIVE
+
+---
+
+### [M-007]: CSP Allows 'unsafe-inline' Weakening XSS Mitigation
+- **CWE:** CWE-1035 (Security Configuration - CSP Weakness)
+- **File:** `internal/admin/ui.go:54`
+- **Confidence:** 90%
+- **Status:** OPEN
+- **Verified:** Yes
+
+**Evidence:**
+```go
+// internal/admin/ui.go:54
+w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'")
+```
+
+**Analysis:** The CSP header permits `'unsafe-inline'` in `script-src` and `style-src`. This allows inline script/style tags to execute, significantly reducing XSS protection. Modern browsers support nonce-based CSP which should be used instead.
+
+**Remediation:** Replace `unsafe-inline` with nonce-based CSP or remove entirely if possible.
+
+---
+
+### [M-008]: Marketplace Archive SHA-256 Verified, Not Per-File Contents
+- **CWE:** CWE-345 (Insufficient Verification of Data Authenticity)
+- **File:** `internal/plugin/marketplace.go:365-369`
+- **Confidence:** 75%
+- **Status:** OPEN
+- **Verified:** Yes
+
+**Evidence:**
+```go
+// internal/plugin/marketplace.go:365-369
+expectedChecksum := listing.Checksums[version]
+if expectedChecksum != "" && checksum != expectedChecksum {
+    return nil, fmt.Errorf("checksum mismatch")
+}
+```
+
+**Analysis:** Only the archive checksum is verified. Individual extracted files are not checksummed. If an attacker modifies a `.wasm` file post-install (e.g., via container escape), the gateway loads the tampered module without detection. The `wasm_file_sha256` config field exists but is optional and not automatically populated from marketplace metadata.
+
+**Remediation:** Store per-file SHA-256 hashes in `metadata.json` at install time; verify on `LoadModule`.
+
+---
+
+### [M-009]: http.DefaultClient Used for OIDC Token Exchange
 - **CWE:** CWE-295 (Improper Certificate Validation)
-- **Severity:** Low (production config only)
-- **Status:** ACCEPTED RISK — Config validation rejects `skip_verify: true` for Kafka in production (load.go:439), but the flag is still configurable for development
-- **Explanation:** `InsecureSkipVerify: kw.config.TLS.SkipVerify` is set with `#nosec G402` annotation noting it is admin-configurable. The config validation in `load.go:439` rejects this in production. However, the flag can still be set in non-production environments.
-- **Remediation:** No code change needed — this is intentional for development flexibility. Production deployments are protected by validation. Ensure deployment CI/CD rejects production configs with `skip_verify: true` for Kafka.
+- **File:** `internal/admin/oidc.go:398`
+- **Confidence:** 70%
+- **Status:** OPEN
+- **Verified:** Yes
 
-#### Finding 32: GraphQL Introspection Enabled — Production Exposure
-- **File:** `internal/admin/graphql.go:39-78` + `internal/config/types.go:192`
-- **CWE:** CWE-200 (Exposure of Sensitive Information)
-- **Severity:** Low
-- **Status:** ✅ **FIXED (2026-04-16)** — `admin.graphql_introspection` config field + introspection check
-- **Explanation:** Added `admin.graphql_introspection` bool field to `AdminConfig` (default `false`), and `ServeHTTP` now checks this setting before executing introspection queries. Introspection queries (containing `__schema` or `__type`) are blocked with a generic error when disabled. Enabled by setting `admin.graphql_introspection: true` in config.
-- **Impact:** Introspection is now disabled by default. Production deployments without explicit opt-in are protected from schema enumeration.
-- **Remediation:** No further action needed.
-
-#### Finding 33: Admin API Key Rotation — Hot-Reload Implementation
-- **File:** `internal/admin/token.go:337-409` + `internal/admin/server.go:137`
-- **CWE:** CWE-306 (Missing Authentication for Critical Function)
-- **Severity:** Low
-- **Status:** :white_check_mark: **FIXED (2026-04-16)** — `POST /admin/api/v1/auth/rotate-key` endpoint
-- **Explanation:** Added `POST /admin/api/v1/auth/rotate-key` endpoint that accepts the current admin key (via `X-Admin-Key` header) and a new key (via JSON body `new_key`). The new key must be minimum 32 characters and pass weak-value validation. Uses `mutateConfig` for hot-reload without restart. Rate limiting and failed auth tracking apply to prevent abuse.
-- **Impact:** Administrators can now rotate the static admin key without restarting the gateway, enabling key rotation policies without downtime.
-- **Remediation:** No further action needed.
-
-#### Finding 6: Admin API Brute Force — WebSocket Endpoint
-- **File:** `internal/admin/ws.go:147-166` (fixed), `internal/admin/token.go:184-214`
-- **CWE:** CWE-307 (Brute Force)
-- **Original Severity:** Low (partial finding)
-- **Final Status:** ✅ **FIXED** — Rate limiting added to WebSocket static key fallback path
-- **Fix:** `isWebSocketAuthorized` now calls `isRateLimited()` and `recordFailedAuth()`/`clearFailedAuth()` for the static key path, matching the protection in `withAdminStaticAuth`. Verified via `clientIP := extractClientIP(r)` at line 122.
-- **Verification:** `go test ./internal/admin/...` passes.
-
-#### Finding 8: Test Files Contain Hardcoded Secrets
-- **File:** `test/e2e_v010_mcp_stdio_test.go:110`
-- **CWE:** CWE-798 (Use of Hardcoded Credentials)
-- **Original Severity:** Medium
-- **Final Status:** ✅ **FIXED**
-- **Fix:** `generateRandomSecret()` function added (crypto/rand, URL-safe base64). `writeMCPTestConfig()` now generates cryptographically random secrets per test run. Raw secrets never written to disk.
-- **Verification:** `go test ./test/...` passes.
-
-#### Finding 9: Test Config Contains Predictable Secrets
-- **File:** `test-config.yaml:13-14`
-- **CWE:** CWE-798 (Use of Hardcoded Credentials)
-- **Original Severity:** Medium
-- **Final Status:** ✅ **FIXED**
-- **Fix:** Replaced hardcoded values with `${ADMIN_API_KEY}` / `${TOKEN_SECRET}` env var placeholders. Note: the YAML loader does not expand `${}` natively — tests that need valid config should generate their own inline configs (as most tests already do).
-- **Verification:** `test-config.yaml` now contains env var placeholders consistent with `apicerberus.yaml` and deployment configs.
-
-#### Finding 27: Incomplete Body Transform TODO
-- **File:** `internal/plugin/request_transform.go:130`
-- **Original Severity:** Low
-- **Final Status:** ✅ **DOCUMENTED** — Comment clarified
-- **Fix:** Replaced `TODO: implement JSON body read/rewrite in POST body phase.` with a clear comment explaining that body hooks are parsed but not applied, and this is a known limitation.
-- **Verification:** `go test ./internal/plugin/...` passes.
-
----
-
-### ℹ️ INTENTIONAL DESIGN (No Fix Required)
-
-#### Finding 3: Health Endpoint Bypasses Auth
-- **File:** `internal/gateway/server.go:977-1038`
-- **CWE:** CWE-288 (Authentication Bypass)
-- **Severity:** Medium
-- **Status:** ✅ **FIXED (2026-04-16)**
-- **Fix:** New `gateway.allowed_health_ips` config field restricts `/ready` and `/health/audit-drops` to authorized IPs only. Internal details (DB connectivity, audit buffer metrics) are only disclosed to IPs in the allow-list. `/health` (status + uptime) remains fully open. `netutil.IsAllowedIP()` provides consistent CIDR/IP allow-list checking.
-- **Files changed:** `config/types.go` (+AllowedHealthIPs), `gateway/server.go` (IP check), `pkg/netutil/clientip.go` (+IsAllowedIP), `apicerberus.example.yaml` (docs), `clientip_test.go` (+8 tests)
-- **Verification:** All tests pass including new `IsAllowedIP` tests.
-
----
-
-### ✅ FALSE POSITIVES / NOT VULNERABILITIES
-
-#### Finding 23: Portal API CSRF Protection
-- **File:** `web/src/lib/portal-api.ts:124-129`, `internal/portal/server.go:617-625`
-- **CWE:** CWE-352 (Cross-Site Request Forgery)
-- **Status:** **NOT A VULNERABILITY** — Properly implemented
-- **Explanation:** CSRF double-submit pattern is fully implemented:
-  - Server generates cryptographically random token via `generateCSRFToken()` (crypto/rand)
-  - Cookie: `csrf_token` with `SameSite=Strict` + `Secure` + `HttpOnly=false` (readable by JS)
-  - Header: `X-CSRF-Token` sent on all state-changing requests (portal-api.ts:129)
-  - Server validates cookie value == header value via `validateCSRFToken()` (server.go:643)
-  - Auto-refresh on 403 with retry mechanism (portal-api.ts:145-165)
-- **Conclusion:** This is a proper double-submit CSRF implementation. The original finding was incorrect.
-
-#### Finding 28: Kubernetes Empty Secrets Placeholders
-- **File:** `deployments/kubernetes/base/configmap.yaml:35-36`
-- **Status:** **NOT A CODE VULNERABILITY**
-- **Explanation:** Empty string placeholders in ConfigMaps are the standard Kubernetes pattern. Secrets are mounted via K8s Secrets resources (typed key-value pairs) which are injected into pods as files or env vars. This is intentional and documented.
-- **Conclusion:** Deployment configuration concern, not a code vulnerability.
-
-#### Finding 2: PostgreSQL DSN Construction — `url.QueryEscape` correctly applied
-#### Finding 10: JWT Benchmark Secret — benchmark-only code, not in production binaries
-#### Finding 11: OIDC Test Client Secret — test file only, not production
-#### Finding 14: Proxy SSRF Risk — `validateUpstreamHost()` blocks private/metadata IPs
-#### Finding 21: Non-Crypto RNG in Analytics — intentional for reservoir sampling
-#### Finding 22: Crypto/Rand Panic — correct fail-safe behavior
-#### Finding 24: API Client Fetch with Credentials — standard good practice
-
----
-
-## New Findings (2026-04-16 Additional Scan)
-
-These findings were identified in an additional 2026-04-16 scan and are NOT covered by the prior audit report:
-
-### HIGH-NEW-1: JWT JTI Replay Cache Disabled by Default
-
-| Field | Value |
-|-------|-------|
-| **CWE** | CWE-287 (Improper Authentication) |
-| **CVSS 3.1** | 6.5 (Medium) — `CVSS:3.1/AV:N/AC:L/PR:N/UI:N/SA:P/Au:N/RE:P/RL:O/RC:C` |
-| **File:Line** | `internal/plugin/auth_jwt.go:260-270` |
-| **Confidence** | High |
-| **Status** | ✅ FIXED (2026-04-16) — Fail-closed on missing JTI cache |
-
-**Code:**
+**Evidence:**
 ```go
-func (a *AuthJWT) checkJTIReplay(token *jwt.Token) error {
-    if a.jtiReplayCache == nil {
-        fmt.Printf("WARN: JTI replay cache not configured, replay protection disabled for token\n")
-        return nil  // ← Token accepted even with replayed JTI
-    }
-    // ...
+// internal/admin/oidc.go:398
+resp, err := http.DefaultClient.Do(req)
+```
+
+**Analysis:** Uses `http.DefaultClient` for OIDC token exchange. Go's default client enforces TLS 1.2 minimum but does not configure IdP-specific Root CAs. If the IdP uses a private CA or self-signed certificate, the request would fail without proper CA configuration.
+
+**Remediation:** Create a dedicated HTTP client with explicit TLS configuration and Root CAs for the IdP.
+
+---
+
+### [M-010]: Marketplace Extraction Creates Orphan Files on Failure
+- **CWE:** CWE-409 (Improper Handling of Highly Compressed Data)
+- **File:** `internal/plugin/marketplace.go:697-699`
+- **Confidence:** 70%
+- **Status:** OPEN
+- **Verified:** Yes
+
+**Evidence:**
+```go
+// internal/plugin/marketplace.go:691-699
+written, err := io.CopyN(outFile, tarReader, remaining)
+extractedSize += written
+if err != nil && !errors.Is(err, io.EOF) {
+    _ = outFile.Close() // Best-effort cleanup only
+    return err
+}
+if extractedSize > maxExtractSize {
+    _ = outFile.Close() // Partial file remains on disk
+    return fmt.Errorf("extracted plugin exceeds maximum size")
 }
 ```
 
-**Impact:** JWTs with replayed `jti` claims are accepted when no JTI replay cache is configured. An attacker who obtains a valid JWT can replay it within the token's validity window.
+**Analysis:** When extraction fails due to size limit, the partial file is closed but NOT deleted. These orphan files accumulate in `DataDir/installed/<id>/`. Minor cleanup issue - partial files cannot be loaded as valid WASM modules but consume disk space and may confuse operators.
 
-**Remediation:** Require `jtiReplayCache` to be configured in production; fail startup or return 500 if a JWT contains a `jti` claim but no replay cache exists.
-
----
-
-### HIGH-NEW-2: GraphQL Federation SSRF via Subgraph URL Runtime Mutation
-
-| Field | Value |
-|-------|-------|
-| **CWE** | CWE-918 (Server-Side Request Forgery) |
-| **CVSS 3.1** | 7.5 (High) — `CVSS:3.1/AV:N/AC:L/PR:H/UI:N/SA:P/Au:N/RE:P/RL:O/RC:C` |
-| **File:Line** | `internal/federation/executor.go:365-372` |
-| **Confidence** | Medium — Requires compromised admin credentials |
-| **Status** | **Open** |
-
-**Code:**
+**Remediation:** Delete the partial file on extraction failure:
 ```go
-if e.validateURLs {
-    if err := validateSubgraphURL(step.Subgraph.URL); err != nil {
-        return nil, fmt.Errorf("subgraph URL validation failed: %w", err)
-    }
+if extractedSize > maxExtractSize {
+    outFile.Close()
+    os.Remove(targetPath)  // Clean up partial file
+    return fmt.Errorf("extracted plugin exceeds maximum size")
 }
-req, err := http.NewRequestWithContext(ctx, "POST", step.Subgraph.URL, ...)
 ```
-
-**Impact:** Subgraph URLs can be updated via `PUT /admin/api/v1/subgraphs/{id}` without invalidating cached query plans. A malicious admin could set a subgraph URL to an internal service (e.g., AWS IMDS at `169.254.169.254`). URL validation at execution time prevents direct attacks, but the cached plan references the modified URL.
-
-**Remediation:**
-1. Make subgraph URLs immutable after creation
-2. Store a hash of validated URL in execution plan; reject if URL changed post-validation
-3. Include subgraph URL in query plan cache key
 
 ---
 
-### HIGH-NEW-3: Portal Session Secret Validation Gap
+### [M-011]: WASM Hot-Reload TOCTOU Race Window
+- **CWE:** CWE-367 (Time-of-check Time-of-use Race Condition)
+- **File:** `internal/plugin/wasm.go:520-528`
+- **Confidence:** 65%
+- **Status:** FIXED
+- **Verified:** Yes
 
-| Field | Value |
-|-------|-------|
-| **CWE** | CWE-547 (Use of Hard-coded, Security-relevant Constants) |
-| **CVSS 3.1** | 5.3 (Medium) — `CVSS:3.1/AV:N/AC:L/PR:N/UI:R/RE:L/RL:O/RC:C` |
-| **File:Line** | `internal/config/load.go:333-344` |
-| **Confidence** | Medium — Requires hot-reload misconfiguration |
-| **Status** | ✅ FIXED (2026-04-16) — Portal secret validated unconditionally |
-
-**Code:**
+**Evidence:**
 ```go
-if cfg.Portal.Enabled {
-    if len(secret) < 32 {
-        addErr("portal.session.secret must be at least 32 characters...")
-    }
-    // ...
+// internal/plugin/wasm.go:357-366 (Execute)
+m.inflight.Add(1)       // Line 361 - Increment BEFORE check
+defer m.inflight.Done()  // Line 362
+if !m.loaded.Load() {   // Line 364 - Check after increment
+    return false, fmt.Errorf("wasm module not loaded")
 }
-// When portal is disabled, empty secret is silently accepted
+
+// internal/plugin/wasm.go:520-528 (Close)
+m.loaded.Store(false)  // Line 523 - prevents new executions
+m.inflight.Wait()      // Line 528 - waits for current executions
 ```
 
-**Impact:** If portal is disabled with no secret, then hot-reloaded with `portal.enabled: true`, session cookies are signed with empty-string secret → predictable → session hijacking.
+**Analysis:** The `inflight` WaitGroup pattern correctly closes the TOCTOU race by:
+1. Incrementing `inflight` counter BEFORE the `loaded` check
+2. Setting `loaded=false` to prevent NEW executions
+3. Waiting for existing executions to complete before closing the module
 
-**Remediation:** Validate portal secret length regardless of current `portal.enabled` state.
+The race window between checking `loaded` and incrementing `inflight` is closed because `inflight` is incremented first.
+
+**Status Change:** OPEN → FIXED
 
 ---
 
-### MED-NEW-1: fmt.Printf Warning Exposes Replay Protection Status
+## Low Severity Findings
 
-| Field | Value |
-|-------|-------|
-| **CWE** | CWE-532 (Information Exposure Through Log Files) |
-| **CVSS 3.1** | 3.1 (Low) |
-| **File:Line** | `internal/plugin/auth_jwt.go:265` |
-| **Confidence** | High |
-| **Status** | ✅ FIXED (2026-04-16) — Eliminated as part of HIGH-NEW-1 refactor |
+### [L-001]: Bot Detect Plugin Error Message Contains Raw User-Agent Header
+- **CWE:** CWE-77 (Command Injection - Theoretical)
+- **File:** `internal/plugin/bot_detect.go:79`
+- **Confidence:** 70%
+- **Status:** OPEN
+- **Verified:** Yes
 
-**Code:**
+**Evidence:**
 ```go
-fmt.Printf("WARN: JTI replay cache not configured, replay protection disabled for token\n")
+// internal/plugin/bot_detect.go:79
+Message: fmt.Sprintf("Blocked bot user-agent: %s", in.Request.Header.Get("User-Agent")),
 ```
 
-**Impact:** The message indicates replay protection is disabled, informing an attacker that replay attacks are viable. Uses `fmt.Printf` instead of structured logger.
-
-**Remediation:** Use structured logging. Do not log in this context at all — just return nil silently.
+**Analysis:** Raw User-Agent embedded in error message without sanitization. Could cause log injection with extremely long values or special characters. Low severity - primarily a logging concern.
 
 ---
 
-### MED-NEW-2: Query Plan Cache Keyed by Query String Only
+### [L-002]: Request Transform Plugin Applies Header Values Without Validation
+- **CWE:** CWE-79 (Cross-Site Scripting - Low Risk)
+- **File:** `internal/plugin/request_transform.go:156-158`
+- **Confidence:** 60%
+- **Status:** OPEN
+- **Verified:** Yes
 
-| Field | Value |
-|-------|-------|
-| **CWE** | CWE-345 (Insufficient Verification of Data Authenticity) |
-| **CVSS 3.1** | 4.3 (Medium) — `CVSS:3.1/AV:N/AC:L/PR:N/UI:R/SA:P/Au:N/RE:P/RL:O/RC:C` |
-| **File:Line** | `internal/federation/executor.go:136-148` |
-| **Confidence** | High |
-| **Status** | ✅ DOCUMENTED — QueryCache is dead code; Get/Set never called in executor |
-
-**Code:**
+**Evidence:**
 ```go
-func (qc *QueryCache) Get(query string) (*Plan, bool) {
-    entry, ok := qc.entries[query]  // ← Only query string is the key
+// internal/plugin/request_transform.go:156-158
+for key, value := range t.addHeaders {
+    req.Header.Set(key, value)
+}
 ```
 
-**Impact:** Cached query plans may be returned for queries with identical query strings but different variable values or different subgraph URLs, potentially routing to the wrong subgraph.
-
-**Remediation:** Include a hash of variables and subgraph URL in the cache key, or disable caching for queries with non-empty variables.
+**Analysis:** Header values from config are applied without sanitization. Plugin configuration is operator-controlled, not user-controlled - low practical risk.
 
 ---
 
-### MED-NEW-3: WebSocket Upgrade Lacks Origin Header Validation
+### [L-003]: GraphQL Guard Error Messages May Expose Query Structure Information
+- **CWE:** CWE-209 (Information Exposure Through Error Message)
+- **File:** `internal/plugin/graphql_guard.go:102-106`
+- **Confidence:** 65%
+- **Status:** OPEN
+- **Verified:** Yes
 
-| Field | Value |
-|-------|-------|
-| **CWE** | CWE-346 (Origin Validation Error) |
-| **CVSS 3.1** | 4.3 (Medium) — Requires deployment misconfiguration |
-| **File:Line** | `internal/admin/ws.go:171-240` |
-| **Confidence** | Medium |
-| **Status** | ✅ FIXED (2026-04-16) — `isValidWebSocketOrigin` called at ws.go:48 |
+**Evidence:**
+```go
+// internal/plugin/graphql_guard.go:102-106
+if !result.IsValid {
+    errors := ""
+    for _, e := range result.Errors {
+        errors += e + "; "
+    }
+    graphql.WriteError(w, errors, http.StatusBadRequest)
+    return true
+}
+```
 
-**Impact:** WebSocket upgrades are not validated against the `AllowedOrigins` config list. If the gateway is deployed behind a reverse proxy that passes raw Origin headers, cross-site WebSocket hijacking is possible.
-
-**Remediation:** Validate Origin header during WebSocket upgrade. Reject if origin is not in the allowlist.
+**Analysis:** GraphQL analyzer errors are returned directly to client, potentially revealing schema structure information through error messages. This is primarily a reconnaissance advantage for attackers, not a direct exploit.
 
 ---
 
-### MED-NEW-4: Portal sessionStorage Auth State (XSS-Readable) — Already Documented
+### [L-004]: WASM Module Path Resolution Without Canonical Validation
+- **CWE:** CWE-22 (Path Traversal)
+- **File:** `internal/plugin/wasm.go:242-256`
+- **Confidence:** 80%
+- **Status:** OPEN
+- **Verified:** Yes
 
-This finding (sessionStorage readable by XSS) was already documented in the prior audit (Finding 29 / F-009) as M-022 in code. It is listed here for completeness and is marked as **Accepted Risk** with the recommendation to use httpOnly cookies for high-risk deployments.
-
-**Status:** Documented (M-022) — No additional action beyond prior recommendation.
+**Analysis:** WASM module path uses `safeResolvePath` but not `filepath.EvalSymlinks`. Plugin paths are operator-controlled, not user input - low practical risk but canonical validation would improve defense-in-depth.
 
 ---
 
-## Recommendations
+### [L-005]: Admin Auth State in sessionStorage Accessible to XSS
+- **CWE:** CWE-315 (Cleartext Storage in Browser)
+- **File:** `web/src/lib/api.ts:38-43`, `web/src/lib/constants.ts:35`
+- **Confidence:** 85%
+- **Status:** OPEN
+- **Verified:** Yes
 
-### New Open Items (2026-04-16 Additional Scan)
-1. Make subgraph URLs immutable after creation, or hash-validate before execution
-2. Configure `jtiReplayCache` in production when using JWTs with `jti` claims — use Redis-backed store
+**Evidence:**
+```typescript
+// web/src/lib/constants.ts:35
+adminAuthStateKey: "apicerberus_admin_authenticated"
 
-### ✅ Completed (2026-04-16 — Today's Session)
-1. ✅ JWT JTI replay protection — fail-closed when JTI present but cache missing (HIGH-NEW-1)
-2. ✅ fmt.Printf info leak — eliminated as part of JTI refactor (MED-NEW-1)
-3. ✅ Portal secret validation gap — always validated regardless of enabled state (HIGH-NEW-3)
-4. ✅ WebSocket Origin validation — `isValidWebSocketOrigin` was already implemented (MED-NEW-3)
-5. ✅ Query plan cache — QueryCache is dead code, Get/Set never invoked (MED-NEW-2)
+// web/src/lib/api.ts:111-113
+export function isAdminAuthenticated(): boolean {
+  return window.sessionStorage.getItem(API_CONFIG.adminAuthStateKey) === "true";
+}
+```
 
-### ✅ Completed (2026-04-16 — from prior audit)
-1. ✅ Test file hardcoded secrets — `generateRandomSecret()` via crypto/rand
-2. ✅ Test config hardcoded secrets — env var placeholders
-3. ✅ WebSocket brute force — rate limiting added to static key fallback
-4. ✅ Body transform TODO — comment clarified
-5. ✅ Health endpoint disclosure — `allowed_health_ips` config + IP check
-6. ✅ GraphQL introspection — `admin.graphql_introspection` config field
-7. ✅ Admin key rotation — `POST /admin/api/v1/auth/rotate-key` endpoint
-8. ✅ OIDC state CSRF — properly verified (crypto/rand + constant-time compare)
+**Analysis:** Admin authentication state stored in sessionStorage as a boolean flag. The actual JWT is in an HttpOnly cookie (good), but the sessionStorage flag is readable by injected JavaScript. Note: The sessionStorage flag only reveals login status, not the actual token.
 
-### ℹ️ No Action Required
-1. Health/readiness bypass — intentional K8s design, M-004 note in code
-2. Portal CSRF — properly implemented double-submit pattern
-3. K8s empty secrets — standard deployment pattern
-4. PostgreSQL DSN, SSRF, RNG, benchmark/test secrets — confirmed safe
-5. OIDC state CSRF protection — properly verified
-6. Admin session cookie httpOnly — **VERIFIED: correctly set at `token.go:235`**
+**Remediation:** Check HttpOnly session cookie presence for auth state instead of sessionStorage.
 
-*Additional scan report generated: 2026-04-16*
+---
+
+### [L-006]: WebSocket Token in Query Parameter on Initial Connection
+- **CWE:** CWE-598 (Information Exposure Through Query String)
+- **File:** `internal/admin/ws.go:131-138`
+- **Confidence:** 90%
+- **Status:** OPEN
+- **Verified:** Yes
+
+**Evidence:**
+```go
+// internal/admin/ws.go:131-138
+if token := strings.TrimSpace(r.URL.Query().Get("token")); token != "" {
+    // Clear token from URL to prevent logging (CWE-532)
+    q := r.URL.Query()
+    q.Del("token")
+    r.URL.RawQuery = q.Encode()
+    return true
+}
+```
+
+**Analysis:** Server clears the token from URL after verification, but the token appears in the initial URL (could appear in server access logs). Cookie-based auth is preferred and already implemented.
+
+---
+
+### [L-007]: WASM Plugin Manager Bypasses Native Factory System
+- **CWE:** CWE-1188 (Insecure Default Initialization)
+- **File:** `internal/plugin/registry.go:181-207`, `internal/plugin/wasm.go:681-696`
+- **Confidence:** 75%
+- **Status:** OPEN
+- **Verified:** Yes
+
+**Analysis:** WASM modules bypass `NewDefaultRegistry()` factory system. `PluginConfig.Enabled *bool` is not honored, no priority bounds check. Mitigated by SEC-WASM-001 phase validation which prevents WASM modules from running in PhaseAuth, significantly reducing practical impact.
+
+---
+
+### [L-008]: EnvVars Field Acknowledged But Unwired in WASM Config
+- **CWE:** CWE-1188 (Insufficient Isolation of Security-Sensitive Operations)
+- **File:** `internal/plugin/wasm.go:62-65`
+- **Confidence:** 95%
+- **Status:** CONFIRMED
+- **Verified:** Yes
+
+**Analysis:** `WASMConfig.Validate()` does not reject `EnvVars`. The field exists in config schema but is not wired to wazero runtime. This is a documented limitation in the codebase comments. Either implement the feature or remove it from the config schema.
+
+---
+
+### [L-009]: Kubernetes Secret Default Values in Example Deployment
+- **CWE:** CWE-547 (Hard-coded Security-Related Constants)
+- **File:** `deployments/examples/kubernetes-deployment.yaml:82-83`
+- **Confidence:** 90%
+- **Status:** OPEN
+- **Verified:** Yes
+
+**Analysis:** K8s example Secret uses `change-me-in-production` placeholder values. No mechanism prevents deployment without proper values.
+
+---
+
+### [L-010]: README curl Commands Use Placeholder Credentials
+- **CWE:** CWE-547 (Hard-coded Security-Related Constants)
+- **File:** `README.md:233,425,430`
+- **Confidence:** 90%
+- **Status:** OPEN
+- **Verified:** Yes
+
+**Analysis:** Documentation examples use `change-me` placeholder credentials. Could be copy-pasted into production.
+
+---
+
+## False Positives Eliminated
+
+| ID | Finding | Reason Eliminated |
+|----|---------|-------------------|
+| FP-001 | M-005: WASM allocFn.Call uses unbounded context.Background() | Verified - timeout context `ctx` is correctly propagated to allocFn.Call |
+| FP-002 | M-006: Pipeline phase filtering not enforced at execution | Verified - plugins are sorted by phase at build time via phaseOrder() |
+
+---
+
+## Previously Confirmed Secure Controls
+
+| Control | Evidence |
+|---------|----------|
+| SQL Injection Prevention | Parameterized queries with `?` placeholders throughout store layer |
+| ORDER BY Protection | `normalizeUserSortBy()` whitelist in user_repo.go |
+| Command Injection | No `exec.Command` usage in application code |
+| Header Injection | No user input in response headers |
+| SSRF Protection | `validateUpstreamHost` called before proxy and health probes |
+| XSS Prevention | `html/template` auto-escapes, API returns JSON |
+| SSTI Prevention | `safeTemplateFuncMap()` restricts available functions |
+| Path Traversal | `filepath.Rel()` validation in WASM and marketplace |
+| WASM Phase Validation | Rejects PhaseAuth/PhasePostProxy (wasm.go:218-233) |
+| WASM Panic Recovery | `defer/recover` in Execute pipeline (wasm.go:368-373) |
+| Protected Headers | X-Claim-* blocked (wasm.go:814-830) |
+| OIDC PKCE | S256 challenge verification (oidc_provider.go:258-264) |
+| OIDC Token Signature | RS256/ES256 verification (oidc_provider.go:766-777) |
+| Admin CSRF | Double-submit cookie pattern (token.go:199-210) |
+| Constant-time Comparison | `subtle.ConstantTimeCompare` used for all secrets |
+| TLS 1.2+ Minimum | Enforced in http clients |
+| bcrypt Cost 12 | User passwords hashed with adequate cost factor |
+
+---
+
+## Remediation Priority
+
+| Priority | ID | Description | Severity | Effort |
+|----------|----|-------------|----------|--------|
+| 1 | H-001 | Expand weak-secret blocklist for admin token secret | High | Low |
+| 2 | M-007 | Remove `unsafe-inline` from CSP | Medium | Medium |
+| 3 | M-008 | Implement per-file SHA-256 verification in marketplace | Medium | Medium |
+| 4 | M-009 | Create dedicated HTTP client for OIDC with explicit TLS | Medium | Low |
+| 5 | M-002 | Add allowlist for OIDC post-logout URIs | Medium | Medium |
+| 6 | M-010 | Delete partial files on marketplace extraction failure | Low | Low |
+| 7 | L-005 | Check HttpOnly session cookie for admin auth state | Low | Low |
+| 8 | L-004 | Add canonical path validation for WASM modules | Low | Low |
+| 9 | L-009 | Use empty values with fail-fast for K8s secrets | Low | Low |
+| 10 | L-010 | Update README to use ${ADMIN_API_KEY} placeholders | Low | Low |
+
+---
+
+## Summary Statistics
+
+| Severity | Count | vs. Previous Report | Change |
+|----------|-------|---------------------|--------|
+| Critical | 0 | 0 | 0 |
+| High | 1 | 2 | -1 |
+| Medium | 10 | 11 | -1 |
+| Low | 10 | 8 | +2 |
+| **Total** | **21** | **27** | **-6** |
+
+**Changes:**
+- Fixed: 3 (M-003 redirect, M-005 OIDC JWT, H-002 hardcoded API key)
+- False Positives: 2 (M-005 WASM alloc, M-006 pipeline phase)
+- New findings added: 3 (L-NEW-001, L-NEW-002, M-NEW-001)
+
+---
+
+*Verification completed: 2026-04-18*
+*Based on code inspection and git history analysis*

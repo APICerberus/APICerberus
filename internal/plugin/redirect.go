@@ -15,19 +15,23 @@ type RedirectRule struct {
 
 // RedirectConfig configures redirect plugin behavior.
 type RedirectConfig struct {
-	Rules []RedirectRule
+	Rules          []RedirectRule
+	AllowedDomains []string // Optional domain allowlist for external redirects; if set, only these domains are allowed
 }
 
 // Redirect performs early redirect response based on request path.
 type Redirect struct {
-	rules []RedirectRule
+	rules          []RedirectRule
+	allowedDomains map[string]bool // lookup map for O(1) domain check
 }
 
 // isValidRedirectTarget validates that a redirect target is safe.
 // Rejects: javascript:, data:, file:, vbscript: and other schemes.
 // Rejects: relative paths starting with // (proto-relative to different host).
 // Allows: absolute paths (/foo), https://, http:// (with warning).
-func isValidRedirectTarget(target string) bool {
+// If allowedDomains is non-empty, external https:///http:// redirects are
+// restricted to those domains only (M-003 fix).
+func isValidRedirectTarget(target string, allowedDomains map[string]bool) bool {
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return false
@@ -51,6 +55,13 @@ func isValidRedirectTarget(target string) bool {
 	// Explicitly block dangerous schemes
 	switch strings.ToLower(u.Scheme) {
 	case "https", "http":
+		// M-003: if allowedDomains is configured, restrict external redirects
+		if len(allowedDomains) > 0 {
+			host := strings.ToLower(u.Host)
+			if !allowedDomains[host] {
+				return false
+			}
+		}
 		return true
 	default:
 		return false
@@ -59,6 +70,11 @@ func isValidRedirectTarget(target string) bool {
 
 func NewRedirect(cfg RedirectConfig) *Redirect {
 	rules := make([]RedirectRule, 0, len(cfg.Rules))
+	allowedDomains := make(map[string]bool, len(cfg.AllowedDomains))
+	for _, d := range cfg.AllowedDomains {
+		allowedDomains[strings.ToLower(strings.TrimSpace(d))] = true
+	}
+
 	for _, rule := range cfg.Rules {
 		path := strings.TrimSpace(rule.Path)
 		target := strings.TrimSpace(rule.TargetURL)
@@ -68,7 +84,7 @@ func NewRedirect(cfg RedirectConfig) *Redirect {
 		if !strings.HasPrefix(path, "/") {
 			path = "/" + path
 		}
-		if !isValidRedirectTarget(target) {
+		if !isValidRedirectTarget(target, allowedDomains) {
 			continue
 		}
 		status := normalizeRedirectStatus(rule.StatusCode)
@@ -78,7 +94,7 @@ func NewRedirect(cfg RedirectConfig) *Redirect {
 			StatusCode: status,
 		})
 	}
-	return &Redirect{rules: rules}
+	return &Redirect{rules: rules, allowedDomains: allowedDomains}
 }
 
 func (r *Redirect) Name() string  { return "redirect" }

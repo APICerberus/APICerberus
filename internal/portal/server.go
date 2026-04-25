@@ -490,6 +490,12 @@ func extractClientIP(r *http.Request) string {
 	return netutil.ExtractClientIP(r)
 }
 
+// MEDIUM-004 fix: reduced rate limit threshold from 5 attempts/15min to 3 attempts/5min
+// to better protect against credential stuffing attacks.
+const rlAttemptsThreshold = 3
+const rlWindowDuration = 5 * time.Minute
+const rlBlockDuration = 30 * time.Minute
+
 // isRateLimited checks if a client IP has exceeded the rate limit for failed login attempts
 func (s *Server) isRateLimited(clientIP string) bool {
 	s.rlMu.RLock()
@@ -500,22 +506,21 @@ func (s *Server) isRateLimited(clientIP string) bool {
 		return false
 	}
 
-	// If already blocked, check if block duration has passed (30 minutes)
+	// If already blocked, check if block duration has passed
 	if attempts.blocked {
-		if time.Since(attempts.lastSeen) > 30*time.Minute {
-			// Unblock after 30 minutes of no activity
+		if time.Since(attempts.lastSeen) > rlBlockDuration {
 			return false
 		}
 		return true
 	}
 
-	// Check if within rate limit window (15 minutes) and exceeded threshold (5 attempts)
-	if time.Since(attempts.firstSeen) <= 15*time.Minute && attempts.count >= 5 {
+	// Check if within rate limit window and exceeded threshold
+	if time.Since(attempts.firstSeen) <= rlWindowDuration && attempts.count >= rlAttemptsThreshold {
 		return true
 	}
 
 	// Reset if outside the window
-	if time.Since(attempts.firstSeen) > 15*time.Minute {
+	if time.Since(attempts.firstSeen) > rlWindowDuration {
 		return false
 	}
 
@@ -535,7 +540,7 @@ func (s *Server) recordFailedAuth(clientIP string) {
 			if evicted >= evictCount {
 				break
 			}
-			if time.Since(a.lastSeen) < 5*time.Minute {
+			if time.Since(a.lastSeen) < rlWindowDuration {
 				continue // don't evict recent entries
 			}
 			delete(s.rlAttempts, ip)
@@ -544,7 +549,7 @@ func (s *Server) recordFailedAuth(clientIP string) {
 	}
 
 	attempts, exists := s.rlAttempts[clientIP]
-	if !exists || time.Since(attempts.firstSeen) > 15*time.Minute {
+	if !exists || time.Since(attempts.firstSeen) > rlWindowDuration {
 		// New entry or expired entry - reset
 		s.rlAttempts[clientIP] = &loginAuthAttempts{
 			count:     1,

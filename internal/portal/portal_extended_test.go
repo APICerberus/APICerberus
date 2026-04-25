@@ -495,15 +495,18 @@ func TestLogin_SuccessClearsRateLimit(t *testing.T) {
 		t.Fatalf("NewServer error: %v", err)
 	}
 
-	// Record some failed attempts
+	// Record some failed attempts (stay under threshold)
 	clientIP := "192.168.1.100"
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 2; i++ {
 		srv.recordFailedAuth(clientIP)
 	}
 
 	// Verify attempts were recorded
-	if !srv.isRateLimited(clientIP) && srv.rlAttempts[clientIP].count != 3 {
-		t.Error("Failed attempts should be recorded")
+	if srv.isRateLimited(clientIP) {
+		t.Error("client should not be rate limited with 2 attempts (threshold is 3)")
+	}
+	if srv.rlAttempts[clientIP].count != 2 {
+		t.Errorf("expected 2 attempts, got %d", srv.rlAttempts[clientIP].count)
 	}
 
 	// Now login successfully

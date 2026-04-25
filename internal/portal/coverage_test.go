@@ -1124,13 +1124,13 @@ func TestIsRateLimited_Advanced(t *testing.T) {
 		// Reset attempts
 		srv.rlAttempts = make(map[string]*loginAuthAttempts)
 
-		// Record 3 failed attempts (under threshold)
-		for i := 0; i < 3; i++ {
+		// Record 2 failed attempts (under threshold of 3)
+		for i := 0; i < 2; i++ {
 			srv.recordFailedAuth(clientIP)
 		}
 
 		if srv.isRateLimited(clientIP) {
-			t.Error("client with 3 attempts should not be rate limited")
+			t.Error("client with 2 attempts should not be rate limited")
 		}
 	})
 

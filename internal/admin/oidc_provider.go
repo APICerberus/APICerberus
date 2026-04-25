@@ -412,19 +412,24 @@ func (s *Server) handleOIDCProviderToken(w http.ResponseWriter, r *http.Request)
 
 		s.mu.Lock()
 		entry, exists := s.oidcProvider.authCodes[code]
-		if exists && entry != nil && !entry.Used && time.Now().Before(entry.Expiry) {
-			entry.Used = true
-		}
-		s.mu.Unlock()
-
 		if !exists || entry == nil {
+			s.mu.Unlock()
+			writeError(w, http.StatusBadRequest, "invalid_grant", "authorization code invalid or expired")
+			return
+		}
+		if entry.Used || time.Now().After(entry.Expiry) {
+			s.mu.Unlock()
 			writeError(w, http.StatusBadRequest, "invalid_grant", "authorization code invalid or expired")
 			return
 		}
 		if entry.RedirectURI != redirectURI {
+			s.mu.Unlock()
 			writeError(w, http.StatusBadRequest, "invalid_grant", "redirect_uri mismatch")
 			return
 		}
+		// MEDIUM-006 fix: delete immediately to prevent any reuse.
+		delete(s.oidcProvider.authCodes, code)
+		s.mu.Unlock()
 
 		// PKCE verification (RFC 7636): if code_challenge was stored, code_verifier is required.
 		if entry.CodeChallenge != "" {

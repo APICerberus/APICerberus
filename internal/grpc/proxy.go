@@ -33,6 +33,10 @@ type Proxy struct {
 	// StreamProxy handles gRPC streaming RPCs over HTTP.
 	StreamProxy *StreamProxy
 
+	// AllowedOrigins is the list of allowed CORS origins for gRPC-Web.
+	// If nil or empty, no Access-Control-Allow-Origin header is set (blocks cross-origin).
+	AllowedOrigins []string
+
 	// client is the gRPC client connection
 	client *grpc.ClientConn
 }
@@ -43,6 +47,9 @@ type ProxyConfig struct {
 	EnableWeb         bool
 	EnableTranscoding bool
 	Insecure          bool
+	// AllowedOrigins is the list of allowed CORS origins for gRPC-Web.
+	// If nil or empty, cross-origin requests are blocked.
+	AllowedOrigins []string
 }
 
 // NewProxy creates a new gRPC proxy.
@@ -61,12 +68,13 @@ func NewProxy(cfg *ProxyConfig) (*Proxy, error) {
 	}
 
 	return &Proxy{
-		Target:      cfg.Target,
-		EnableWeb:   cfg.EnableWeb,
-		Transcoding: cfg.EnableTranscoding,
-		Transcoder:  NewTranscoder(),
-		StreamProxy: NewStreamProxy(),
-		client:      conn,
+		Target:         cfg.Target,
+		EnableWeb:      cfg.EnableWeb,
+		Transcoding:    cfg.EnableTranscoding,
+		Transcoder:     NewTranscoder(),
+		StreamProxy:    NewStreamProxy(),
+		AllowedOrigins: cfg.AllowedOrigins,
+		client:         conn,
 	}, nil
 }
 
@@ -215,7 +223,21 @@ func (p *Proxy) handleGRPCWeb(w http.ResponseWriter, r *http.Request) {
 
 	// Set response headers
 	w.Header().Set("Content-Type", "application/grpc-web+proto")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	// MEDIUM-002 fix: restrict allowed origins instead of using wildcard "*".
+	// If AllowedOrigins is configured, use it; otherwise deny cross-origin requests.
+	if p.AllowedOrigins != nil && len(p.AllowedOrigins) > 0 {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			for _, allowed := range p.AllowedOrigins {
+				if allowed == origin || allowed == "*" {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					break
+				}
+			}
+		}
+	}
+	// When no allowed origins are configured, do not set Access-Control-Allow-Origin.
+	// This effectively blocks cross-origin gRPC-Web requests from browsers.
 	w.Header().Set("Access-Control-Expose-Headers", "grpc-status, grpc-message")
 
 	// Set gRPC status in headers (gRPC-Web uses headers for status)

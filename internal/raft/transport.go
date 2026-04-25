@@ -274,7 +274,7 @@ func (t *HTTPTransport) handleRequestVote(w http.ResponseWriter, r *http.Request
 	}
 
 	var req RequestVoteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxRaftRPCBodySize)).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -304,7 +304,7 @@ func (t *HTTPTransport) handleAppendEntries(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req AppendEntriesRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxRaftRPCBodySize)).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -334,7 +334,7 @@ func (t *HTTPTransport) handleInstallSnapshot(w http.ResponseWriter, r *http.Req
 	}
 
 	var req InstallSnapshotRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxRaftRPCBodySize)).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

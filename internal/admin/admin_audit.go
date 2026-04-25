@@ -15,6 +15,14 @@ import (
 )
 
 func (s *Server) searchAuditLogs(w http.ResponseWriter, r *http.Request) {
+	// CRITICAL-002 fix: only admins can access the general audit log search endpoint.
+	// Non-admin users with PermAuditRead can only view their own audit logs via
+	// searchUserAuditLogs (enforced via user_id path parameter).
+	if getRequestingUserRole(r) != string(RoleAdmin) {
+		writeError(w, http.StatusForbidden, "permission_denied", "general audit log search is restricted to admins")
+		return
+	}
+
 	filters, err := parseAuditSearchFilters(r.URL.Query())
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_audit_filters", err.Error())
@@ -37,6 +45,15 @@ func (s *Server) searchAuditLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) searchUserAuditLogs(w http.ResponseWriter, r *http.Request) {
+	// CRITICAL-002 fix: only admins can access another user's audit logs.
+	// The {id} path parameter scopes results to a specific user, but without
+	// a user_id in the JWT context we cannot reliably verify ownership.
+	// Restrict to admin role to prevent IDOR by manager/viewer roles.
+	if getRequestingUserRole(r) != string(RoleAdmin) {
+		writeError(w, http.StatusForbidden, "permission_denied", "accessing another user's audit logs is restricted to admins")
+		return
+	}
+
 	filters, err := parseAuditSearchFilters(r.URL.Query())
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_audit_filters", err.Error())
@@ -66,6 +83,13 @@ func (s *Server) getAuditLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// CRITICAL-002 fix: only admins can fetch individual audit log entries by ID.
+	// Without user context in the JWT, we cannot verify the requesting user owns this entry.
+	if getRequestingUserRole(r) != string(RoleAdmin) {
+		writeError(w, http.StatusForbidden, "permission_denied", "accessing audit log entries by ID is restricted to admins")
+		return
+	}
+
 	st, err := s.openStore()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
@@ -86,6 +110,12 @@ func (s *Server) getAuditLog(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) auditLogStats(w http.ResponseWriter, r *http.Request) {
+	// CRITICAL-002 fix: only admins can access audit log statistics.
+	if getRequestingUserRole(r) != string(RoleAdmin) {
+		writeError(w, http.StatusForbidden, "permission_denied", "audit log statistics are restricted to admins")
+		return
+	}
+
 	filters, err := parseAuditSearchFilters(r.URL.Query())
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_audit_filters", err.Error())
@@ -110,6 +140,12 @@ func (s *Server) auditLogStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) exportAuditLogs(w http.ResponseWriter, r *http.Request) {
+	// CRITICAL-002 fix: only admins can export audit logs.
+	if getRequestingUserRole(r) != string(RoleAdmin) {
+		writeError(w, http.StatusForbidden, "permission_denied", "audit log export is restricted to admins")
+		return
+	}
+
 	filters, err := parseAuditSearchFilters(r.URL.Query())
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_audit_filters", err.Error())
@@ -143,6 +179,12 @@ func (s *Server) exportAuditLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) cleanupAuditLogs(w http.ResponseWriter, r *http.Request) {
+	// HIGH-001 fix: require admin role for audit log deletion.
+	if getRequestingUserRole(r) != string(RoleAdmin) {
+		writeError(w, http.StatusForbidden, "permission_denied", "audit log deletion is restricted to admins")
+		return
+	}
+
 	query := r.URL.Query()
 	cutoff, err := resolveAuditCleanupCutoff(query)
 	if err != nil {
@@ -157,7 +199,12 @@ func (s *Server) cleanupAuditLogs(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_batch_size", "batch_size must be numeric")
 			return
 		}
+		// HIGH-001 fix: cap batch_size to prevent resource exhaustion.
 		if parsed > 0 {
+			const maxBatchSize = 10000
+			if parsed > maxBatchSize {
+				parsed = maxBatchSize
+			}
 			batchSize = parsed
 		}
 	}

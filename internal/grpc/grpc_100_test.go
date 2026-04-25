@@ -489,6 +489,7 @@ func TestHandleGRPCWeb_Bufconn(t *testing.T) {
 		client:      conn,
 		Transcoder:  NewTranscoder(),
 		StreamProxy: NewStreamProxy(),
+		// MEDIUM-002 fix: AllowedOrigins is nil by default, so cross-origin is blocked.
 	}
 
 	t.Run("handleGRPCWeb with actual call", func(t *testing.T) {
@@ -503,9 +504,9 @@ func TestHandleGRPCWeb_Bufconn(t *testing.T) {
 			t.Errorf("Expected status %d, got %d", http.StatusOK, rec.Code)
 		}
 
-		// Check CORS headers
-		if rec.Header().Get("Access-Control-Allow-Origin") != "*" {
-			t.Error("Expected CORS header to be set")
+		// CORS headers are not set when AllowedOrigins is nil (cross-origin blocked)
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+			t.Errorf("Expected no CORS header, got %q", got)
 		}
 	})
 

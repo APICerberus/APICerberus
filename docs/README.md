@@ -58,6 +58,7 @@ Welcome to the API Cerberus documentation. This guide covers all aspects of the 
 
 - [Troubleshooting](TROUBLESHOOTING.md) - Common issues and solutions
 - [Runbook](production/RUNBOOK.md) - Operational procedures for production
+- [Cheatsheet](CHEATSHEET.md) - Quick reference for common operations
 
 ## Key Features
 

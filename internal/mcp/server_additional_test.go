@@ -539,7 +539,7 @@ gateway:
 admin:
   addr: ":9876"
   api_key: "ck-test-admin-key-at-least-32-chars-long!!"
-  token_secret: "test-admin-token-secret-at-least-32-chars-long"
+  token_secret: "xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r"
 portal:
   session:
     secret: test-portal-session-value-at-least-32-chars-long!!
@@ -2174,7 +2174,7 @@ gateway:
 admin:
   addr: ":9876"
   api_key: "ck-test-admin-key-at-least-32-chars-long!!"
-  token_secret: "test-admin-token-secret-at-least-32-chars-long"
+  token_secret: "xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r"
 portal:
   session:
     secret: test-portal-session-value-at-least-32-chars-long!!
@@ -2237,7 +2237,7 @@ gateway:
 admin:
   addr: ":9876"
   api_key: "ck-test-admin-key-at-least-32-chars-long!!"
-  token_secret: "test-admin-token-secret-at-least-32-chars-long"
+  token_secret: "xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r"
 portal:
   session:
     secret: test-portal-session-value-at-least-32-chars-long!!

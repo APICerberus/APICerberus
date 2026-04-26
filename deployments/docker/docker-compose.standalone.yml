@@ -13,8 +13,10 @@ services:
       - apicerberus-data:/data
     environment:
       - APICERBERUS_LOG_LEVEL=info
-      - APICERBERUS_JWT_SECRET=${JWT_SECRET:-changeme}
-      - APICERBERUS_ADMIN_API_KEY=${ADMIN_API_KEY:-changeme}
+      # SECURITY: These must be set via environment variables.
+      # The gateway will refuse to start with weak/placeholder values.
+      - APICERBERUS_JWT_SECRET=${JWT_SECRET}
+      - APICERBERUS_ADMIN_API_KEY=${ADMIN_API_KEY}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]

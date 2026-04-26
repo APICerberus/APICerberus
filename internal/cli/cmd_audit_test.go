@@ -427,7 +427,7 @@ server:
   port: 8080
 admin:
   api_key: ck-test-admin-key-at-least-32-chars-long!!
-  token_secret: test-admin-token-secret-at-least-32-chars-long
+  token_secret: xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r
 portal:
   session:
     secret: test-portal-session-value-at-least-32-chars-long!!
@@ -453,7 +453,7 @@ server:
   port: 8080
 admin:
   api_key: ck-test-admin-key-at-least-32-chars-long!!
-  token_secret: test-admin-token-secret-at-least-32-chars-long
+  token_secret: xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r
 portal:
   session:
     secret: test-portal-session-value-at-least-32-chars-long!!
@@ -476,7 +476,7 @@ server:
   port: 8080
 admin:
   api_key: ck-test-admin-key-at-least-32-chars-long!!
-  token_secret: test-admin-token-secret-at-least-32-chars-long
+  token_secret: xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r
 portal:
   session:
     secret: test-portal-session-value-at-least-32-chars-long!!
@@ -507,7 +507,7 @@ server:
   port: 8080
 admin:
   api_key: ck-test-admin-key-at-least-32-chars-long!!
-  token_secret: test-admin-token-secret-at-least-32-chars-long
+  token_secret: xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r
 portal:
   session:
     secret: test-portal-session-value-at-least-32-chars-long!!
@@ -534,7 +534,7 @@ server:
   port: 8080
 admin:
   api_key: ck-test-admin-key-at-least-32-chars-long!!
-  token_secret: test-admin-token-secret-at-least-32-chars-long
+  token_secret: xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r
 portal:
   session:
     secret: test-portal-session-value-at-least-32-chars-long!!
@@ -555,7 +555,7 @@ server:
   port: 8080
 admin:
   api_key: ck-test-admin-key-at-least-32-chars-long!!
-  token_secret: test-admin-token-secret-at-least-32-chars-long
+  token_secret: xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r
 `
 	_ = os.WriteFile(configPath, []byte(configContent), 0644)
 
@@ -576,7 +576,7 @@ server:
   port: 8080
 admin:
   api_key: ck-test-admin-key-at-least-32-chars-long!!
-  token_secret: test-admin-token-secret-at-least-32-chars-long
+  token_secret: xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r
 portal:
   session:
     secret: test-portal-session-value-at-least-32-chars-long!!
@@ -612,7 +612,7 @@ server:
   port: 8080
 admin:
   api_key: ck-test-admin-key-at-least-32-chars-long!!
-  token_secret: test-admin-token-secret-at-least-32-chars-long
+  token_secret: xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r
 portal:
   session:
     secret: test-portal-session-value-at-least-32-chars-long!!

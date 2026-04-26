@@ -19,7 +19,7 @@ func configYAML(dbPath, httpAddr, apiKey string) []byte {
 admin:
   addr: ":19876"
   api_key: "` + apiKey + `"
-  token_secret: "test-admin-token-secret-at-least-32-chars-long"
+  token_secret: "xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r"
 portal:
   session:
     secret: "integration-test-portal-value-32-chars!!"

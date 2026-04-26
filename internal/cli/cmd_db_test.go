@@ -64,7 +64,7 @@ gateway:
 admin:
   addr: :9876
   api_key: test-admin-api-key-at-least-32-chars
-  token_secret: test-admin-token-secret-at-least-32-chars
+  token_secret: xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r
 portal:
   session:
     secret: test-portal-session-value-at-least-32-chars-long!!
@@ -90,7 +90,7 @@ gateway:
 admin:
   addr: :9876
   api_key: test-admin-api-key-at-least-32-chars
-  token_secret: test-admin-token-secret-at-least-32-chars
+  token_secret: xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r
 portal:
   session:
     secret: test-portal-session-value-at-least-32-chars-long!!

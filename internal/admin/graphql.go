@@ -10,6 +10,7 @@ import (
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/pkg/uuid"
 	"github.com/APICerberus/APICerebrus/internal/store"
+	apigql "github.com/APICerberus/APICerebrus/internal/graphql"
 	"github.com/graphql-go/graphql"
 )
 
@@ -262,9 +263,50 @@ func (h *GraphQLHandler) buildQueryType() *graphql.Object {
 }
 
 // isIntrospectionQuery returns true if the query is a GraphQL introspection query.
-// Introspection queries use __schema or __type introspection fields.
+// Uses AST analysis to detect __schema and __type fields regardless of aliases.
 func isIntrospectionQuery(query string) bool {
-	return strings.Contains(query, "__schema") || strings.Contains(query, "__type")
+	node, err := apigql.ParseQuery(query)
+	if err != nil {
+		return strings.Contains(query, "__schema") || strings.Contains(query, "__type")
+	}
+
+	return containsIntrospectionField(node)
+}
+
+// containsIntrospectionField walks the AST to detect __schema or __type fields.
+func containsIntrospectionField(node apigql.Node) bool {
+	switch n := node.(type) {
+	case *apigql.Document:
+		for _, def := range n.Definitions {
+			if containsIntrospectionField(def) {
+				return true
+			}
+		}
+	case *apigql.Operation:
+		for _, sel := range n.Selections {
+			if containsIntrospectionField(sel) {
+				return true
+			}
+		}
+	case *apigql.Field:
+		if n.Name == "__schema" || n.Name == "__type" {
+			return true
+		}
+		for _, sel := range n.Selections {
+			if containsIntrospectionField(sel) {
+				return true
+			}
+		}
+	case *apigql.InlineFragment:
+		for _, sel := range n.Selections {
+			if containsIntrospectionField(sel) {
+				return true
+			}
+		}
+	case *apigql.FragmentSpread:
+		return false
+	}
+	return false
 }
 
 // buildMutationType builds the GraphQL mutation type

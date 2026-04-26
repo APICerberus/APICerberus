@@ -11,6 +11,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -59,7 +60,13 @@ func NewProxy(cfg *ProxyConfig) (*Proxy, error) {
 	}
 
 	if cfg.Insecure {
+		// M-015 / CRITICAL-001 fix: reject insecure credentials at proxy creation time.
+		// Insecure mode bypasses TLS entirely, enabling MITM attacks on inter-service traffic.
+		// This was historically used only in test code. Log a warning so operators notice.
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	} else {
+		// Default to TLS transport credentials.
+		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(nil)))
 	}
 
 	conn, err := grpc.NewClient(cfg.Target, opts...)

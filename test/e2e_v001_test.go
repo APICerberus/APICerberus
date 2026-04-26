@@ -332,7 +332,7 @@ gateway:
 admin:
   addr: "127.0.0.1:0"
   api_key: "ck-test-admin-key-at-least-32-chars-long!!"
-  token_secret: "test-admin-token-secret-at-least-32-chars-long"
+  token_secret: "xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r"
   ui_enabled: false
   ui_path: "/dashboard"
 portal:

@@ -83,7 +83,7 @@ func TestRunDB_WithRealConfig(t *testing.T) {
 	cfg := `
 admin:
   api_key: test-admin-key-that-is-at-least-32-chars
-  token_secret: test-token-secret-that-is-at-least-32-characters
+  token_secret: xpr8kTwM3zJN7QvL9XF4sH2YCdR5oP6r
 portal:
   session:
     secret: test-portal-session-value-at-least-32-chars-long!!

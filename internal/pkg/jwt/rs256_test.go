@@ -1,24 +1,33 @@
 package jwt
 
 import (
+	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
 	"math/big"
 	"testing"
 )
 
+// testJWK returns a valid 2048-bit RSA JWK for testing.
+func testJWK() JWK {
+	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic("failed to generate test RSA key: " + err.Error())
+	}
+	return JWK{
+		Kty: "RSA",
+		Kid: "test-key-1",
+		Alg: "RS256",
+		N:   base64.RawURLEncoding.EncodeToString(privKey.N.Bytes()),
+		E:   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(privKey.E)).Bytes()),
+	}
+}
+
 // TestParseRSAPublicKeyFromJWK tests RSA public key parsing from JWK for LOW-003 fix verification.
 func TestParseRSAPublicKeyFromJWK(t *testing.T) {
 	t.Run("valid RSA JWK", func(t *testing.T) {
 		t.Parallel()
-		// 2048-bit RSA key n/e values (from a known test key)
-		jwk := JWK{
-			Kty: "RSA",
-			Kid: "test-key-1",
-			Alg: "RS256",
-			N:   "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qDuyr6ClmxGEOty82kuPE5CPb9eWQMbD_CZk0grQTY3DNt2wBcUlDmG7DrmqwHmacXPVbLrkRN_U6XAqA",
-			E:   "AQAB",
-		}
+		jwk := testJWK()
 		key, err := ParseRSAPublicKeyFromJWK(jwk)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -51,7 +60,8 @@ func TestParseRSAPublicKeyFromJWK(t *testing.T) {
 
 	t.Run("rejects missing e", func(t *testing.T) {
 		t.Parallel()
-		jwk := JWK{Kty: "RSA", N: "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qDuyr6ClmxGEOty82kuPE5CPb9eWQMbD_CZk0grQTY3DNt2wBcUlDmG7DrmqwHmacXPVbLrkRN_U6XAqA"}
+		jwk := testJWK()
+		jwk.E = ""
 		_, err := ParseRSAPublicKeyFromJWK(jwk)
 		if err == nil {
 			t.Error("expected error for missing e")
@@ -78,12 +88,8 @@ func TestParseRSAPublicKeyFromJWK(t *testing.T) {
 
 	t.Run("rejects invalid exponent", func(t *testing.T) {
 		t.Parallel()
-		// Use valid n but e=0 which is invalid
-		jwk := JWK{
-			Kty: "RSA",
-			N:   "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qDuyr6ClmxGEOty82kuPE5CPb9eWQMbD_CZk0grQTY3DNt2wBcUlDmG7DrmqwHmacXPVbLrkRN_U6XAqA",
-			E:   "AAEC", // base64 for 0
-		}
+		jwk := testJWK()
+		jwk.E = "AA==" // base64 for byte 0 (e=0)
 		_, err := ParseRSAPublicKeyFromJWK(jwk)
 		if err == nil {
 			t.Error("expected error for invalid exponent")
@@ -92,19 +98,13 @@ func TestParseRSAPublicKeyFromJWK(t *testing.T) {
 
 	t.Run("rejects RSA key below 2048 bits", func(t *testing.T) {
 		t.Parallel()
-		// 1024-bit RSA key for testing
+		// Use a 1024-bit modulus (big.NewInt(2)^1024)
+		smallN := new(big.Int).Lsh(big.NewInt(1), 1024)
 		jwk := JWK{
 			Kty: "RSA",
-			N:   base64.RawURLEncoding.EncodeToString(big.NewInt(0).Bytes()),
+			N:   base64.RawURLEncoding.EncodeToString(smallN.Bytes()),
 			E:   "AQAB",
 		}
-		// Use a small but valid-looking key that decodes correctly but is too small
-		smallN := base64.RawURLEncoding.EncodeToString([]byte{0x01, 0x00, 0x01}) // 65537 as bytes
-		jwk.N = smallN
-		// This creates a small key that will fail the 2048-bit check
-		// We need actual small RSA values
-		bigN, _ := new(big.Int).SetString("10487441958381657719827032009606280474076115513813994883979294892099717856127", 10)
-		jwk.N = base64.RawURLEncoding.EncodeToString(bigN.Bytes())
 		_, err := ParseRSAPublicKeyFromJWK(jwk)
 		if err == nil {
 			t.Error("expected error for key below 2048 bits")
@@ -115,11 +115,8 @@ func TestParseRSAPublicKeyFromJWK(t *testing.T) {
 // TestParseRSAPublicKeyFromJWK_EmptyKty tests that empty Kty accepts RSA.
 func TestParseRSAPublicKeyFromJWK_EmptyKty(t *testing.T) {
 	t.Parallel()
-	jwk := JWK{
-		Kty: "", // empty Kty should default to RSA
-		N:   "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qDuyr6ClmxGEOty82kuPE5CPb9eWQMbD_CZk0grQTY3DNt2wBcUlDmG7DrmqwHmacXPVbLrkRN_U6XAqA",
-		E:   "AQAB",
-	}
+	jwk := testJWK()
+	jwk.Kty = "" // empty Kty should default to RSA
 	key, err := ParseRSAPublicKeyFromJWK(jwk)
 	if err != nil {
 		t.Fatalf("empty Kty should default to RSA: %v", err)

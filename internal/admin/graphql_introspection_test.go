@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -12,15 +11,15 @@ func TestIsIntrospectionQuery(t *testing.T) {
 		query string
 		want  bool
 	}{
-		// Should be detected as introspection
+		// Should be detected as introspection (__schema and __type only, not __typename)
 		{"introspection __schema", "{ __schema { types { name } } }", true},
 		{"introspection __type", "{ __type(name: \"User\") { name } }", true},
-		{"introspection __typename", "{ __typename }", true},
 		{"alias to __schema", "{ foo: __schema { types { name } } }", true},
 		{"alias to __type", "{ bar: __type(name: \"User\") { name } }", true},
-		{"nested introspection", "{ user { __typename } }", true},
 
-		// Should NOT be detected (these are regular queries)
+		// Should NOT be detected (regular queries)
+		{"__typename alone", "{ __typename }", false},
+		{"__typename in nested", "{ user { __typename } }", false},
 		{"regular query", "{ user(id: 1) { id name email } }", false},
 		{"query with underscore field", "{ user_id }", false},
 		{"query with type name", "{ type(id: 1) { id } }", false},

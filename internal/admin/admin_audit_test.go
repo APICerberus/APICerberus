@@ -3,7 +3,7 @@ package admin
 import (
 	"net/http"
 	"net/http/httptest"
-	"strings"
+	"net/url"
 	"testing"
 	"time"
 )
@@ -54,7 +54,7 @@ func TestParseAuditSearchFilters(t *testing.T) {
 	}{
 		{"empty query", "", "", "", 0, 0},
 		{"user_id filter", "user_id=user-1", "user-1", "", 0, 0},
-		{"route filter", "route=/api/v1/users", "/api/v1/users", "", 0, 0},
+		{"route filter", "route=/api/v1/users", "", "/api/v1/users", 0, 0},
 		{"limit and offset", "limit=20&offset=10", "", "", 20, 10},
 		{"status_min", "status_min=400", "", "", 0, 0},
 		{"date_from", "date_from=2024-01-01T00:00:00Z", "", "", 0, 0},
@@ -63,13 +63,7 @@ func TestParseAuditSearchFilters(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			v := make(map[string][]string)
-			for _, pair := range strings.Fields(tt.query) {
-				kv := strings.SplitN(pair, "=", 2)
-				if len(kv) == 2 {
-					v[kv[0]] = []string{kv[1]}
-				}
-			}
+			v, _ := url.ParseQuery(tt.query)
 			filters, err := parseAuditSearchFilters(v)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
@@ -134,8 +128,8 @@ func TestResolveAuditCleanupCutoff(t *testing.T) {
 	})
 }
 
-// TestParseAuditTime tests time parsing for audit log timestamps.
-func TestParseAuditTime(t *testing.T) {
+// TestParseAuditTimeHelper tests time parsing for audit log timestamps.
+func TestParseAuditTimeHelper(t *testing.T) {
 	tests := []struct {
 		name    string
 		raw     string
@@ -183,8 +177,8 @@ func TestAuditExportFileExtension(t *testing.T) {
 	}
 }
 
-// TestAuditExportContentType tests export content-type detection.
-func TestAuditExportContentType(t *testing.T) {
+// TestAuditExportContentTypeHelper tests export content-type detection.
+func TestAuditExportContentTypeHelper(t *testing.T) {
 	tests := []struct {
 		format string
 		want   string
@@ -205,8 +199,8 @@ func TestAuditExportContentType(t *testing.T) {
 	}
 }
 
-// TestParseBoolString tests boolean string parsing.
-func TestParseBoolString(t *testing.T) {
+// TestParseBoolStringHelper tests boolean string parsing.
+func TestParseBoolStringHelper(t *testing.T) {
 	tests := []struct {
 		raw     string
 		want    bool

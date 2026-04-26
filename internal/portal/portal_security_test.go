@@ -5,9 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/APICerberus/APICerebrus/internal/config"
-	"github.com/APICerberus/APICerebrus/internal/store"
 )
 
 // TestLoginSessionResponseVerifiesHIGH002 tests that the login response
@@ -85,13 +82,13 @@ func TestRateLimitPortalLogin(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		resp := mustPortalJSONRequest(t, client, http.MethodPost, baseURL, nil,
 			map[string]any{"email": "ratelimit-test@example.com", "password": "wrong-password"})
-		resp.Body.Close()
+		_ = resp // body already read
 	}
 
 	// 4th attempt should trigger rate limit (MEDIUM-004 fix: reduced from 5 to 3)
 	resp := mustPortalJSONRequest(t, client, http.MethodPost, baseURL, nil,
 		map[string]any{"email": "ratelimit-test@example.com", "password": "wrong-password"})
-	defer resp.Body.Close()
+	_ = resp
 
 	t.Logf("rate limit triggered: status=%d after 3 failures (MEDIUM-004 fix)", resp.StatusCode)
 }
@@ -115,7 +112,6 @@ func TestPortalLogoutClearsSession(t *testing.T) {
 	// Login first
 	loginResp := mustPortalJSONRequest(t, client, http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil,
 		map[string]any{"email": "logout-test@example.com", "password": "test-pass-123"})
-	loginResp.Body.Close()
 	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
 	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
 	if csrfCookie == nil {
@@ -125,7 +121,7 @@ func TestPortalLogoutClearsSession(t *testing.T) {
 	// Logout
 	logoutResp := mustPortalJSONRequestWithCSRF(t, client, http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/logout",
 		[]*http.Cookie{sessionCookie, csrfCookie}, map[string]any{}, csrfCookie.Value)
-	defer logoutResp.Body.Close()
+	_ = logoutResp // body already read
 
 	if logoutResp.StatusCode != http.StatusOK {
 		t.Errorf("logout status = %d, want 200", logoutResp.StatusCode)

@@ -96,4 +96,3 @@ func (r *readCloser) Read(p []byte) (n int, err error) {
 }
 
 func (r *readCloser) Close() error { return nil }
-}

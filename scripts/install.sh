@@ -2,8 +2,7 @@
 # =============================================================================
 # APICerebrus Installation Script (Unix/Linux/macOS)
 # =============================================================================
-# Usage: curl -sSL https://get.apicerberus.io | bash
-#   or:  ./scripts/install.sh [--version v1.0.0] [--dir /opt/apicerberus]
+# Usage: ./scripts/install.sh [--version v1.0.0] [--dir /opt/apicerberus]
 # =============================================================================
 
 set -euo pipefail
@@ -179,7 +178,7 @@ create_config() {
     if [ ! -f "$CONFIG_DIR/apicerberus.yaml" ]; then
         cat > "$CONFIG_DIR/apicerberus.yaml" << 'EOF'
 # APICerebrus Configuration
-# Full reference: https://docs.apicerberus.io/configuration
+# See: apicerberus.yaml.example in project root for full reference
 
 gateway:
   listen: ":8080"

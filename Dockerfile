@@ -6,7 +6,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Web Dashboard Builder
 # -----------------------------------------------------------------------------
-FROM node:20-alpine AS web-builder
+FROM node:26-alpine AS web-builder
 
 WORKDIR /build/web
 

@@ -3,7 +3,7 @@ module github.com/APICerberus/APICerebrus
 go 1.26.2
 
 require (
-	github.com/alicebob/miniredis/v2 v2.37.0
+	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/andybalholm/brotli v1.2.1
 	github.com/coder/websocket v1.8.14
 	github.com/coreos/go-oidc/v3 v3.18.0
